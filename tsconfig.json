@@ -1,30 +1,46 @@
 {
   "compilerOptions": {
-    // Environment setup & latest features
+    // ----- Language & Environment -----
     "lib": ["ESNext"],
     "target": "ESNext",
     "module": "Preserve",
     "moduleDetection": "force",
     "jsx": "react-jsx",
     "allowJs": true,
-    "types": ["bun"],
 
-    // Bundler mode
+    // ----- Type Declaration -----
+    "types": ["bun"],
+    "typeRoots": ["./node_modules/@types"],
+
+    // ----- Bundler mode -----
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "noEmit": true,
+    "resolveJsonModule": true,
 
-    // Best practices
+    // ----- Path aliases -----
+    "paths": {
+      "@/*": ["./src/*"],
+      "@db/*": ["./src/db/*"],
+      "@middleware/*": ["./src/middleware/*"],
+      "@utils/*": ["./src/utils/*"],
+      "@workers/*": ["./src/workers/*"]
+    },
+
+    // ----- Type Checking (strict) -----
     "strict": true,
     "skipLibCheck": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
+    "forceConsistentCasingInFileNames": true,
 
-    // Some stricter flags (disabled by default)
+    // ----- Stricter flags (disabled — opt-in later) -----
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false
-  }
+  },
+  "include": ["src/**/*.ts", "*.d.ts", "seed-agent.ts"],
+  "exclude": ["node_modules", "data", "dist", "build"]
 }
