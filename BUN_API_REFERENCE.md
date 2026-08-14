@@ -24,14 +24,14 @@ This table maps every Bun API used in the automation platform to its **version**
 | **`Bun.cron`** (OS-level) | v1.3.11 | [Blog](https://bun.com/blog/bun-v1.3.11) · [Docs](https://bun.com/docs/runtime/cron) | Stable | `await Bun.cron("./worker.ts", "0 2 * * *", "daily-job");` | Registers system cron jobs; works on Linux/macOS/Windows. |
 | **`Bun.spawn`** | Built-in | [Docs](https://bun.com/docs/runtime/spawn) | Stable | `const proc = Bun.spawn(["bun", "worker.ts"], { ipc: (msg) => {} });` | Spawn child processes with IPC; `--no-orphans` added in v1.3.14. |
 | **`process.execve`** | v1.3.14 | [Blog](https://bun.com/blog/bun-v1.3.14) | Stable | `process.execve("/usr/bin/echo", ["echo", "hi"], process.env);` | Replace current process image; POSIX syscall; no return on success. |
-| **`Bun.Terminal`** (ConPTY) | v1.3.14 (Windows) | [Blog](https://bun.com/blog/bun-v1.3.14) · [Docs](https://bun.com/docs/runtime/spawn#terminal) | Stable | `const term = new Bun.Terminal({ cols: 80, rows: 24, data: (t,d) => process.stdout.write(d) });` | Cross-platform PTY; Windows ConPTY supported from v1.3.14. |
+| **`Bun.Terminal`** (ConPTY) | v1.3.14 (Windows) | [Blog](https://bun.com/blog/bun-v1.3.14) · [Docs](https://bun.com/docs/runtime/spawn#terminal) | Stable | `const term = new Bun.Terminal({ cols: 80, rows: 24, data: (t, d) => process.stdout.write(d) });` | Cross-platform PTY; Windows ConPTY supported from v1.3.14. |
 | **`Bun.CSRF`** | Built-in | [Docs](https://bun.com/docs/runtime/csrf) | Stable | `const token = Bun.CSRF.generate(secret, { sessionId }); if (Bun.CSRF.verify(token, { secret, sessionId })) ...` | Generate/verify CSRF tokens; HMAC-signed; binds to session. |
 | **`Bun.CookieMap`** | v1.2.7 | [Blog](https://bun.com/blog/bun-v1.2.7) | Stable | `const cookies = req.cookies; cookies.set("session", id, { httpOnly: true });` | Map-like cookie management in `Bun.serve`. |
 | **`Bun.password`** | Built-in | [Docs](https://bun.com/docs/runtime/bun-apis) | Stable | `const hash = await Bun.password.hash("secret"); const ok = await Bun.password.verify("secret", hash);` | Argon2id (default) and bcrypt; async/sync. |
 | **`Bun.secrets`** | Built-in | [Docs](https://bun.com/docs/runtime/secrets) | Experimental | `await Bun.secrets.set({ service: "app", name: "key", value: "secret" });` | OS keychain storage (macOS, Linux, Windows). |
 | **`Bun.color`** | v1.1.30 | [Blog](https://bun.com/blog/bun-v1.1.30) · [Docs](https://bun.com/docs/runtime/bun-apis) | Stable | `const c = Bun.color("#3b82f6", "hex"); // "#3b82f6" or null` | Format converter: `Bun.color(input, outputFormat?)` returns `string \| number \| object \| array \| null`. Formats: `"css"`, `"ansi"`, `"ansi-16"`, `"ansi-256"`, `"ansi-16m"`, `"number"`, `"hex"`, `"HEX"`, `"{rgb}"`, `"{rgba}"`, `"[rgb]"`, `"[rgba]"`, `"hsl"`, `"rgb"`, `"rgba"`. Validation via `=== null`. |
 | **`Bun.markdown`** (`html`, `render`, `react`) | v1.3.8 | [Blog](https://bun.com/blog/bun-v1.3.8) · [Docs](https://bun.com/docs/runtime/markdown) · [Ref](https://bun.com/reference/bun/markdown) | Unstable | `const html = Bun.markdown.html("# Hello **world**", { autolinks: true });` | Built-in Markdown parser (Zig port of `md4c`). GFM defaults: `tables`, `strikethrough`, `tasklists`. See [Bun.markdown detail](#bunmarkdown-detail) below. |
-| **`Bun.markdown.ansi()`** | v1.3.12 | [Blog](https://bun.com/blog/bun-v1.3.12) · [Ref](https://bun.com/reference/bun/markdown/ansi) | Unstable | `const out = Bun.markdown.ansi("# Hello", { hyperlinks: true }); process.stdout.write(out);` | ANSI-colored terminal output. Enables all GFM + wikilinks + underline + LaTeX by default. Also enables `bun ./file.md` CLI. v1.3.14 fixed crash on invalid UTF-8 bytes. Not in docs page — only in reference + blog. |
+| **`Bun.markdown.ansi()`** | v1.3.12 | [Blog](https://bun.com/blog/bun-v1.3.12) · [Ref](https://bun.com/reference/bun/markdown/ansi) | Unstable | `const out = Bun.markdown.ansi("# Hello", { hyperlinks: true }); process.stdout.write(out);` | ANSI-colored terminal output. Enables all GFM + wikilinks + underline + LaTeX math by default. Also enables `bun ./file.md` CLI. v1.3.14 fixed crash on invalid UTF-8 bytes. Not in the docs page — only in reference + blog. |
 | **`Bun.env` / `process.env`** | Built-in | [Docs](https://bun.com/docs/runtime/env) | Stable | `const key = process.env.MASTER_KEY;` | Auto-loads `.env` files; aliases `Bun.env`. |
 | **`Bun.write` / `Bun.file`** | Built-in | [Docs](https://bun.com/docs/runtime/bun-apis) | Stable | `await Bun.write("out.png", screenshot); const file = Bun.file("in.png");` | File/S3 operations; handles Blob, Buffer, streams. |
 | **`bun:sqlite`** | Built-in | [Docs](https://bun.com/docs/runtime/bun-apis) | Stable | `import { Database } from "bun:sqlite"; const db = new Database("data.db");` | SQLite3 built-in; supports prepared statements. |
@@ -64,7 +64,7 @@ This table maps every Bun API used in the automation platform to its **version**
 | `Bun.markdown.html()` | `html(input, options?)` | `string` | Render to HTML string |
 | `Bun.markdown.render()` | `render(input, callbacks?, options?)` | `string` | Custom callbacks per element (ANSI, custom HTML, plain text) |
 | `Bun.markdown.react()` | `react(input, components?, options?)` | `unknown` (React Fragment) | React JSX elements; SSR via `renderToString()` |
-| `Bun.markdown.ansi()` | `ansi(input, theme?)` | `string` | ANSI-colored terminal output; enables all GFM + wikilinks + underline + LaTeX by default. **v1.3.12+** |
+| `Bun.markdown.ansi()` | `ansi(input, theme?)` | `string` | ANSI-colored terminal output; enables all GFM + wikilinks + underline + LaTeX math by default. **v1.3.12+** |
 
 **Input type:** `string | ArrayBufferLike | TypedArray | DataView`
 
@@ -101,7 +101,7 @@ const linked = Bun.markdown.ansi("[docs](https://bun.com)", { hyperlinks: true }
 
 ### Options (Parser Configuration)
 
-All four functions accept options (html: 2nd arg; render: 3rd arg; react: 3rd arg as `ReactOptions`; ansi: uses `AnsiTheme` instead).
+`html`, `render`, and `react` accept `Options` (html: 2nd arg; render: 3rd arg; react: 3rd arg as `ReactOptions`). `ansi()` uses `AnsiTheme` instead (see [AnsiTheme](#ansitheme-ansi-second-argument) below).
 
 **GFM extensions — enabled by default:**
 
@@ -115,8 +115,8 @@ All four functions accept options (html: 2nd arg; render: 3rd arg; react: 3rd ar
 
 | Option | Type | Description |
 |--------|------|-------------|
-| `autolinks` | `boolean \| { url: boolean, www: boolean, email: boolean }` | Autolink URLs, emails, www links. `true` = all types. |
-| `headings` | `boolean \| { ids: boolean, autolink: boolean }` | Heading IDs and autolink headings. `true` = both. |
+| `autolinks` | `boolean \| { url: boolean, www: boolean, email: boolean }` | Autolink URLs, emails, www links. `true` = all types |
+| `headings` | `boolean \| { ids: boolean, autolink: boolean }` | Heading IDs and autolink headings. `true` = both |
 | `hardSoftBreaks` | `boolean` | Treat soft line breaks as hard breaks (`<br>`) |
 | `wikiLinks` | `boolean` | Enable `[[wiki links]]` and `[[target\|label]]` |
 | `underline` | `boolean` | `__text__` renders as `<u>` instead of `<strong>` |
@@ -170,7 +170,7 @@ Each callback receives `(children: string, meta?: MetaInterface)`. Return `strin
 
 ### Render Callbacks (`render()` second argument)
 
-Each callback receives `(children: string, meta?: MetaInterface)`. Return `string` to replace output, `null`/`undefined` to omit element. If no callback is registered, children pass through unchanged. **21 callbacks total** (14 block + 7 inline).
+Return `string` to replace output, `null`/`undefined` to omit element. If no callback is registered, children pass through unchanged. **21 callbacks total** (14 block + 7 inline).
 
 **Block callbacks:**
 
@@ -216,7 +216,7 @@ The `listItem` callback receives everything needed to render markers directly �
 
 ```ts
 // render() with parser options as third argument
-const text = Bun.markdown.render("Visit www.example.com", {
+const linked = Bun.markdown.render("Visit www.example.com", {
   link: (children, { href }) => `[${children}](${href})`,
   paragraph: (children) => children,
 }, { autolinks: true });
@@ -243,6 +243,7 @@ const omitted = Bun.markdown.render("# Title\n\n![logo](img.png)\n\nHello", {
 // "Title\nHello\n"
 
 // Nested list numbering — listItem meta gives everything needed
+// (toRoman is a user-supplied helper, e.g. 4 → "iv")
 const nested = Bun.markdown.render("1. first\n   1. sub-a\n   2. sub-b\n2. second", {
   listItem: (children, { index, depth, ordered, start }) => {
     const n = (start ?? 1) + index;

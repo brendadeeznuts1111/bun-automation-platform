@@ -595,7 +595,7 @@ Works across all platforms — removes the crontab entry, launchd plist, or Task
 | `Bun.markdown.html()` | `html(input, options?)` | `string` | Render to HTML string |
 | `Bun.markdown.render()` | `render(input, callbacks?, options?)` | `string` | Custom callbacks per element (ANSI, custom HTML, plain text) |
 | `Bun.markdown.react()` | `react(input, components?, options?)` | `unknown` (React Fragment) | React JSX elements; SSR via `renderToString()` |
-| `Bun.markdown.ansi()` | `ansi(input, theme?)` | `string` | ANSI-colored terminal output; enables all GFM + wikilinks + underline + LaTeX by default. **v1.3.12+** |
+| `Bun.markdown.ansi()` | `ansi(input, theme?)` | `string` | ANSI-colored terminal output; enables all GFM + wikilinks + underline + LaTeX math by default. **v1.3.12+** |
 
 **Input type:** `string | ArrayBufferLike | TypedArray | DataView`
 
@@ -632,7 +632,7 @@ const linked = Bun.markdown.ansi("[docs](https://bun.com)", { hyperlinks: true }
 
 ### 2. Options (Parser Configuration)
 
-All four functions accept options (html: 2nd arg; render: 3rd arg; react: 3rd arg as `ReactOptions`; ansi: uses `AnsiTheme` instead).
+`html`, `render`, and `react` accept `Options` (html: 2nd arg; render: 3rd arg; react: 3rd arg as `ReactOptions`). `ansi()` uses `AnsiTheme` instead (see [AnsiTheme](#6-ansitheme-ansi-second-argument) below).
 
 **GFM extensions — enabled by default:**
 
@@ -646,8 +646,8 @@ All four functions accept options (html: 2nd arg; render: 3rd arg; react: 3rd ar
 
 | Option | Type | Description |
 |--------|------|-------------|
-| `autolinks` | `boolean \| { url: boolean, www: boolean, email: boolean }` | Autolink URLs, emails, www links. `true` = all types. |
-| `headings` | `boolean \| { ids: boolean, autolink: boolean }` | Heading IDs and autolink headings. `true` = both. |
+| `autolinks` | `boolean \| { url: boolean, www: boolean, email: boolean }` | Autolink URLs, emails, www links. `true` = all types |
+| `headings` | `boolean \| { ids: boolean, autolink: boolean }` | Heading IDs and autolink headings. `true` = both |
 | `hardSoftBreaks` | `boolean` | Treat soft line breaks as hard breaks (`<br>`) |
 | `wikiLinks` | `boolean` | Enable `[[wiki links]]` and `[[target\|label]]` |
 | `underline` | `boolean` | `__text__` renders as `<u>` instead of `<strong>` |
@@ -701,7 +701,7 @@ Each callback receives `(children: string, meta?: MetaInterface)`. Return `strin
 
 ### 4. Render Callbacks (`render()` second argument)
 
-Each callback receives `(children: string, meta?: MetaInterface)`. Return `string` to replace output, `null`/`undefined` to omit element. If no callback is registered, children pass through unchanged. **21 callbacks total** (14 block + 7 inline).
+Return `string` to replace output, `null`/`undefined` to omit element. If no callback is registered, children pass through unchanged. **21 callbacks total** (14 block + 7 inline).
 
 **Block callbacks:**
 
@@ -747,7 +747,7 @@ The `listItem` callback receives everything needed to render markers directly �
 
 ```ts
 // render() with parser options as third argument
-const text = Bun.markdown.render("Visit www.example.com", {
+const linked = Bun.markdown.render("Visit www.example.com", {
   link: (children, { href }) => `[${children}](${href})`,
   paragraph: (children) => children,
 }, { autolinks: true });
@@ -774,6 +774,7 @@ const omitted = Bun.markdown.render("# Title\n\n![logo](img.png)\n\nHello", {
 // "Title\nHello\n"
 
 // Nested list numbering — listItem meta gives everything needed
+// (toRoman is a user-supplied helper, e.g. 4 → "iv")
 const nested = Bun.markdown.render("1. first\n   1. sub-a\n   2. sub-b\n2. second", {
   listItem: (children, { index, depth, ordered, start }) => {
     const n = (start ?? 1) + index;
