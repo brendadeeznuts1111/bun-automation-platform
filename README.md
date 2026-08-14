@@ -2,6 +2,11 @@
 
 Mermaid diagram rendering pipeline + Bun v1.3.14 architecture blueprints.
 
+## Docs
+
+- [ARCHITECTURE.md](ARCHITECTURE.md) — Complete unified platform architecture with all v1.3.14 features
+- [BACKLOG.md](BACKLOG.md) — Gap analysis: production hardening, scalability, security, UX, and roadmap
+
 ## Quick start
 
 ```bash
