@@ -221,6 +221,8 @@ flowchart TB
 | `Bun.CookieMap` | v1.2.7 | Stable | Cookie handling |
 | `Bun.secrets` | Built-in | Experimental | OS keychain |
 | `Bun.color` | v1.1.30 | Stable | Color utilities |
+| `Bun.markdown` (`html`, `render`, `react`) | v1.3.8 | Unstable | Markdown parsing/rendering (GFM, autolinks, heading IDs, LaTeX math, wiki links) |
+| `Bun.markdown.ansi()` + `bun ./file.md` CLI | v1.3.12 | Unstable | ANSI terminal output; `bun ./file.md` renders .md files directly |
 | `Bun.env` / `process.env` | Built-in | Stable | Environment variables |
 | `Bun.write` / `Bun.file` | Built-in | Stable | File/S3 operations |
 | `bun:sqlite` | Built-in | Stable | SQLite database |
@@ -235,6 +237,35 @@ flowchart TB
 | FreeBSD / Android builds | v1.3.14 | Stable | Broader OS support |
 | `perMessageDeflate: false` | v1.3.14 | Stable | WebSocket compatibility |
 | SIGHUP / SIGBREAK on Windows | v1.3.14 | Stable | Signal handling |
+
+### `Bun.markdown` — Built-in Markdown Parser (v1.3.8 core, v1.3.12 ansi, Unstable)
+
+Fast, CommonMark-compliant parser (Zig port of `md4c`). Four render modes:
+
+| Function | Signature | Output | Version |
+|----------|-----------|--------|---------|
+| `Bun.markdown.html()` | `html(input, options?)` | HTML string | v1.3.8 |
+| `Bun.markdown.render()` | `render(input, callbacks?, options?)` | Custom string (ANSI, HTML, plain text) | v1.3.8 |
+| `Bun.markdown.react()` | `react(input, components?, options?)` | React JSX elements (Fragment) | v1.3.8 |
+| `Bun.markdown.ansi()` | `ansi(input, theme?)` | ANSI-colored terminal string | v1.3.12 |
+
+**CLI:** `bun ./file.md` (v1.3.12+) — renders .md files directly to terminal ANSI output, zero JS VM startup.
+
+**v1.3.14 fix:** `ansi()` crash on invalid UTF-8 (lone continuation bytes `0x80-0xBF`, bytes `0xF8-0xFF`) — now treated as replacement characters.
+
+**21 render callbacks** (13 block + 8 inline): `heading`, `paragraph`, `blockquote`, `code`, `list`, `listItem`, `hr`, `table`, `thead`, `tbody`, `tr`, `th`, `td`, `html` (block); `strong`, `emphasis`, `strikethrough`, `link`, `image`, `codespan`, `text` (inline).
+
+**GFM extensions enabled by default:** `tables`, `strikethrough`, `tasklists`.
+
+**Additional options (all default `false`):** `autolinks` (`boolean | { url, www, email }`), `headings` (`boolean | { ids, autolink }`), `hardSoftBreaks`, `wikiLinks`, `underline`, `latexMath`, `collapseWhitespace`, `permissiveAtxHeaders`, `noIndentedCodeBlocks`, `noHtmlBlocks`, `noHtmlSpans`, `tagFilter`.
+
+**Meta interfaces** (passed to `render()` callbacks): `ListMeta` (`{ depth, ordered, start? }`), `ListItemMeta` (`{ index, depth, ordered, start?, checked? }`), `HeadingMeta` (`{ level, id? }`), `CodeBlockMeta` (`{ language? }`), `CellMeta` (`{ align? }`), `LinkMeta` (`{ href, title? }`), `ImageMeta` (`{ src, title? }`).
+
+**AnsiTheme options:** `colors`, `columns`, `hyperlinks` (OSC 8), `kittyGraphics` (inline images), `light`.
+
+**React:** `reactVersion?: 18 | 19` (default 19 = `react.transitional.element`; 18 = `react.element`).
+
+**Docs:** [Markdown](https://bun.com/docs/runtime/markdown) (html/render/react only) · [Reference](https://bun.com/reference/bun/markdown) (all four) · [Blog v1.3.8](https://bun.com/blog/bun-v1.3.8) · [Blog v1.3.12](https://bun.com/blog/bun-v1.3.12) (ansi + CLI)
 
 ---
 
