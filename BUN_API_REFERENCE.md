@@ -162,7 +162,7 @@ Each callback receives `(children: string, meta?: MetaInterface)`. Return `strin
 |-----------|--------|-----------------|
 | `ListMeta` | `depth: number`, `ordered: boolean`, `start?: number` | `list` |
 | `ListItemMeta` | `index: number`, `depth: number`, `ordered: boolean`, `start?: number`, `checked?: boolean` | `listItem` |
-| `HeadingMeta` | `level: number` (1-6), `id?: string` | `heading` |
+| `HeadingMeta` | `level: number` (1–6), `id?: string` | `heading` |
 | `CodeBlockMeta` | `language?: string` | `code` |
 | `CellMeta` | `align?: 'left' \| 'center' \| 'right'` | `th`, `td` |
 | `LinkMeta` | `href: string`, `title?: string` | `link` |
@@ -176,32 +176,32 @@ Each callback receives `(children: string, meta?: MetaInterface)`. Return `strin
 
 | Callback | Meta | Description |
 |----------|------|-------------|
-| `heading` | `HeadingMeta` `{ level, id? }` | Heading level 1-6. `id` set when `headings: { ids: true }`. |
-| `paragraph` | -- | Paragraph block |
-| `blockquote` | -- | Blockquote block |
+| `heading` | `HeadingMeta` `{ level, id? }` | Heading level 1–6. `id` set when `headings: { ids: true }`. |
+| `paragraph` | — | Paragraph block |
+| `blockquote` | — | Blockquote block |
 | `code` | `CodeBlockMeta` `{ language? }` | Fenced/indented code block. `language` is info-string (e.g. `"js"`). Only passed for fenced code blocks with a language. |
 | `list` | `ListMeta` `{ ordered, start?, depth }` | Ordered or unordered list. `start` is first item number for ordered lists. |
 | `listItem` | `ListItemMeta` `{ index, depth, ordered, start?, checked? }` | List item. `meta` always includes `{index, depth, ordered}`. `start` set for ordered lists; `checked` set for task list items. |
-| `hr` | -- | Horizontal rule |
-| `table` | -- | Table block |
-| `thead` | -- | Table head |
-| `tbody` | -- | Table body |
-| `tr` | -- | Table row |
+| `hr` | — | Horizontal rule |
+| `table` | — | Table block |
+| `thead` | — | Table head |
+| `tbody` | — | Table body |
+| `tr` | — | Table row |
 | `th` | `CellMeta` `{ align? }` | Table header cell. `align` is `"left"`, `"center"`, `"right"`, or absent. |
 | `td` | `CellMeta` `{ align? }` | Table data cell. `align` set when column alignment specified. |
-| `html` | -- | Raw HTML content |
+| `html` | — | Raw HTML content |
 
 **Inline callbacks:**
 
 | Callback | Meta | Description |
 |----------|------|-------------|
-| `strong` | -- | Strong emphasis (`**text**`) |
-| `emphasis` | -- | Emphasis (`*text*`) |
-| `strikethrough` | -- | Strikethrough (`~~text~~`) |
+| `strong` | — | Strong emphasis (`**text**`) |
+| `emphasis` | — | Emphasis (`*text*`) |
+| `strikethrough` | — | Strikethrough (`~~text~~`) |
 | `link` | `LinkMeta` `{ href, title? }` | Link. `href` is URL, `title` is optional title attribute. |
 | `image` | `ImageMeta` `{ src, title? }` | Image. `src` is URL, `title` is optional title attribute. |
-| `codespan` | -- | Inline code (`` `code` ``) |
-| `text` | -- | Plain text content. **Note:** receives `text` directly (not `children`). |
+| `codespan` | — | Inline code (`` `code` ``) |
+| `text` | — | Plain text content. **Note:** receives `text` directly (not `children`). |
 
 #### List item meta (detailed)
 
@@ -235,7 +235,7 @@ const plaintext = Bun.markdown.render("# Hello **world**", {
 // "Hello world"
 
 // Omitting elements (return null/undefined to remove)
-const result = Bun.markdown.render("# Title\n\n![logo](img.png)\n\nHello", {
+const omitted = Bun.markdown.render("# Title\n\n![logo](img.png)\n\nHello", {
   image: () => null, // Remove all images
   heading: children => children,
   paragraph: children => children + "\n",
@@ -243,7 +243,7 @@ const result = Bun.markdown.render("# Title\n\n![logo](img.png)\n\nHello", {
 // "Title\nHello\n"
 
 // Nested list numbering — listItem meta gives everything needed
-const result = Bun.markdown.render("1. first\n   1. sub-a\n   2. sub-b\n2. second", {
+const nested = Bun.markdown.render("1. first\n   1. sub-a\n   2. sub-b\n2. second", {
   listItem: (children, { index, depth, ordered, start }) => {
     const n = (start ?? 1) + index;
     const marker = !ordered
@@ -263,7 +263,7 @@ const result = Bun.markdown.render("1. first\n   1. sub-a\n   2. sub-b\n2. secon
 // 2. second
 
 // Code block syntax highlighting
-const result = Bun.markdown.render("```js\nconsole.log('hi')\n```", {
+const highlighted = Bun.markdown.render("```js\nconsole.log('hi')\n```", {
   code: (children, meta) => {
     const lang = meta?.language ?? "";
     return `<pre><code class="language-${lang}">${children}</code></pre>`;
@@ -277,7 +277,7 @@ Every HTML tag can be overridden with a custom React component:
 
 | Override | Props | Description |
 |----------|-------|-------------|
-| `h1`-`h6` | `{ id?, children }` | Headings (`id` when `headings: { ids: true }`) |
+| `h1`–`h6` | `{ id?, children }` | Headings (`id` when `headings: { ids: true }`) |
 | `p` | `{ children }` | Paragraph |
 | `blockquote` | `{ children }` | Blockquote |
 | `pre` | `{ language?, children }` | Code block |
@@ -313,10 +313,10 @@ const el18 = Bun.markdown.react(text, undefined, { reactVersion: 18 });
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `colors` | `boolean` | `true` | Emit ANSI color + styling escape sequences. `false` = plain ASCII (no box drawing, no emoji, no escape codes) |
-| `columns` | `number` | auto | Line width for word-wrapping paragraphs/headings/HR. `0` = disable wrapping |
+| `columns` | `number` | `auto` | Line width for word-wrapping paragraphs/headings/HR. `0` = disable wrapping |
 | `hyperlinks` | `boolean` | `false` | Emit OSC 8 hyperlinks (clickable in modern terminals). `false` = `text (url)` |
 | `kittyGraphics` | `boolean` | `false` | Inline images via Kitty Graphics Protocol (Kitty, WezTerm, Ghostty). Falls through to text alt for remote URLs |
-| `light` | `boolean` | auto | Terminal background is light. Affects inline code background color. Auto-detected from `COLORFGBG` env var |
+| `light` | `boolean` | `auto` | Terminal background is light. Affects inline code background color. Auto-detected from `COLORFGBG` env var |
 
 ### ReactOptions (`react()` third argument)
 

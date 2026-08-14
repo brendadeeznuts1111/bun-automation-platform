@@ -766,7 +766,7 @@ const plaintext = Bun.markdown.render("# Hello **world**", {
 // "Hello world"
 
 // Omitting elements (return null/undefined to remove)
-const result = Bun.markdown.render("# Title\n\n![logo](img.png)\n\nHello", {
+const omitted = Bun.markdown.render("# Title\n\n![logo](img.png)\n\nHello", {
   image: () => null, // Remove all images
   heading: children => children,
   paragraph: children => children + "\n",
@@ -774,7 +774,7 @@ const result = Bun.markdown.render("# Title\n\n![logo](img.png)\n\nHello", {
 // "Title\nHello\n"
 
 // Nested list numbering — listItem meta gives everything needed
-const result = Bun.markdown.render("1. first\n   1. sub-a\n   2. sub-b\n2. second", {
+const nested = Bun.markdown.render("1. first\n   1. sub-a\n   2. sub-b\n2. second", {
   listItem: (children, { index, depth, ordered, start }) => {
     const n = (start ?? 1) + index;
     const marker = !ordered
@@ -794,7 +794,7 @@ const result = Bun.markdown.render("1. first\n   1. sub-a\n   2. sub-b\n2. secon
 // 2. second
 
 // Code block syntax highlighting
-const result = Bun.markdown.render("```js\nconsole.log('hi')\n```", {
+const highlighted = Bun.markdown.render("```js\nconsole.log('hi')\n```", {
   code: (children, meta) => {
     const lang = meta?.language ?? "";
     return `<pre><code class="language-${lang}">${children}</code></pre>`;
@@ -844,12 +844,20 @@ const el18 = Bun.markdown.react(text, undefined, { reactVersion: 18 });
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `colors` | `boolean` | `true` | Emit ANSI color + styling escape sequences. `false` = plain ASCII (no box drawing, no emoji, no escape codes) |
-| `columns` | `number` | auto | Line width for word-wrapping paragraphs/headings/HR. `0` = disable wrapping |
+| `columns` | `number` | `auto` | Line width for word-wrapping paragraphs/headings/HR. `0` = disable wrapping |
 | `hyperlinks` | `boolean` | `false` | Emit OSC 8 hyperlinks (clickable in modern terminals). `false` = `text (url)` |
 | `kittyGraphics` | `boolean` | `false` | Inline images via Kitty Graphics Protocol (Kitty, WezTerm, Ghostty). Falls through to text alt for remote URLs |
-| `light` | `boolean` | auto | Terminal background is light. Affects inline code background color. Auto-detected from `COLORFGBG` env var |
+| `light` | `boolean` | `auto` | Terminal background is light. Affects inline code background color. Auto-detected from `COLORFGBG` env var |
 
-### 7. Integration Points in the Automation Platform
+### 7. ReactOptions (`react()` third argument)
+
+Same as `Options` plus:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `reactVersion` | `18 \| 19` | `19` | Which `$$typeof` symbol to use. `19` = `Symbol.for('react.transitional.element')`; `18` = `Symbol.for('react.element')` (for React 18 and older) |
+
+### 8. Integration Points in the Automation Platform
 
 | Use Case | Function | Why |
 |----------|----------|-----|
