@@ -1,0 +1,192 @@
+/**
+ * Database layer — SQLite via bun:sqlite.
+ *
+ * Uses WAL mode for concurrent reads, a single writer connection
+ * (SQLite serializes writes), and a separate read-only connection pool.
+ * Migrations run on boot; schema version tracked in _meta table.
+ */
+
+import { Database } from "bun:sqlite";
+import { mkdirSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+
+const DB_PATH = resolve(process.env.DB_PATH ?? "./data/platform.db");
+
+// Ensure the data directory exists.
+mkdirSync(dirname(DB_PATH), { recursive: true });
+
+// --- Connections -----------------------------------------------------------
+
+/** Writer connection — serialized via a mutex (SQLite limitation). */
+const writer = new Database(DB_PATH);
+writer.exec("PRAGMA journal_mode = WAL;");
+writer.exec("PRAGMA foreign_keys = ON;");
+writer.exec("PRAGMA busy_timeout = 5000;");
+
+/** Reader pool — N read-only connections for concurrent SELECTs.
+ *  Opened lazily after the writer creates the DB file + schema. */
+const READER_COUNT = parseInt(process.env.DB_READERS ?? "4", 10);
+let readers: Database[] = [];
+let readerIdx = 0;
+
+function ensureReaders(): void {
+  if (readers.length > 0) return;
+  for (let i = 0; i < READER_COUNT; i++) {
+    const r = new Database(DB_PATH, { readonly: true });
+    r.exec("PRAGMA journal_mode = WAL;");
+    readers.push(r);
+  }
+}
+
+function getReader(): Database {
+  ensureReaders();
+  const r = readers[readerIdx % readers.length];
+  readerIdx++;
+  return r;
+}
+
+// --- Write mutex -----------------------------------------------------------
+
+let writeQueue: Promise<unknown> = Promise.resolve();
+
+/**
+ * Run a write operation (INSERT/UPDATE/DELETE) on the writer connection.
+ * Writes are serialized via a promise chain — SQLite only allows one writer.
+ */
+export function write<T>(fn: (db: Database) => T): Promise<T> {
+  const run = writeQueue.then(() => fn(writer));
+  writeQueue = run.catch(() => {});
+  return run as Promise<T>;
+}
+
+/** Run a read operation (SELECT) on a pooled reader connection. */
+export function read<T>(fn: (db: Database) => T): T {
+  return fn(getReader());
+}
+
+// --- Migrations ------------------------------------------------------------
+
+const MIGRATIONS: { version: number; sql: string }[] = [
+  {
+    version: 1,
+    sql: `
+      CREATE TABLE IF NOT EXISTS _meta (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS agents (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        username    TEXT NOT NULL UNIQUE,
+        password    TEXT NOT NULL,
+        created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS tasks (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        agent_id    INTEGER NOT NULL REFERENCES agents(id),
+        url         TEXT NOT NULL,
+        status      TEXT NOT NULL DEFAULT 'pending',
+        progress    INTEGER NOT NULL DEFAULT 0,
+        priority    INTEGER NOT NULL DEFAULT 0,
+        proxy       TEXT,
+        user_agent  TEXT,
+        geo_lat     REAL,
+        geo_lon     REAL,
+        error       TEXT,
+        result      TEXT,
+        created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+        started_at  TEXT,
+        completed_at TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+      CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(priority DESC, created_at ASC);
+
+      CREATE TABLE IF NOT EXISTS sessions (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        task_id      INTEGER NOT NULL REFERENCES tasks(id),
+        cookies      TEXT NOT NULL DEFAULT '{}',
+        local_storage TEXT NOT NULL DEFAULT '{}',
+        session_storage TEXT NOT NULL DEFAULT '{}',
+        screenshot_path TEXT,
+        screenshot_color TEXT,
+        expires_at   TEXT,
+        last_healthy TEXT,
+        created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_sessions_task ON sessions(task_id);
+
+      CREATE TABLE IF NOT EXISTS credentials (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        agent_id    INTEGER NOT NULL REFERENCES agents(id),
+        site        TEXT NOT NULL,
+        username_enc TEXT NOT NULL,
+        password_enc TEXT NOT NULL,
+        created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(agent_id, site)
+      );
+
+      CREATE TABLE IF NOT EXISTS audit_log (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        agent_id    INTEGER,
+        action      TEXT NOT NULL,
+        resource    TEXT,
+        details     TEXT,
+        ip_address  TEXT,
+        created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_audit_agent ON audit_log(agent_id);
+      CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS rate_limits (
+        key         TEXT NOT NULL,
+        window_start INTEGER NOT NULL,
+        count       INTEGER NOT NULL DEFAULT 1,
+        PRIMARY KEY (key, window_start)
+      );
+
+      CREATE TABLE IF NOT EXISTS circuit_breakers (
+        site        TEXT PRIMARY KEY,
+        failures    INTEGER NOT NULL DEFAULT 0,
+        tripped_at  TEXT,
+        last_failure TEXT
+      );
+    `,
+  },
+];
+
+export function migrate(): void {
+  // Run migrations synchronously on the writer connection (before server starts)
+  writer.exec("CREATE TABLE IF NOT EXISTS _meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);");
+
+  const row = writer.query("SELECT value FROM _meta WHERE key = 'schema_version'").get() as
+    | { value: string }
+    | null;
+  const currentVersion = row ? parseInt(row.value, 10) : 0;
+
+  for (const m of MIGRATIONS) {
+    if (m.version > currentVersion) {
+      writer.exec(m.sql);
+      writer
+        .query("INSERT OR REPLACE INTO _meta (key, value) VALUES ('schema_version', ?)")
+        .run(m.version.toString());
+      console.log(`[db] migrated to schema version ${m.version}`);
+    }
+  }
+
+  // Now that the DB file + schema exist, initialize reader pool
+  ensureReaders();
+}
+
+// --- Cleanup ---------------------------------------------------------------
+
+export function closeDB(): void {
+  for (const r of readers) try { r.close(); } catch {}
+  try { writer.close(); } catch {}
+}

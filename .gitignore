@@ -36,4 +36,7 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # Dev TLS certs (self-signed, generated locally)
 dev-cert.pem
 dev-key.pem
+
+# SQLite database files (runtime data, not source)
+data/
 user_pasted_clipboard*
