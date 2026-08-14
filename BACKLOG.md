@@ -24,7 +24,7 @@ Even with Bun's latest features, several gaps remain. They fall into **productio
 |-----|-------------|--------|---------------------|
 | **SQLite as the only data store** | SQLite is single-file and not designed for high concurrency or distributed deployments. | As the number of agents grows, SQLite may become a bottleneck; horizontal scaling is impossible. | Use PostgreSQL (or MySQL) for production; keep SQLite for local dev and testing. |
 | **No connection pooling for DB** | Each worker opens its own SQLite connection (or uses the same file, causing locking). | Contention and poor performance under load. | Use a connection pool (e.g., `pg.Pool` for PostgreSQL) and share it across workers (or use a separate DB per worker). |
-| **Workers are short-lived** | Each task spawns a new Bun process – startup overhead (~50ms) adds up. | For high-frequency tasks, this wastes CPU. | Implement a worker pool: pre-spawn N workers and assign tasks via IPC. Use `Bun.spawn` with `ipc` and keep them alive. |
+| **Workers are short-lived** | Each task spawns a new Bun process – startup overhead (~50ms) adds up. | For high-frequency tasks, this wastes CPU. | Implement a worker pool: pre-spawn N workers with `Bun.spawn({ ipc: true })` and keep them alive. Send tasks via `child.send(taskId)`, receive results via `child.on("message", ...)`. The v1.3.14 GC leak fix for `ipc` subprocesses makes this safe (see section 8). |
 | **No task prioritisation** | All tasks are processed FIFO; urgent tasks may wait behind long-running ones. | Agents may experience delays for critical operations. | Add a `priority` column to tasks and process higher-priority tasks first. |
 | **No caching for API responses** | Repeated API calls (e.g., `getSportsLeagues`) hit the target site every time. | Wastes network and may trigger rate limits. | Cache responses in Redis or an in-memory LRU with TTL (e.g., 60 seconds). |
 | **No distributed locking for cron jobs** | `Bun.cron` runs in-process on each server instance; in a multi-server setup, cron jobs overlap. | Duplicate work and potential race conditions. | Use Redis distributed locks (e.g., `redlock`) to ensure only one instance runs the cron job. |
@@ -123,3 +123,41 @@ Even with Bun's latest features, several gaps remain. They fall into **productio
 ## Final Verdict
 
 The architecture is **sound and powerful** – it leverages Bun's latest features (HTTP/3, shared SSL_CTX, `--no-orphans`, native `using`, etc.) to achieve high performance and reliability. However, it is currently an **MVP** – production-ready for small-scale use, but requiring the above additions to serve hundreds of agents across multiple sites. Bun provides the **primitives**; the remaining gaps are **application-level concerns** that can be filled with well-structured code and selected third-party libraries.
+
+---
+
+## 8. Bun v1.3.14 Bug Fixes Relevant to This Platform
+
+These fixes shipped in v1.3.14 and directly affect patterns used in this architecture. Listed here so future implementation doesn't re-encounter the original bugs.
+
+### Bun.spawn fixes
+
+| Fix | Impact on platform |
+|-----|---------------------|
+| **`Bun.spawn({ ipc })` GC leak** — subprocesses with `ipc: true` were never garbage collected after child exit, leaking the subprocess + stdout/stderr buffers + stdin FileSink for the process lifetime. | **Worker pool**: `ipc: true` is the correct API for parent-child IPC (send/onMessage). This fix means pooled workers won't leak memory. The `ipc: true` option is real — earlier testing showed `child.send` exists but `child.connected` was false; that was the GC bug, not a missing API. |
+| **stdin pipe fd leak** — when using `stdin: "pipe"` without reading `.stdin`, the fd leaked until GC. | **render-mermaid.ts**: uses `stdin: "inherit"` (not affected), but worker pool implementations using `stdin: "pipe"` for IPC fallback are now safe. |
+| **stdout/stderr pipe GC leak** — subprocess objects weren't GC'd when pipes drained asynchronously after child exit (e.g., grandchild inherits the pipe). | **render-mermaid.ts**: uses `stdio: "inherit"` (not affected). Worker pool with piped stdio is now safe. |
+| **`exit` event not firing on Linux** with `stdio: "ignore"` — pidfd poll used EPOLLONESHOT, disarming before user-space could process it. | **Worker pool**: Linux workers with `stdio: "ignore"` now reliably fire exit events. |
+| **Caller-owned fd corruption** — extra stdio slots (index >= 3) were incorrectly closed after GC, causing EACCES/EBADF on reuse. | **Worker pool**: passing custom fds as extra stdio slots is now safe. |
+
+### Bun.serve fixes
+
+| Fix | Impact on platform |
+|-----|---------------------|
+| **`perMessageDeflate` non-boolean crash** — setting it to a number/string/bigint crashed instead of throwing TypeError. | **LiveControl WebSocket**: always pass `perMessageDeflate: false` (boolean), now guarded against type coercion bugs. |
+| **ReadableStream sync handler leak** — direct stream handlers writing synchronously leaked ~400 bytes/request. | **LiveControl**: screenshot streaming via ReadableStream no longer leaks. |
+| **`server.fetch(string)` URL buffer leak** — intermediate URL was leaked on every call. | **Scheduling**: `Bun.cron` health checks using `server.fetch()` no longer leak. |
+| **`server.reload()` WebSocket handler leak** — discarded handler functions were permanently rooted when WebSocket config lacked open/message handlers. | **Hot-reload**: `server.reload()` with partial WebSocket config is now safe. |
+| **Chunked body + pending Promise leak** — heap-use-after-free when chunked body exceeded `maxRequestBodySize` and fetch handler returned a pending Promise. | **Task submission**: large task payloads with async fetch handlers are now safe. |
+
+### Other relevant fixes
+
+| Fix | Impact on platform |
+|-----|---------------------|
+| **`Bun.password.hash()` buffer leak** — hash output buffer wasn't freed after copying to JS string. | **Auth**: `/login` endpoint using `Bun.password.hash()` no longer leaks per call. |
+| **TLS cert/key file leak** — passing `Bun.file()` as cert/key/ca leaked one buffer per file per config parse. | **dev-server.ts**: uses `await certFile.text()` (string, not Bun.file directly) — not affected, but good to know the direct-file path is now fixed too. |
+| **`Bun.markdown.ansi()` invalid UTF-8 crash** — lone continuation bytes caused a panic. | **Logging**: markdown-to-ANSI rendering (if used for dashboard) is now safe with untrusted input. |
+| **RedisClient stuck after failure** — `connect()` didn't recover after reconnection exhaustion or fatal errors. | **Caching/locking**: Redis-based rate limiting and distributed locks can now recover without replacing the client instance. |
+| **RedisClient TLS hostname verification** — `rejectUnauthorized: true` silently accepted mismatched/self-signed certs. | **Caching/locking**: Redis TLS connections now properly verify hostnames. |
+| **`Bun.S3Client({ queueSize })` panic** — queueSize > 255 crashed, and valid values (1-255) were silently overridden to 255. | **Screenshot storage**: S3 uploads with configurable queue depth are now safe. |
+| **`Bun.s3.list()` panic** — prefix/delimiter/continuationToken/startAfter > ~341 chars after URL-encoding crashed. | **Screenshot storage**: listing S3 objects with long prefixes no longer crashes. |
