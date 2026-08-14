@@ -170,7 +170,7 @@ Each callback receives `(children: string, meta?: MetaInterface)`. Return `strin
 
 ### Render Callbacks (`render()` second argument)
 
-Each callback receives `(children: string, meta?: MetaInterface)`. Return `string` to replace output, `null`/`undefined` to omit element. If no callback is registered, children pass through unchanged. **21 callbacks total** (13 block + 8 inline).
+Each callback receives `(children: string, meta?: MetaInterface)`. Return `string` to replace output, `null`/`undefined` to omit element. If no callback is registered, children pass through unchanged. **21 callbacks total** (14 block + 7 inline).
 
 **Block callbacks:**
 
@@ -202,7 +202,6 @@ Each callback receives `(children: string, meta?: MetaInterface)`. Return `strin
 | `image` | `ImageMeta` `{ src, title? }` | Image. `src` is URL, `title` is optional title attribute. |
 | `codespan` | -- | Inline code (`` `code` ``) |
 | `text` | -- | Plain text content. **Note:** receives `text` directly (not `children`). |
-| `paragraph` | -- | (also block-level, listed above) |
 
 #### List item meta (detailed)
 

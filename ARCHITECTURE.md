@@ -253,7 +253,7 @@ Fast, CommonMark-compliant parser (Zig port of `md4c`). Four render modes:
 
 **v1.3.14 fix:** `ansi()` crash on invalid UTF-8 (lone continuation bytes `0x80-0xBF`, bytes `0xF8-0xFF`) — now treated as replacement characters.
 
-**21 render callbacks** (13 block + 8 inline): `heading`, `paragraph`, `blockquote`, `code`, `list`, `listItem`, `hr`, `table`, `thead`, `tbody`, `tr`, `th`, `td`, `html` (block); `strong`, `emphasis`, `strikethrough`, `link`, `image`, `codespan`, `text` (inline).
+**21 render callbacks** (14 block + 7 inline): `heading`, `paragraph`, `blockquote`, `code`, `list`, `listItem`, `hr`, `table`, `thead`, `tbody`, `tr`, `th`, `td`, `html` (block); `strong`, `emphasis`, `strikethrough`, `link`, `image`, `codespan`, `text` (inline).
 
 **GFM extensions enabled by default:** `tables`, `strikethrough`, `tasklists`.
 

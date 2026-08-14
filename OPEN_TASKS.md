@@ -701,7 +701,7 @@ Each callback receives `(children: string, meta?: MetaInterface)`. Return `strin
 
 ### 4. Render Callbacks (`render()` second argument)
 
-Each callback receives `(children: string, meta?: MetaInterface)`. Return `string` to replace output, `null`/`undefined` to omit element. If no callback is registered, children pass through unchanged. **21 callbacks total** (13 block + 8 inline).
+Each callback receives `(children: string, meta?: MetaInterface)`. Return `string` to replace output, `null`/`undefined` to omit element. If no callback is registered, children pass through unchanged. **21 callbacks total** (14 block + 7 inline).
 
 **Block callbacks:**
 
