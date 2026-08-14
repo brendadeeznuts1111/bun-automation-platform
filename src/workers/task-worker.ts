@@ -113,7 +113,7 @@ async function executeTask(task: TaskRow): Promise<string> {
  * Creates a 1280x720 image with the task URL rendered as colored bars.
  * In production, this would be replaced by Bun.WebView's screenshot API.
  */
-function generatePlaceholderScreenshot(task: TaskRow): ArrayBuffer {
+function generatePlaceholderScreenshot(task: TaskRow): Buffer {
   // Create a simple 1280x720 PNG with a solid color background.
   // We build it manually to avoid any image library dependency —
   // Bun.Image handles the rest (resize, convert, thumbnail).
@@ -155,7 +155,7 @@ function hashString(s: string): number {
 }
 
 /** Minimal PNG encoder (RGBA, 8-bit, no compression library needed — uses Bun's zlib). */
-function encodePng(raw: Uint8Array, width: number, height: number): ArrayBuffer {
+function encodePng(raw: Uint8Array, width: number, height: number): Buffer {
   // Use Bun's built-in zlib via node:zlib
   const { deflateSync } = require("node:zlib");
 

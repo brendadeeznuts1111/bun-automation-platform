@@ -22,7 +22,7 @@ interface PendingTask {
 }
 
 interface WorkerSlot {
-  proc: import("bun").Subprocess<"ignore", "ignore", "ignore">;
+  proc: import("bun").Subprocess<"ignore", "inherit", "inherit">;
   busy: boolean;
   currentTask: PendingTask | null;
   untrack: () => void;

@@ -40,7 +40,7 @@ function ensureReaders(): void {
 
 function getReader(): Database {
   ensureReaders();
-  const r = readers[readerIdx % readers.length];
+  const r = readers[readerIdx % readers.length]!;
   readerIdx++;
   return r;
 }

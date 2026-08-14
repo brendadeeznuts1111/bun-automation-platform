@@ -29,7 +29,7 @@ function getConfig(path: string): RateLimitConfig {
   for (const [prefix, cfg] of Object.entries(DEFAULTS)) {
     if (prefix !== "default" && path.startsWith(prefix)) return cfg;
   }
-  return DEFAULTS.default;
+  return DEFAULTS.default!;
 }
 
 /**

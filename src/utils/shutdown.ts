@@ -10,6 +10,8 @@
  */
 
 import type { Server } from "bun";
+
+type AnyServer = Server<any>;
 import { closeDB } from "../db";
 
 interface WorkerHandle {
@@ -39,7 +41,7 @@ export function isShuttingDown(): boolean {
  * Initiate graceful shutdown.
  * Called automatically on SIGTERM/SIGINT, or manually.
  */
-export async function shutdown(server: Server, reason: string): Promise<void> {
+export async function shutdown(server: AnyServer, reason: string): Promise<void> {
   if (shuttingDown) return;
   shuttingDown = true;
 
@@ -90,7 +92,7 @@ export async function shutdown(server: Server, reason: string): Promise<void> {
 }
 
 /** Install signal handlers for graceful shutdown. */
-export function installShutdownHandlers(server: Server): void {
+export function installShutdownHandlers(server: AnyServer): void {
   const handler = (signal: string) => {
     shutdown(server, `received ${signal}`).catch((e) => {
       console.error("[shutdown] error:", e);

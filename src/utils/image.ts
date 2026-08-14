@@ -96,54 +96,17 @@ export async function processScreenshot(
 
 /**
  * Extract the dominant color from an image as a hex string.
- * Resizes to 1x1 to get the average color, then reads the pixel.
+ *
+ * Bun.Image doesn't expose per-pixel access, so we resize to 1x1 and
+ * encode as JPEG base64. The JPEG base64 is not directly parseable for
+ * pixel values without a decoder, so for now we return a default dark
+ * background color. The ThumbHash placeholder (generated separately)
+ * already encodes the dominant color for blur-up loading.
+ *
+ * TODO: When Bun.Image adds a pixel accessor, parse the 1x1 buffer directly.
  */
-async function extractDominantColor(img: import("bun").Image): Promise<string> {
-  // Resize to 1x1 to get the average color
-  const buf = await img.resize(1, 1, { filter: "box" }).png().buffer();
-  // PNG: skip the header and read the pixel data
-  // The PNG signature is 8 bytes, then IHDR chunk, then IDAT
-  // For a 1x1 RGBA PNG, the pixel is at a known offset
-  // But it's easier to just use the raw buffer approach:
-  // Decode the 1x1 PNG back and read the pixel
-  const tiny = new Bun.Image(buf);
-  // Use toBase64 and decode, or just read the buffer
-  // Actually, let's use a different approach — resize to 1x1 and get JPEG base64
-  const jpegB64 = await tiny.resize(1, 1).jpeg({ quality: 100 }).toBase64();
-  // Decode JPEG to get pixel — but that's circular.
-  // Better: use the PNG buffer directly. For a 1x1 PNG, the raw pixel
-  // is typically at a fixed offset. Let's use a simpler approach:
-  // Resize to a small size and sample the center pixel via metadata + crop.
-  //
-  // Actually, the simplest approach is to use the dataurl and parse it.
-  // But even simpler: Bun.Image doesn't expose per-pixel access.
-  // We can use the 1x1 PNG and parse the bytes manually.
-  return parsePngDominantColor(buf);
-}
-
-/**
- * Parse a 1x1 PNG buffer to extract the RGBA pixel color.
- * PNG format: 8-byte signature + chunks (IHDR, IDAT, IEND).
- * For a 1x1 RGBA PNG, the decompressed IDAT data is:
- *   1 byte filter (0 = none) + 4 bytes RGBA
- */
-function parsePngDominantColor(buf: ArrayBuffer): string {
-  // Use Bun's built-in zlib to decompress the IDAT chunk
-  // Actually, let's use a simpler approach: decode via Bun.Image
-  // and convert to a known format we can parse.
-  //
-  // The most reliable approach: resize to 1x1, convert to BMP (simple format),
-  // and parse the pixel directly. But Bun.Image doesn't output BMP.
-  //
-  // Alternative: use the dataurl approach — resize to 1x1, get PNG dataurl,
-  // base64 decode, decompress IDAT, read pixel.
-  //
-  // For now, let's use a fallback: generate a color from the thumbhash.
-  // The thumbhash encodes the dominant color, so we can extract it.
-  //
-  // Simplest reliable approach: just return a default color and let
-  // the caller use the thumbhash for the placeholder.
-  return "#1f2020"; // default dark background
+async function extractDominantColor(_img: import("bun").Image): Promise<string> {
+  return "#1f2020"; // default dark background — thumbhash carries the real color
 }
 
 /**

@@ -242,7 +242,7 @@ const server = Bun.serve({
 
     const taskMatch = path.match(/^\/task\/(\d+)$/);
     if (taskMatch && method === "GET") {
-      const taskId = parseInt(taskMatch[1], 10);
+      const taskId = parseInt(taskMatch[1]!, 10);
       const task = read((db) => {
         return db.query("SELECT * FROM tasks WHERE id = ?").get(taskId);
       });
@@ -271,7 +271,7 @@ const server = Bun.serve({
 
     const screenshotMatch = path.match(/^\/screenshot\/(\d+)$/);
     if (screenshotMatch && method === "GET") {
-      const sessionId = parseInt(screenshotMatch[1], 10);
+      const sessionId = parseInt(screenshotMatch[1]!, 10);
       const session = read((db) => {
         return db.query("SELECT screenshot_path FROM sessions WHERE id = ?").get(sessionId) as
           | { screenshot_path: string }
