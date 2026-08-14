@@ -4,7 +4,7 @@ Cross-referenced against:
 - [Bun v1.3.14 release blog](https://bun.com/blog/bun-v1.3.14) — released May 13, 2026
 - [Bun docs](https://bun.com/docs/) — Server, Routing, WebSockets, WebView, Cron, CSRF, Secrets, Spawn, Image
   - [Cron (canonical)](https://bun.com/docs/runtime/cron) — `Bun.cron()`, `Bun.cron.parse()`, OS-level jobs
-- Current codebase (`src/` — 12 files, ~2000 lines)
+- Current codebase (`src/` — 12 files, ~1600 lines)
 - `BACKLOG.md` gap analysis
 
 Each task cites the specific Bun API/doc that grounds it.

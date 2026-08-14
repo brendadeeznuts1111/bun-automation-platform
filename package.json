@@ -1,5 +1,5 @@
 {
-  "name": "artifacts-browser",
+  "name": "bun-automation-platform",
   "private": true,
   "bin": {
     "render-mermaid": "render-mermaid.ts"
