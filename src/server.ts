@@ -20,6 +20,7 @@ import { checkRateLimit, cleanupRateLimits } from "./middleware/rate-limit";
 import { handlePreflight, withCors } from "./middleware/cors";
 import { installShutdownHandlers, isShuttingDown } from "./utils/shutdown";
 import { initWorkerPool, submitTask, getPoolStatus } from "./workers/pool";
+import { serveScreenshot } from "./utils/image";
 
 // --- Config ----------------------------------------------------------------
 
@@ -210,7 +211,7 @@ const server = Bun.serve({
           return error("invalid url", 400, req);
         }
 
-        const taskId = write((db) => {
+        const taskId = await write((db) => {
           const result = db.query(
             `INSERT INTO tasks (agent_id, url, proxy, user_agent, priority)
              VALUES (?, ?, ?, ?, ?)`,
@@ -266,6 +267,31 @@ const server = Bun.serve({
       return json({ sessions, limit, offset }, 200, req);
     }
 
+    // --- Screenshot: Serve by session ID -----------------------------------
+
+    const screenshotMatch = path.match(/^\/screenshot\/(\d+)$/);
+    if (screenshotMatch && method === "GET") {
+      const sessionId = parseInt(screenshotMatch[1], 10);
+      const session = read((db) => {
+        return db.query("SELECT screenshot_path FROM sessions WHERE id = ?").get(sessionId) as
+          | { screenshot_path: string }
+          | null;
+      });
+
+      if (!session) return error("session not found", 404, req);
+      if (!session.screenshot_path) return error("no screenshot for this session", 404, req);
+
+      // Optional resize + format query params
+      const width = url.searchParams.get("w") ? parseInt(url.searchParams.get("w")!, 10) : undefined;
+      const format = (url.searchParams.get("format") as "webp" | "jpeg" | "png") ?? "webp";
+
+      try {
+        return serveScreenshot(session.screenshot_path, width, format);
+      } catch {
+        return error("screenshot file missing", 404, req);
+      }
+    }
+
     // --- Audit log ---------------------------------------------------------
 
     if (path === "/audit" && method === "GET") {
@@ -296,4 +322,5 @@ console.log(`  GET  /tasks        — list tasks (pagination + status filter)`);
 console.log(`  POST /task         — create task (dispatches to worker pool)`);
 console.log(`  GET  /task/:id     — get task by ID`);
 console.log(`  GET  /sessions     — list sessions`);
+console.log(`  GET  /screenshot/:id — serve screenshot (optional ?w=400&format=jpeg)`);
 console.log(`  GET  /audit        — audit log (pagination + agent filter)`);
