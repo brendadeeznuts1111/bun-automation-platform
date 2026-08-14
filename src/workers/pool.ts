@@ -1,14 +1,14 @@
 /**
- * Worker pool — pre-spawned Bun processes with IPC.
+ * Worker pool — pre-spawned Bun processes with native IPC.
  *
- * Uses node:child_process.fork() for reliable IPC (Bun.spawn({ ipc: true })
- * has a known issue where the IPC channel doesn't open in v1.3.14).
+ * Uses Bun.spawn({ ipc: (message) => ... }) for parent-child IPC.
+ * The child uses process.send() and process.on("message") — same as
+ * Node.js child_process.fork().
  *
- * Tasks are dispatched via child.send(taskId) and results are received
- * via child.on("message", ...).
+ * The v1.3.14 GC leak fix for ipc subprocesses makes this safe.
+ * Messages are serialized with the JSC serialize API (structuredClone-compatible).
  */
 
-import { fork, type ChildProcess } from "node:child_process";
 import { resolve } from "node:path";
 import { trackWorker, isShuttingDown } from "../utils/shutdown";
 
@@ -22,10 +22,11 @@ interface PendingTask {
 }
 
 interface WorkerSlot {
-  proc: ChildProcess;
+  proc: import("bun").Subprocess<"ignore", "ignore", "ignore">;
   busy: boolean;
   currentTask: PendingTask | null;
   untrack: () => void;
+  exited: boolean;
 }
 
 const pool: WorkerSlot[] = [];
@@ -41,31 +42,39 @@ export async function initWorkerPool(): Promise<void> {
 }
 
 function spawnWorker(): WorkerSlot {
-  const proc = fork(
-    process.execPath,
-    [WORKER_SCRIPT],
-    {
-      stdio: ["inherit", "inherit", "inherit", "ipc"],
-      env: {
-        ...process.env,
-        // Strip --hot to prevent event loop hang in child
-        BUN_OPTIONS: undefined,
-      },
-    },
-  );
-
   const slot: WorkerSlot = {
-    proc,
+    proc: undefined!,
     busy: false,
     currentTask: null,
     untrack: () => {},
+    exited: false,
   };
+
+  const proc = Bun.spawn({
+    cmd: [process.execPath, WORKER_SCRIPT],
+    ipc: (message: any) => {
+      handleWorkerMessage(slot, message);
+    },
+    onDisconnect: () => {
+      // IPC channel closed — child exited or called disconnect
+    },
+    stdin: "ignore",
+    stdout: "inherit",
+    stderr: "inherit",
+    env: {
+      ...process.env,
+      // Strip --hot to prevent event loop hang in child
+      BUN_OPTIONS: undefined,
+    },
+  });
+
+  slot.proc = proc;
 
   // Track for graceful shutdown
   slot.untrack = trackWorker({
     pid: proc.pid!,
     send: (msg) => proc.send(msg),
-    exited: new Promise<number>((resolve) => proc.on("exit", (code) => resolve(code ?? 0))),
+    exited: proc.exited,
     kill: (sig) => {
       try {
         proc.kill(sig as any);
@@ -73,23 +82,17 @@ function spawnWorker(): WorkerSlot {
     },
   });
 
-  // Handle messages from worker
-  proc.on("message", (msg: any) => {
-    handleWorkerMessage(slot, msg);
-  });
-
-  // Handle worker exit — only respawn if the process actually ran for a while
-  let exited = false;
-  proc.on("exit", (code, signal) => {
-    if (exited) return;
-    exited = true;
+  // Handle worker exit
+  proc.exited.then((code) => {
+    if (slot.exited) return;
+    slot.exited = true;
     slot.untrack();
 
     if (slot.currentTask) {
       if (code === 0) {
         slot.currentTask.resolve({ status: "completed" });
       } else {
-        slot.currentTask.reject(new Error(`worker exited with code ${code} signal ${signal}`));
+        slot.currentTask.reject(new Error(`worker exited with code ${code}`));
       }
       slot.currentTask = null;
     }
@@ -101,7 +104,7 @@ function spawnWorker(): WorkerSlot {
       const idx = pool.indexOf(slot);
       if (idx >= 0) {
         pool[idx] = spawnWorker();
-        console.log(`[workers] respawned worker at index ${idx} (code=${code} signal=${signal})`);
+        console.log(`[workers] respawned worker at index ${idx} (code=${code})`);
       }
     }
   });
@@ -110,20 +113,23 @@ function spawnWorker(): WorkerSlot {
 }
 
 function handleWorkerMessage(slot: WorkerSlot, msg: any): void {
-  if (!slot.currentTask) return;
+  if (!slot.currentTask && msg.type !== "ready") return;
 
   switch (msg.type) {
+    case "ready":
+      // Worker is ready — nothing to do, it's already in the pool
+      break;
     case "progress":
       console.log(`[worker:${slot.proc.pid}] task ${msg.taskId} progress: ${msg.progress}%`);
       break;
     case "result":
-      slot.currentTask.resolve(msg.result);
+      slot.currentTask?.resolve(msg.result);
       slot.currentTask = null;
       slot.busy = false;
       dispatchNext();
       break;
     case "error":
-      slot.currentTask.reject(new Error(msg.error));
+      slot.currentTask?.reject(new Error(msg.error));
       slot.currentTask = null;
       slot.busy = false;
       dispatchNext();
@@ -134,7 +140,7 @@ function handleWorkerMessage(slot: WorkerSlot, msg: any): void {
 function dispatchNext(): void {
   if (taskQueue.length === 0 || isShuttingDown()) return;
 
-  const idle = pool.find((s) => !s.busy);
+  const idle = pool.find((s) => !s.busy && !s.exited);
   if (!idle) return;
 
   const task = taskQueue.shift()!;

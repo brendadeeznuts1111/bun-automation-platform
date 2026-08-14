@@ -1,8 +1,9 @@
 /**
  * Task worker — runs in a spawned Bun process.
  *
- * Receives task IDs via IPC, loads the task from the database,
- * executes the automation steps, and reports progress/results back.
+ * Receives task IDs via IPC (process.on("message")),
+ * loads the task from the database, executes the automation steps,
+ * and reports progress/results back via process.send().
  *
  * In production, this would use Bun.WebView for browser automation.
  * For now, it's a stub that simulates task execution.
@@ -55,74 +56,20 @@ async function executeTask(task: TaskRow): Promise<string> {
   const steps = ["navigate", "login", "collect", "screenshot"];
 
   for (let i = 0; i < steps.length; i++) {
-    if (process.send) {
-      process.send({ type: "progress", taskId: task.id, progress: Math.round((i / steps.length) * 100) });
-    }
+    process.send?.({ type: "progress", taskId: task.id, progress: Math.round((i / steps.length) * 100) });
     updateProgress(task.id, Math.round((i / steps.length) * 100));
 
     // Simulate work
     await new Promise((r) => setTimeout(r, 500));
   }
 
-  return JSON.stringify({ url: task.url, steps: steps, timestamp: new Date().toISOString() });
+  return JSON.stringify({ url: task.url, steps, timestamp: new Date().toISOString() });
 }
 
 // --- IPC handler -----------------------------------------------------------
 
-process.on("message", async (msg: any) => {
-  if (msg.type === "shutdown") {
-    console.log(`[worker:${process.pid}] received shutdown signal`);
-    process.exit(0);
-  }
-
-  if (msg.type === "task") {
-    const taskId = msg.taskId as number;
-    const task = loadTask(taskId);
-
-    if (!task) {
-      process.send?.({ type: "error", taskId, error: "task not found" });
-      return;
-    }
-
-    // Mark task as running
-    write((db) => {
-      db.query("UPDATE tasks SET status = 'running', started_at = datetime('now') WHERE id = ?").run(taskId);
-    });
-
-    try {
-      // Execute with retry logic
-      const result = await withRetry(() => executeTask(task), {
-        maxAttempts: 3,
-        baseDelayMs: 2000,
-        retryable: (e) => {
-          // Don't retry on "not found" or auth errors
-          const msg = e instanceof Error ? e.message : String(e);
-          return !msg.includes("not found") && !msg.includes("auth");
-        },
-        onRetry: (attempt, delay) => {
-          console.log(`[worker:${process.pid}] retry ${attempt} after ${delay}ms`);
-          process.send?.({ type: "progress", taskId, progress: -1, retrying: attempt });
-        },
-      });
-
-      completeTask(taskId, result);
-      recordSuccess(new URL(task.url).host);
-      process.send?.({ type: "result", taskId, result });
-    } catch (err) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      failTask(taskId, errMsg);
-      recordFailure(new URL(task.url).host);
-      process.send?.({ type: "error", taskId, error: errMsg });
-    }
-  }
-});
-
-console.log(`[worker:${process.pid}] ready`);
-
 // Keep the process alive waiting for IPC messages.
-// Bun's event loop doesn't stay alive for IPC alone, so we need a ref'd timer
-// that we clear when we receive a shutdown signal.
-let keepAlive = setInterval(() => {}, 1000);
+let keepAlive = setInterval(() => {}, 60_000);
 
 process.on("message", async (msg: any) => {
   if (msg.type === "shutdown") {
@@ -146,14 +93,12 @@ process.on("message", async (msg: any) => {
     });
 
     try {
-      // Execute with retry logic
       const result = await withRetry(() => executeTask(task), {
         maxAttempts: 3,
         baseDelayMs: 2000,
         retryable: (e) => {
-          // Don't retry on "not found" or auth errors
-          const msg = e instanceof Error ? e.message : String(e);
-          return !msg.includes("not found") && !msg.includes("auth");
+          const errMsg = e instanceof Error ? e.message : String(e);
+          return !errMsg.includes("not found") && !errMsg.includes("auth");
         },
         onRetry: (attempt, delay) => {
           console.log(`[worker:${process.pid}] retry ${attempt} after ${delay}ms`);
@@ -172,3 +117,7 @@ process.on("message", async (msg: any) => {
     }
   }
 });
+
+// Notify parent that we're ready
+process.send?.({ type: "ready", pid: process.pid });
+console.log(`[worker:${process.pid}] ready`);
