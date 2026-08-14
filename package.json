@@ -1,0 +1,14 @@
+{
+  "name": "artifacts-browser",
+  "private": true,
+  "bin": {
+    "render-mermaid": "render-mermaid.ts"
+  },
+  "devDependencies": {
+    "@mermaid-js/mermaid-cli": "^11.16.0",
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}

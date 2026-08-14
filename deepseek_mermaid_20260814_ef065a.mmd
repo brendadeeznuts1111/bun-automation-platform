@@ -1,0 +1,116 @@
+flowchart TB
+    subgraph Config["Configuration (Environment Variables)"]
+        A[".env files loaded automatically by Bun"] --> B["MASTER_KEY, PROXY_POOL_URL, NODE_ENV, CSRF_SECRET"]
+        B --> C["Used by Server & Workers"]
+    end
+
+    subgraph Frontend["Agent Dashboard (HTML + JS)"]
+        D[Login Page] --> E[Dashboard UI]
+        E --> F["Task Submission Form (URL, creds, location)"]
+        E --> G[Task List with progress]
+        E --> H[Session Detail Modal]
+        E --> I["Credential Management (add/edit/delete)"]
+        E --> J["Live Control (canvas + WebSocket) – uses Bun.serve WebSocket (built-in)"]
+        E --> K["Verification Panel (IP, UA, fingerprint)"]
+    end
+
+    subgraph Server["Main Bun Server (Bun.serve – built-in)"]
+        L[HTTP/HTTPS endpoints] --> M{CSRF protection?}
+        M -->|Valid token| N[Process request]
+        M -->|Invalid/missing| O[403 Forbidden]
+        N --> P["/login endpoint – Bun.password (stable)"]
+        N --> Q["/task endpoint – create task in DB, spawn worker – Bun.spawn (stable)"]
+        N --> R["/tasks, /sessions endpoints – return data – Bun.serve (built-in)"]
+        N --> S["/session/:id/refresh, /close – state changes – Bun.CSRF (stable)"]
+        N --> T["/credentials – list/add/delete – Bun.secrets (experimental, v1.3.5?)"]
+        N --> U["/verify – return agent metadata – uses request headers"]
+        N --> V["/live – WebSocket upgrade – Bun.serve WebSocket (built-in)"]
+    end
+
+    subgraph Workers["Task Workers (Bun.spawn – stable)"]
+        W[Worker process] --> X[Read taskId from argv]
+        X --> Y["Launch Bun.WebView (v1.3.12, experimental) with proxy & UA override"]
+        Y --> Z[Navigate, login, capture session]
+        Z --> AA["Take screenshot with Bun.Image (v1.3.14, stable)"]
+        Z --> AB[Store session in SQLite]
+        W --> AC["IPC: send progress (10%, 50%, 100%) – Bun.spawn IPC (stable)"]
+        AC --> AD["Server updates task status in DB"]
+        W --> AE["Exit (success/failure) – onExit handler (stable)"]
+    end
+
+    subgraph Scheduling["Scheduled Jobs (Bun.cron – v1.3.11, stable)"]
+        AF[In‑process cron] --> AG["*/5 * * * * – health check"]
+        AG --> AH[Fetch active sessions from DB]
+        AH --> AI[Call lightweight API with session cookie]
+        AI --> AJ{Valid?}
+        AJ -->|Yes| AK[Update last_healthy]
+        AJ -->|No| AL[Spawn refresh worker]
+        AM["OS‑level cron (optional) – Bun.cron(path, schedule, title)"] --> AN[Run collector script for heavy tasks]
+    end
+
+    subgraph Data["Data Storage"]
+        AO["SQLite (or PostgreSQL) – Bun:sqlite (stable)"] --> AP["Tasks (status, progress, creds)"]
+        AO --> AQ["Sessions (cookies, storage, logs)"]
+        AO --> AR["Credentials (encrypted with MASTER_KEY)"]
+        AO --> AS["Audit logs (actions, agent_id, timestamp)"]
+        AT["File system / S3 – Bun.write, Bun.file (stable)"] --> AU["Screenshots, thumbnails"]
+    end
+
+    subgraph Security["Security Layer"]
+        AV["Bun.CSRF (stable, built‑in)"] --> AW["Generate token on login, verify on state changes"]
+        AX["Bun.CookieMap (v1.2.7, stable)"] --> AY["Dashboard session cookie (httpOnly, secure, sameSite)"]
+        AZ["Bun.password (stable, built‑in)"] --> BA["Hash/verify agent password"]
+        BB["Bun.secrets (experimental, built‑in)"] --> BC["Store master key or credentials (local OS keychain)"]
+    end
+
+    subgraph LiveControl["Live Control (WebSocket – Bun.serve WebSocket, built‑in)"]
+        BD[WebSocket endpoint /live] --> BE[Upgrade to WebSocket]
+        BE --> BF[Stream screenshots from active WebView]
+        BE --> BG[Forward mouse/keyboard events to WebView]
+        BG --> BH["Update WebView via CDP – view.cdp() available in WebView"]
+    end
+
+    subgraph Gaps["Critical Gaps & Considerations"]
+        BI[Missing features] --> BJ["Rate limiting (add with bun-rate-limiter)"]
+        BI --> BK["Retry logic (exponential backoff)"]
+        BI --> BL["Circuit breaker (skip site after N failures)"]
+        BI --> BM["Structured logs (pino) & Prometheus metrics"]
+        BI --> BN["Distributed locking (Redis) for multi‑instance cron"]
+        BI --> BO["Containerization (Docker) & CI/CD"]
+        BI --> BP["Database migrations (use migrate tool)"]
+        BI --> BQ["Real‑time updates via WebSocket (partially implemented)"]
+        BI --> BR["Multi‑account support (per profile)"]
+        BI --> BS["Audit trail (partially implemented, expand)"]
+    end
+
+    %% Connections
+    Frontend -->|HTTP/HTTPS| Server
+    Server --> Workers
+    Server --> Scheduling
+    Server --> Data
+    Server --> Security
+    Server --> LiveControl
+    Workers --> Data
+    Scheduling --> Workers
+    Scheduling --> Data
+    Config --> Server
+    Config --> Workers
+    Config --> Security
+    LiveControl --> Workers
+
+    %% Styling
+    classDef bun fill:#b3d9ff,stroke:#333,stroke-width:1px;
+    classDef security fill:#ffb3b3,stroke:#333,stroke-width:1px;
+    classDef data fill:#b3ffb3,stroke:#333,stroke-width:1px;
+    classDef gap fill:#ffcccc,stroke:#ff0000,stroke-width:2px,stroke-dasharray: 5 5;
+    classDef frontend fill:#f9d5e5,stroke:#333,stroke-width:1px;
+    classDef stable fill:#d4edda,stroke:#28a745,stroke-width:1px;
+    classDef experimental fill:#ffe5cc,stroke:#ff8800,stroke-width:1px;
+
+    class Y,AA,AF,AG,AI,AL,AV,AW,AX,AZ,BB,BD bun;
+    class AV,AW,AX,AZ,BB security;
+    class AO,AT data;
+    class BI,BJ,BK,BL,BM,BN,BO,BP,BQ,BR,BS gap;
+    class D,E,F,G,H,I,J,K frontend;
+    class P,Q,R,S,T,U,V,W,AC,AE,AF,AG,AH,AI,AJ,AK,AL,AM,AN stable;
+    class Y,BB experimental;

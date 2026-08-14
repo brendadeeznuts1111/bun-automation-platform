@@ -1,0 +1,73 @@
+---
+title: Bun Automation Platform – Implementation Drill-Down
+---
+flowchart TB
+  classDef api fill:#2a2a3d,stroke:#8be9fd,stroke-width:2px,color:#f8f8f2
+  classDef worker fill:#1f3d2a,stroke:#50fa7b,stroke-width:2px,color:#f8f8f2
+  classDef data fill:#3d2a1f,stroke:#ffb86c,stroke-width:2px,color:#f8f8f2
+  classDef sec fill:#3d1f1f,stroke:#ff5555,stroke-width:2px,color:#f8f8f2
+  classDef gap fill:#3d352a,stroke:#bd93f9,stroke-width:2px,stroke-dasharray:5 5,color:#f8f8f2
+  classDef cron fill:#2a3d3d,stroke:#8be9fd,stroke-width:2px,color:#f8f8f2
+
+  %% --- Entry: HTTP server ---
+  REQ["POST /task<br/>CSRF-protected"]:::api
+  REQ --> INSERT["INSERT task<br/>status=pending"]:::data
+
+  %% --- Bun.spawn worker lifecycle ---
+  INSERT --> SPAWN["Bun.spawn<br/>cmd: bun worker.ts taskId<br/>env: process.env<br/>timeout: 120000 (SIGTERM)"]:::api
+  SPAWN --> WPROC["worker.ts<br/>loads task from DB"]:::worker
+
+  %% --- IPC channel ---
+  WPROC -. IPC .-> IPC["ipc handler<br/>progress / done / error"]:::api
+  IPC --> UPD["UPDATE tasks<br/>progress, status, session_id"]:::data
+  SPAWN -. onExit .-> ONEXIT["onExit handler<br/>crash → status=failed"]:::api
+  ONEXIT --> UPD
+
+  %% --- WebView automation sequence ---
+  WPROC --> WV["Bun.WebView<br/>backend: chrome<br/>argv: --proxy-server"]:::api
+  WV --> NAV["view.navigate url"]:::api
+  NAV --> UA["cdp Network.setUserAgentOverride"]:::api
+  UA --> GEO["cdp Emulation.setGeolocationOverride<br/>us-east / eu"]:::api
+  GEO --> FILL["waitForSelector → type → click<br/>login form"]:::api
+  FILL --> WAIT["waitForSelector #dashboard-header<br/>timeout: 30000"]:::api
+  WAIT --> CAP["capture cookies / localStorage / sessionStorage<br/>view.evaluate"]:::api
+  CAP --> SHOT["view.screenshot jpeg q80"]:::api
+
+  %% --- Bun.Image processing ---
+  SHOT --> IMG["Bun.Image<br/>metadata → resize 1200x800<br/>webp q75 → buffer"]:::api
+  IMG --> THUMB["img.placeholder<br/>ThumbHash data URL"]:::api
+  IMG --> WRITE["Bun.write screenshots/taskId.webp"]:::data
+
+  %% --- Session storage ---
+  CAP --> SESSINS["INSERT sessions<br/>cookies, storage, screenshot_path<br/>status=active"]:::data
+  SESSINS --> DONE["process.send done<br/>sessionId"]:::worker
+  DONE --> UPD
+
+  %% --- Bun.cron health checks ---
+  CRON["Bun.cron */5 * * * *<br/>health check"]:::cron
+  CRON --> HEALTH["SELECT sessions WHERE status=active<br/>re-validate cookies"]:::data
+  HEALTH --> REFRESH["Bun.cron hourly<br/>session refresh"]:::cron
+  REFRESH --> SESSUPD["UPDATE sessions<br/>last_healthy, status"]:::data
+
+  %% --- Security layer ---
+  MASTER["MASTER_KEY env<br/>encrypt/decrypt password"]:::sec
+  MASTER -. decrypt .-> WPROC
+  CSRF["CSRF + cookies<br/>password hashing"]:::sec
+  CSRF -. protects .-> REQ
+
+  %% --- Live control (WebSocket) ---
+  WS["WebSocket stream<br/>from active WebView"]:::api
+  WV -. live feed .-> WS
+  WS --> DASH["Dashboard<br/>live control panel"]:::api
+
+  %% --- Gaps (dashed) ---
+  GAPS["GAPS<br/>No CAPTCHA solver<br/>No WebView recording<br/>No per-view storage isolation"]:::gap
+  WV -. missing .-> GAPS
+
+  %% --- Data store ---
+  DB[("bun:sqlite<br/>agent-portal.db")]:::data
+  INSERT --> DB
+  UPD --> DB
+  SESSINS --> DB
+  HEALTH --> DB
+  SESSUPD --> DB

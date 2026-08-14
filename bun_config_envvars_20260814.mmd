@@ -1,0 +1,44 @@
+---
+title: Configuring Bun — Environment Variables
+---
+flowchart TB
+  classDef cfg fill:#2a2a3d,stroke:#8be9fd,stroke-width:2px,color:#f8f8f2
+  classDef net fill:#1f3d2a,stroke:#50fa7b,stroke-width:2px,color:#f8f8f2
+  classDef term fill:#3d2a3d,stroke:#bd93f9,stroke-width:2px,color:#f8f8f2
+  classDef sec fill:#3d1f1f,stroke:#ff5555,stroke-width:2px,color:#f8f8f2
+  classDef cache fill:#3d2a1f,stroke:#ffb86c,stroke-width:2px,color:#f8f8f2
+  classDef warn fill:#3d352a,stroke:#ffb86c,stroke-width:1px,stroke-dasharray:5 5,color:#f8f8f2
+
+  %% --- Bun runtime reads env vars ---
+  BUN["Bun runtime<br/>reads env vars on startup"]:::cfg
+
+  %% --- TLS / security ---
+  BUN --> TLS["NODE_TLS_REJECT_UNAUTHORIZED=0<br/>disables SSL cert validation<br/>(Node-compat name)"]:::sec
+  TLS -. caution .-> TLSWARN["testing/debug only<br/>hesitant in production"]:::warn
+
+  %% --- Fetch / HTTP ---
+  BUN --> VF["BUN_CONFIG_VERBOSE_FETCH=curl<br/>logs URL, method, req/resp headers<br/>=1 → same without curl output<br/>(also node:http)"]:::net
+  BUN --> MAXHTTP["BUN_CONFIG_MAX_HTTPS<br/>max concurrent fetch + bun install<br/>default: 256<br/>lower for rate limits / conn issues"]:::net
+
+  %% --- Transpiler cache ---
+  BUN --> TC["BUN_RUNTIME_TRANSPILER_CACHE_PATH<br/>caches transpiled output >4KB<br/>→ faster CLI loads"]:::cache
+  TC --> TC_SET["set → cache to that dir"]:::cache
+  TC --> TC_OFF["empty / '0' → disabled"]:::cache
+  TC --> TC_UNSET["unset → platform cache dir"]:::cache
+
+  %% --- TMPDIR ---
+  BUN --> TMP["TMPDIR<br/>intermediate assets during bundling<br/>unset → /tmp (Linux) · /private/tmp (macOS)"]:::cache
+
+  %% --- Terminal color ---
+  BUN --> NOCOLOR["NO_COLOR=1<br/>disables ANSI color output"]:::term
+  BUN --> FORCECOLOR["FORCE_COLOR=1<br/>forces ANSI on<br/>overrides NO_COLOR"]:::term
+  FORCECOLOR -. overrides .-> NOCOLOR
+
+  %% --- Watch reload ---
+  BUN --> NOCLEAR["BUN_CONFIG_NO_CLEAR_TERMINAL_ON_RELOAD=true<br/>bun --watch doesn't clear console on reload"]:::term
+
+  %% --- Telemetry / crash reports ---
+  BUN --> DNT["DO_NOT_TRACK=1<br/>disables crash report upload to bun.report<br/>+ all telemetry<br/>(macOS/Windows: crash uploads default-on)"]:::sec
+
+  %% --- BUN_OPTIONS ---
+  BUN --> OPTS["BUN_OPTIONS<br/>prepends CLI args to any Bun execution<br/>e.g. BUN_OPTIONS='--hot'<br/>→ bun run dev == bun --hot run dev"]:::cfg

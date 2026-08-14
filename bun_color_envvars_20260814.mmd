@@ -1,0 +1,68 @@
+---
+title: Bun.color & Environment Variables – Integration Matrix
+---
+flowchart LR
+  classDef env fill:#2a3d3d,stroke:#8be9fd,stroke-width:2px,color:#f8f8f2
+  classDef color fill:#3d2a3d,stroke:#bd93f9,stroke-width:2px,color:#f8f8f2
+  classDef intake fill:#1f3d2a,stroke:#50fa7b,stroke-width:2px,color:#f8f8f2
+  classDef out fill:#3d2a1f,stroke:#ffb86c,stroke-width:2px,color:#f8f8f2
+  classDef sec fill:#3d1f1f,stroke:#ff5555,stroke-width:2px,color:#f8f8f2
+  classDef note fill:#2a2a3d,stroke:#6272a4,stroke-width:1px,stroke-dasharray:4 4,color:#f8f8f2
+
+  %% --- .env auto-load (Bun built-in, no dotenv) ---
+  ENVFILE[".env / .env.local / .env.production<br/>auto-loaded by Bun"]:::env
+  ENVFILE --> ENVARS["process.env"]:::env
+
+  %% --- Env var catalogue ---
+  ENVARS --> MK["MASTER_KEY<br/>hex:64 — credential encryption"]:::sec
+  ENVARS --> CSRF["CSRF_SECRET<br/>Bun.CSRF signing"]:::sec
+  ENVARS --> NENV["NODE_ENV<br/>production | development"]:::env
+  ENVARS --> PROXY["PROXY_POOL_URL<br/>proxy list endpoint"]:::env
+  ENVARS --> BOPTS["BUN_OPTIONS<br/>e.g. --hot"]:::env
+  ENVARS --> LOG["LOG_LEVEL<br/>info | debug"]:::env
+  ENVARS --> DTC["DEFAULT_THEME_COLOR<br/>e.g. #3b82f6"]:::color
+
+  %% --- Worker inheritance ---
+  SPAWN["Bun.spawn<br/>env: process.env"]:::intake
+  ENVARS ==> SPAWN
+  SPAWN --> WENV["worker.ts<br/>inherits all env keys"]:::intake
+  MK -. decrypt .-> WENV
+  PROXY -. proxy select .-> WENV
+  LOG -. verbosity .-> WENV
+
+  %% --- Bun.color (v1.1.30+ stable) ---
+  BC["Bun.color<br/>parse / format / normalize / manipulate"]:::color
+  BC --> OPS["isValid · toHex · toRgb · toHsl<br/>lighten · darken · saturate · rotate"]:::color
+
+  %% --- Integration point A: dashboard theme ---
+  AGENTIN["agent profile update<br/>req.body.themeColor"]:::intake
+  AGENTIN --> VALID["Bun.color.isValid<br/>else 400"]:::color
+  VALID --> THEME["Bun.color primary<br/>.lighten 0.9 → lightBg<br/>.darken 0.7 → darkText"]:::color
+  THEME --> CSS["CSS custom properties<br/>injected into dashboard HTML"]:::out
+  DTC -. default fallback .-> THEME
+
+  %% --- Integration point B: screenshot placeholder ---
+  SHOT["Bun.Image screenshot"]:::intake
+  SHOT --> HASH["Bun.hash task.url<br/>hue = hash % 360"]:::color
+  HASH --> HSL["Bun.color hsl hue 70% 60%<br/>→ primaryColor"]:::color
+  HSL --> BG["primaryColor.lighten 0.8<br/>→ bgColor"]:::color
+  HSL --> SESSUPD["UPDATE sessions<br/>theme_color, bg_color"]:::out
+  BG --> SESSUPD
+
+  %% --- Integration point C: log formatting ---
+  LOGENV["LOG_LEVEL=debug"]:::env
+  LOGENV --> ANSI["Bun.color red / green<br/>→ ANSI console output"]:::color
+  ANSI --> CONSOLE["console.log colored<br/>(dev only)"]:::out
+
+  %% --- Integration point D: dynamic favicons ---
+  HSL --> FAV["Bun.Image colored square<br/>favicon-like thumbnail"]:::out
+
+  %% --- Combined: env default + per-agent override ---
+  COMBINED["DEFAULT_THEME_COLOR env<br/>↓ validate via Bun.color<br/>↓ agent override per profile"]:::note
+  DTC --> COMBINED
+  AGENTIN --> COMBINED
+  COMBINED --> THEME
+
+  %% --- Security note ---
+  SECNOTE[".env never committed<br/>.env.example as template"]:::sec
+  ENVFILE -. governed by .-> SECNOTE

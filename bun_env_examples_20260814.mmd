@@ -1,0 +1,47 @@
+---
+title: Bun .env — Production vs Development
+---
+flowchart LR
+  classDef prod fill:#3d1f1f,stroke:#ff5555,stroke-width:2px,color:#f8f8f2
+  classDef dev fill:#1f3d2a,stroke:#50fa7b,stroke-width:2px,color:#f8f8f2
+  classDef app fill:#2a2a3d,stroke:#8be9fd,stroke-width:2px,color:#f8f8f2
+  classDef tune fill:#3d2a1f,stroke:#ffb86c,stroke-width:2px,color:#f8f8f2
+  classDef note fill:#2a3d3d,stroke:#8be9fd,stroke-width:1px,stroke-dasharray:4 4,color:#f8f8f2
+
+  %% --- Bun auto-loads env files ---
+  BUN["Bun auto-loads .env files<br/>(no dotenv)"]:::app
+  BUN --> PRODF[".env.production"]:::prod
+  BUN --> DEVF[".env.development"]:::dev
+
+  %% --- Production block ---
+  subgraph PROD["Production"]
+    direction TB
+    P_APP["# App config"]:::app
+    P_MK["MASTER_KEY=..."]:::app
+    P_CSRF["CSRF_SECRET=..."]:::app
+    P_NENV["NODE_ENV=production"]:::app
+    P_TUNE["# Bun runtime tuning"]:::tune
+    P_MAX["BUN_CONFIG_MAX_HTTP_REQUESTS=512"]:::tune
+    P_NC["NO_COLOR=1"]:::tune
+    P_DNT["DO_NOT_TRACK=1"]:::tune
+    P_TC["BUN_RUNTIME_TRANSPILER_CACHE_PATH=0<br/># if running in container"]:::tune
+    P_APP --> P_MK --> P_CSRF --> P_NENV
+    P_TUNE --> P_MAX --> P_NC --> P_DNT --> P_TC
+  end
+  PRODF ==> PROD
+
+  %% --- Development block ---
+  subgraph DEV["Development"]
+    direction TB
+    D_VF["BUN_CONFIG_VERBOSE_FETCH=curl"]:::dev
+    D_FC["FORCE_COLOR=1"]:::dev
+    D_OPTS["BUN_OPTIONS=--hot"]:::dev
+    D_VF --> D_FC --> D_OPTS
+  end
+  DEVF ==> DEV
+
+  %% --- Cross-env notes ---
+  P_NC -. suppressed by .-> D_FC
+  D_OPTS -. applies .-> HOT["bun run dev<br/>== bun --hot run dev"]:::note
+  P_TC -. disables .-> TCOFF["no transpiler cache<br/>(container-friendly)"]:::note
+  P_MAX -. raises .-> MAXNOTE["default 256 → 512<br/>higher concurrency"]:::note

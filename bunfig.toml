@@ -1,0 +1,9 @@
+# bunfig.toml — project-level Bun configuration
+# https://bun.com/docs/runtime/bunfig
+
+[install]
+# Global virtual store: symlink packages from a shared cache instead of
+# copying files into each project's node_modules. Cuts install time by ~85%
+# (symlinks vs file copies) and reduces disk usage across projects.
+# Override with BUN_INSTALL_GLOBAL_STORE=0 if needed.
+globalStore = true

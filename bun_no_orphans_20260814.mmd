@@ -1,0 +1,52 @@
+---
+title: "Bun v1.3.14 — --no-orphans: exit when the parent process dies"
+---
+flowchart TB
+  classDef cfg fill:#2a2a3d,stroke:#8be9fd,stroke-width:2px,color:#f8f8f2
+  classDef linux fill:#1f3d2a,stroke:#50fa7b,stroke-width:2px,color:#f8f8f2
+  classDef mac fill:#3d2a3d,stroke:#bd93f9,stroke-width:2px,color:#f8f8f2
+  classDef kill fill:#3d1f1f,stroke:#ff5555,stroke-width:2px,color:#f8f8f2
+  classDef win fill:#3d352a,stroke:#6272a4,stroke-width:1px,stroke-dasharray:4 4,color:#f8f8f2
+  classDef note fill:#2a3d3d,stroke:#8be9fd,stroke-width:1px,stroke-dasharray:4 4,color:#f8f8f2
+
+  %% --- The problem ---
+  PROBLEM["Supervisor force-killed<br/>(Electron · CI runner · thin shim)<br/>SIGKILL — no chance to forward signal"]:::kill
+  PROBLEM --> ORPHAN["Without --no-orphans:<br/>Bun reparented to launchd/init<br/>runs forever + everything it spawned"]:::kill
+
+  %% --- The solution: opt-in mode ---
+  ENABLE["--no-orphans<br/>opt-in: auto-exit when parent dies<br/>+ recursively SIGKILL descendants"]:::cfg
+
+  %% --- Three equivalent ways to enable ---
+  ENABLE --> CLI["CLI flag<br/>bun --no-orphans run my-script"]:::cfg
+  ENABLE --> BUNFIG["bunfig.toml<br/>[run]<br/>noOrphans = true"]:::cfg
+  ENABLE --> ENVVAR["env var<br/>BUN_FEATURE_FLAG_NO_ORPHANS=1<br/>bun run my-script"]:::cfg
+
+  %% --- Inheritance ---
+  CLI --> INHERIT["flag auto-inherited<br/>by nested Bun processes<br/>enable once at top level"]:::note
+  BUNFIG --> INHERIT
+  ENVVAR --> INHERIT
+
+  %% --- Linux mechanism ---
+  INHERIT --> LINUX["Linux"]:::linux
+  LINUX --> PRCTL["prctl PR_SET_PDEATHSIG SIGKILL<br/>kernel-delivered · no polling · no thread"]:::linux
+  PRCTL --> LCHILD["children spawned from main thread<br/>inherit PDEATHSIG by default<br/>→ non-Bun descendants covered"]:::linux
+
+  %% --- macOS mechanism ---
+  INHERIT --> MAC["macOS"]:::mac
+  MAC --> KQUEUE["EVFILT_PROC / NOTE_EXIT watch<br/>on existing event loop kqueue<br/>no dedicated thread · no extra fd"]:::mac
+  KQUEUE --> MACPATHS["now comprehensive coverage"]:::mac
+  MACPATHS --> P1["bun file → event loop watcher"]:::mac
+  MACPATHS --> P2["bun run / bunx → kqueue watcher (new)"]:::mac
+  MACPATHS --> P3["--filter / --parallel → MiniEventLoop watcher (new)"]:::mac
+
+  %% --- Clean exit: stop-verify-kill ---
+  CLEAN["on clean exit<br/>walk process tree"]:::kill
+  CLEAN --> STOP["SIGSTOP each descendant"]:::kill
+  STOP --> VERIFY["re-verify ppid"]:::kill
+  VERIFY --> KILL["only then SIGKILL<br/>→ pid-reuse safety"]:::kill
+  KILL --> SAFE["prevents killing unrelated process<br/>that recycled a stale pid"]:::note
+  INHERIT --> CLEAN
+
+  %% --- Windows ---
+  WIN["Windows: no-op<br/>(Linux + macOS only)"]:::win
+  ENABLE -. does nothing on .-> WIN

@@ -1,0 +1,63 @@
+---
+title: Bun.color — API Surface (v1.1.30+)
+---
+flowchart TB
+  classDef api fill:#2a2a3d,stroke:#8be9fd,stroke-width:2px,color:#f8f8f2
+  classDef in fill:#1f3d2a,stroke:#50fa7b,stroke-width:2px,color:#f8f8f2
+  classDef out fill:#3d2a1f,stroke:#ffb86c,stroke-width:2px,color:#f8f8f2
+  classDef ansi fill:#3d2a3d,stroke:#bd93f9,stroke-width:2px,color:#f8f8f2
+  classDef macro fill:#2a3d3d,stroke:#8be9fd,stroke-width:1px,stroke-dasharray:4 4,color:#f8f8f2
+  classDef null fill:#3d1f1f,stroke:#ff5555,stroke-width:1px,stroke-dasharray:4 4,color:#f8f8f2
+
+  %% --- Entry: Bun.color(input, outputFormat?) ---
+  CALL["Bun.color(input, outputFormat?)<br/>Bun CSS parser · zero deps<br/>alt to color / tinycolor2"]:::api
+
+  %% --- Flexible input ---
+  INPUTS["Flexible input<br/>(any CSS-parseable color)"]:::in
+  INPUTS --> I_NAME["named: red"]:::in
+  INPUTS --> I_NUM["number: 0xff0000"]:::in
+  INPUTS --> I_HEX["hex: #f00 · #ff0000"]:::in
+  INPUTS --> I_RGB["rgb() / rgba()"]:::in
+  INPUTS --> I_HSL["hsl() / hsla()"]:::in
+  INPUTS --> I_LAB["lab()"]:::in
+  INPUTS --> I_OBJ["{r,g,b} · {r,g,b,a}"]:::in
+  INPUTS --> I_ARR["[r,g,b] · [r,g,b,a]"]:::in
+  CALL ==> INPUTS
+
+  %% --- Output formats ---
+  CALL --> FMTS["outputFormat?"]:::api
+  FMTS --> F_CSS["css → 'red'<br/>compact CSS string"]:::out
+  FMTS --> F_HEX["hex → '#ff0000'<br/>HEX → '#FF0000'"]:::out
+  FMTS --> F_RGB["rgb → 'rgb(255,0,0)'<br/>rgba → 'rgba(255,0,0,1)'"]:::out
+  FMTS --> F_HSL["hsl → 'hsl(0,100%,50%)'"]:::out
+  FMTS --> F_NUM["number → 16711680<br/>24-bit · DB-friendly"]:::out
+  FMTS --> F_OBJ["{rgb} → {r,g,b}<br/>{rgba} → {r,g,b,a}  a:0-1"]:::out
+  FMTS --> F_ARR["[rgb] → [255,0,0]<br/>[rgba] → [255,0,0,255]  a:0-255"]:::out
+
+  %% --- ANSI family ---
+  FMTS --> ANSI_GROUP["ANSI — terminal escape codes"]:::ansi
+  ANSI_GROUP --> A_AUTO["ansi<br/>auto-detect stdout depth"]:::ansi
+  ANSI_GROUP --> A_16M["ansi-16m<br/>24-bit · \x1b[38;2;R;G;Bm"]:::ansi
+  ANSI_GROUP --> A_256["ansi-256<br/>nearest of 256 · \x1b[38;5;Nm<br/>(tmux algorithm)"]:::ansi
+  ANSI_GROUP --> A_16["ansi-16<br/>nearest of 16 · \x1b[91m"]:::ansi
+  A_AUTO -. picks .-> A_16M
+  A_AUTO -. picks .-> A_256
+  A_AUTO -. picks .-> A_16
+  A_256 -. converts to .-> A_16
+
+  %% --- Null on parse failure ---
+  FAIL["input unknown / parse fails<br/>→ returns null"]:::null
+  CALL -. on failure .-> FAIL
+  A_AUTO -. no ANSI support .-> EMPTY["returns empty string"]:::null
+
+  %% --- Use cases ---
+  F_NUM --> USE_DB["persist in DB<br/>(number = most DB-friendly)"]:::out
+  F_CSS --> USE_CSS["CSS vars / inline styles<br/>CSS-in-JS"]:::out
+  ANSI_GROUP --> USE_TERM["color terminal output<br/>beyond basic 16"]:::out
+  F_OBJ --> USE_CHAN["extract r,g,b,a channels"]:::out
+
+  %% --- Bundle-time macro ---
+  MACRO["bundle-time macro<br/>import {color} from 'bun' with {type:'macro'}"]:::macro
+  MACRO --> BUILD["bun build ./client-side.ts"]:::macro
+  BUILD --> MACROOUT["inlines result at build time<br/>console.log('red')"]:::macro
+  CALL -. macro invocation .-> MACRO
