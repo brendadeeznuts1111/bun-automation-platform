@@ -36,9 +36,10 @@
     "noImplicitOverride": true,
     "forceConsistentCasingInFileNames": true,
 
-    // ----- Stricter flags (disabled — opt-in later) -----
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
+    // ----- Stricter flags -----
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
     "noPropertyAccessFromIndexSignature": false
   },
   "include": ["src/**/*.ts", "*.d.ts", "seed-agent.ts"],

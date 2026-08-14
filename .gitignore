@@ -39,4 +39,10 @@ dev-key.pem
 
 # SQLite database files (runtime data, not source)
 data/
+
+# Compiled standalone executable (bun build --compile)
+server
+server.exe
+
+# User-pasted clipboard artifacts
 user_pasted_clipboard*

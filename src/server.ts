@@ -14,7 +14,7 @@
  * Plus the worker pool for Week 3 scalability.
  */
 
-import { migrate, read, write, closeDB } from "./db";
+import { migrate, read, write } from "./db";
 import { audit, getAuditLog } from "./db/audit";
 import { checkRateLimit, cleanupRateLimits } from "./middleware/rate-limit";
 import { handlePreflight, withCors } from "./middleware/cors";

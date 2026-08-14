@@ -7,7 +7,10 @@
   "scripts": {
     "check": "tsc --noEmit",
     "start": "bun run src/server.ts",
-    "seed": "bun run seed-agent.ts"
+    "dev": "bun --hot src/server.ts",
+    "build": "bun build --compile --minify src/server.ts --outfile server",
+    "seed": "bun run seed-agent.ts",
+    "test": "bun test"
   },
   "devDependencies": {
     "@mermaid-js/mermaid-cli": "^11.16.0",
