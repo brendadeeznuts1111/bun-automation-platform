@@ -83,7 +83,7 @@ function spawnWorker(): WorkerSlot {
 
   // Track for graceful shutdown
   slot.untrack = trackWorker({
-    pid: proc.pid!,
+    pid: proc.pid,
     send: (msg) => proc.send(msg),
     exited: proc.exited,
     kill: (sig) => {

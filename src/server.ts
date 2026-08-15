@@ -39,6 +39,9 @@ const NODE_ENV = process.env.NODE_ENV ?? "development";
 // non-existent-user login attempts.
 const DUMMY_PASSWORD_HASH = await Bun.password.hash("dummy-password-that-never-matches");
 
+// G10: Max request body size (1 MB). Prevents OOM from oversized payloads.
+const MAX_BODY_BYTES = 1_048_576;
+
 // --- Init ------------------------------------------------------------------
 
 console.log(`[server] starting in ${NODE_ENV} mode on ${HOST}:${PORT}`);
@@ -102,7 +105,7 @@ function errorResponse(msg: string, status: number): Response {
 type RouteHandler<T extends string> = (req: BunRequest<T>) => Response | Promise<Response>;
 
 /**
- * Base middleware: rate limiting + CORS.
+ * Base middleware: rate limiting + CORS + request size limit.
  * Applied to all routes.
  */
 function withMiddleware<T extends string>(
@@ -115,6 +118,13 @@ function withMiddleware<T extends string>(
     const rl = await checkRateLimit(ip, path, req.method);
     if (!rl.allowed) {
       return withCors(req, errorResponse("Too Many Requests", 429));
+    }
+
+    // G10: Reject requests with oversized bodies before parsing JSON.
+    // Prevents OOM from multi-GB payloads. 1MB is generous for login/task JSON.
+    const contentLength = req.headers.get("content-length");
+    if (contentLength && parseInt(contentLength, 10) > MAX_BODY_BYTES) {
+      return withCors(req, errorResponse("request body too large", 413));
     }
 
     const res = await handler(req);
@@ -249,8 +259,15 @@ const loginHandler = withMiddleware<"">(async (req) => {
     });
 
     return json({ token: authToken, csrf_token: csrfToken, agent_id: agent.id, username: agent.username });
-  } catch {
-    return errorResponse("invalid request body", 400);
+  } catch (err) {
+    // G3: Distinguish JSON parse errors (400) from unexpected errors (500).
+    // Previously all errors returned "invalid request body" which hid DB
+    // failures, hash failures, etc. Now only SyntaxError (JSON parse) gets 400.
+    if (err instanceof SyntaxError) {
+      return errorResponse("invalid request body", 400);
+    }
+    console.error("[server] login error:", err);
+    return errorResponse("internal server error", 500);
   }
 });
 
@@ -403,12 +420,17 @@ const getScreenshotHandler = withAuth<"/screenshot/:id">((req, ctx) => {
   // Optional resize + format query params
   const url = new URL(req.url);
   const width = url.searchParams.get("w") ? parseInt(url.searchParams.get("w")!, 10) : undefined;
-  const format = (url.searchParams.get("format") as "webp" | "jpeg" | "png") ?? "webp";
+  // G2: Validate format param — don't cast unchecked user input to a union type
+  const formatParam = url.searchParams.get("format");
+  const format: "webp" | "jpeg" | "png" =
+    formatParam === "jpeg" || formatParam === "png" ? formatParam : "webp";
 
   try {
     return serveScreenshot(session.screenshot_path, width, format);
-  } catch {
-    return errorResponse("screenshot file missing", 404);
+  } catch (err) {
+    // G9: Distinguish "file not found" from "invalid image" for debugging
+    console.error("[server] serveScreenshot error:", err);
+    return errorResponse("screenshot unavailable", 404);
   }
 });
 

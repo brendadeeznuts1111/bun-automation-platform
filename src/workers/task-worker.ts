@@ -65,6 +65,9 @@ function supportsPersistentStorage(): boolean {
 // --- Task loading ----------------------------------------------------------
 
 function loadTask(taskId: number): TaskRow | null {
+  // G7: The worker is an internal subprocess — it only receives task IDs from
+  // the server's submitTask(), which is called after the server has validated
+  // agent_id ownership (E3 IDOR fix). No agent_id check here is needed.
   return read((db) => {
     return db
       .query(

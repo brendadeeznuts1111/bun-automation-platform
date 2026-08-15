@@ -33,7 +33,9 @@ function ensureReaders(): void {
   if (readers.length > 0) return;
   for (let i = 0; i < READER_COUNT; i++) {
     const r = new Database(DB_PATH, { readonly: true });
-    r.exec("PRAGMA journal_mode = WAL;");
+    // G8: Don't set PRAGMA journal_mode on readonly connections — it throws
+    // "attempt to write a readonly database". The writer already sets WAL mode
+    // on the database file, and readers inherit it automatically.
     // E5: Match the writer's busy_timeout so reads don't fail immediately
     // when a write is in progress (WAL allows concurrent reads, but checkpoint
     // operations can briefly lock pages).

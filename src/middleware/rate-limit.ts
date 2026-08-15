@@ -17,19 +17,19 @@ interface RateLimitConfig {
   windowSeconds: number;
 }
 
-/** Default limits per route prefix. */
-const DEFAULTS: Record<string, RateLimitConfig> = {
+/** Default limits per route. Keys are exact paths (not prefixes). */
+const LIMITS: Record<string, RateLimitConfig> = {
   "/login": { maxRequests: 5, windowSeconds: 60 },
-  "/task": { maxRequests: 20, windowSeconds: 60 },
+  "/task": { maxRequests: 20, windowSeconds: 60 }, // POST only — exact match
   "/credentials": { maxRequests: 10, windowSeconds: 60 },
   default: { maxRequests: 100, windowSeconds: 60 },
 };
 
 function getConfig(path: string): RateLimitConfig {
-  for (const [prefix, cfg] of Object.entries(DEFAULTS)) {
-    if (prefix !== "default" && path.startsWith(prefix)) return cfg;
-  }
-  return DEFAULTS.default!;
+  // G5: Use exact path matching, not prefix matching. Previously, /task/123
+  // (GET single task) and /tasks (GET list) matched the /task prefix and got
+  // 20/min instead of 100/min. Now only exact /task matches the stricter limit.
+  return LIMITS[path] ?? LIMITS.default!;
 }
 
 /**

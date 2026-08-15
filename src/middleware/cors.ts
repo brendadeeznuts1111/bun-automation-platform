@@ -1,8 +1,12 @@
 /**
  * CORS middleware — configurable allowed origins.
  *
- * In development, allows all origins. In production, restricts to
+ * In development, allows localhost origins only. In production, restricts to
  * the configured allowed origins (comma-separated env var).
+ *
+ * G1: Previously, dev mode allowed ALL origins with credentials — a CORS
+ * misconfiguration that could allow credential theft from any site. Now
+ * dev mode only allows localhost/127.0.0.1 origins.
  */
 
 const NODE_ENV = process.env.NODE_ENV ?? "development";
@@ -11,10 +15,22 @@ const ALLOWED_ORIGINS = (process.env.CORS_ALLOWED_ORIGINS ?? "")
   .map((s) => s.trim())
   .filter(Boolean);
 
+/** Check if an origin is a localhost dev origin. */
+function isLocalhostOrigin(origin: string): boolean {
+  return (
+    origin.startsWith("http://localhost") ||
+    origin.startsWith("http://127.0.0.1") ||
+    origin.startsWith("http://[::1]")
+  );
+}
+
 /** Check if an origin is allowed. */
 function isAllowedOrigin(origin: string | null): boolean {
   if (!origin) return false;
-  if (NODE_ENV !== "production") return true;
+  if (NODE_ENV !== "production") {
+    // G1: Dev mode — only allow localhost origins, not arbitrary sites
+    return isLocalhostOrigin(origin);
+  }
   if (ALLOWED_ORIGINS.length === 0) return false;
   return ALLOWED_ORIGINS.includes(origin);
 }
