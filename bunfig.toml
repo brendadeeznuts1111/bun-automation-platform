@@ -13,3 +13,30 @@ globalStore = true
 # tests never touch ./data/platform.db. See tests/setup.ts.
 # Static test env (NODE_ENV=test) lives in .env.test, auto-loaded by bun test.
 preload = ["./tests/setup.ts"]
+
+# Don't discover tests under these paths. Pruned during scanning, so cheap.
+# node_modules: dependencies that may ship their own .test.ts files.
+# data/:        runtime SQLite + screenshots — never a test location.
+pathIgnorePatterns = ["node_modules/**", "data/**"]
+
+# Run tests in random order to surface order-dependent / shared-state bugs
+# (the closeDB-across-files failure we hit is exactly this class). Fixed seed
+# for reproducibility — bump to re-randomize. CLI --randomize overrides.
+randomize = true
+seed = 20260815
+
+# Auto-retry failed tests up to 2 times. Surfaces transient/flaky failures
+# (e.g. timing-sensitive setSystemTime, spawn-pipe reads) without masking
+# real bugs — a test must pass on a retry to count as passing. Per-test
+# { retry: N } overrides this. CLI --retry overrides.
+retry = 2
+
+# Coverage — text reporter to stdout for local runs, lcov for CI ingestion.
+# Threshold is a floor below current coverage (91% lines / 94% functions as of
+# 2026-08-15), with headroom for the gaps flagged in OPEN_TASKS.md. Raise as
+# coverage improves.
+coverage = true
+coverageReporter = ["text", "lcov"]
+coverageDir = "./coverage"
+coverageSkipTestFiles = true
+coverageThreshold = { lines = 0.85, functions = 0.85 }
