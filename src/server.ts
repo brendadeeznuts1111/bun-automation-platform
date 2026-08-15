@@ -25,7 +25,7 @@ import { generateCsrfToken, checkCsrf } from "./middleware/csrf";
 import { installShutdownHandlers, isShuttingDown } from "./utils/shutdown";
 import { initWorkerPool, submitTask, getPoolStatus } from "./workers/pool";
 import { serveScreenshot } from "./utils/image";
-import { isFeatureEnabled, canEnable, listFeatures, getFeatureSummary } from "./features/registry";
+import { isFeatureEnabled, shouldActivate, markActive, markBlocked, listFeatures, getFeatureSummary } from "./features/registry";
 
 // --- Config ----------------------------------------------------------------
 
@@ -36,9 +36,19 @@ const NODE_ENV = process.env.NODE_ENV ?? "development";
 // --- Feature flags ---------------------------------------------------------
 // R3: Conditionally enable TLS, HTTP/3, and dev dashboard behind flags.
 // Each flag is tracked in src/features/registry.ts with promotion status.
+// D5: Use shouldActivate() which checks deps + marks blocked, then markActive()
+// after the feature is actually running. This ensures /features endpoint
+// shows accurate runtime state, not just env-var state.
 
-const ENABLE_TLS = canEnable("tls");
-const ENABLE_HTTP3 = canEnable("http3");
+// D4: HTTP/3 requested without TLS → fail loudly, don't silently disable.
+if (isFeatureEnabled("http3") && !isFeatureEnabled("tls")) {
+  console.error("[server] ENABLE_HTTP3=1 requires ENABLE_TLS=1 (HTTP/3 mandates TLS)");
+  process.exit(1);
+}
+
+const ENABLE_TLS = shouldActivate("tls");
+const ENABLE_HTTP3 = shouldActivate("http3");
+// Dev dashboard auto-enables in development mode unless explicitly disabled
 const ENABLE_DEV_DASHBOARD = isFeatureEnabled("devDashboard") ||
   (NODE_ENV === "development" && process.env.ENABLE_DEV_DASHBOARD !== "0");
 
@@ -55,22 +65,27 @@ if (ENABLE_TLS) {
       `Generate with:\n` +
       `  openssl req -x509 -newkey rsa:2048 -keyout dev-key.pem -out dev-cert.pem -days 365 -nodes -subj "/CN=localhost"`,
     );
+    markBlocked("tls", `cert/key not found at ${certPath}/${keyPath}`);
     process.exit(1);
   }
   tlsConfig = { cert: await certFile.text(), key: await keyFile.text() };
+  markActive("tls");
   console.log(`[server] TLS enabled (cert: ${certPath})`);
 }
 
 if (ENABLE_HTTP3) {
   if (!ENABLE_TLS) {
+    markBlocked("http3", "requires tls to be enabled");
     console.error("[server] ENABLE_HTTP3=1 requires ENABLE_TLS=1 (HTTP/3 mandates TLS)");
     process.exit(1);
   }
+  markActive("http3");
   console.log("[server] HTTP/3 (QUIC) enabled — experimental, not for production yet");
   console.log("         Ref: https://bun.sh/blog/bun-v1.3.14#http-3-quic-support-in-bun-serve");
 }
 
 if (ENABLE_DEV_DASHBOARD) {
+  markActive("devDashboard");
   console.log("[server] Dev dashboard enabled at /dashboard");
 }
 
@@ -518,11 +533,11 @@ const featuresHandler = withMiddleware((): Response => {
 
 // R5: Dev dashboard — simple HTML page showing server status.
 // Will be replaced with React + HTML imports dashboard (OPEN_TASKS F1).
+// D6: Dashboard is dev-only — auto-disabled in production unless explicitly enabled.
 const dashboardHandler = withMiddleware((): Response => {
   const pool = getPoolStatus();
   const features = listFeatures()
-    // JUSTIFIED: listFeatures() adds an `enabled` boolean not in the FeatureFlag type
-    .map((f) => `<tr><td>${f.key}</td><td>${f.status}</td><td>${(f as { enabled?: boolean }).enabled ? "✅" : "❌"}</td><td>${f.description}</td></tr>`)
+    .map((f) => `<tr><td>${f.key}</td><td>${f.status}</td><td>${f.active ? "✅ active" : f.blocked ? "⚠️ blocked" : "❌ off"}</td><td>${f.description}</td></tr>`)
     .join("\n");
   const html = `<!DOCTYPE html>
 <html>

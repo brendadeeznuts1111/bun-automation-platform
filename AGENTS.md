@@ -51,13 +51,48 @@ Every file that calls Bun APIs must include a comment citing the specific doc:
 - Typecheck: `bunx tsc --noEmit`
 - Test: `bun test`
 - Run server: `bun run src/server.ts`
+- Run dev server (TLS + HTTP/3 + dashboard): `bun run dev:tls`
+- Run dev server (dashboard only): `bun run dev:dashboard`
 - Run worker: `bun run src/workers/task-worker.ts`
 
 ## Architecture
 
 - `src/server.ts` — Bun.serve HTTP server with routes, middleware, worker pool
+- `src/features/registry.ts` — Feature flag registry with promotion tracking
 - `src/workers/` — Bun.spawn worker pool + Bun.WebView task execution
 - `src/db/` — bun:sqlite with WAL mode, writer + reader pool
 - `src/middleware/` — auth (Bearer token), CSRF, CORS, rate limiting
 - `src/utils/` — image processing, circuit breaker, retry, shutdown
 - `tests/` — bun:test with 85% coverage threshold (lines + functions)
+
+## Feature flags
+
+Gated features are tracked in `src/features/registry.ts`. Each feature has:
+- `status`: `experimental` | `stable` | `promoted`
+- `readyForPromotion`: boolean (true when safe to enable by default)
+- `requested`: env var is set (user asked for it)
+- `active`: feature is actually running (server called `markActive()`)
+- `blocked`: requested but can't run (missing dependency)
+
+### Available flags
+
+| Flag | Env Var | Status | Notes |
+|------|---------|--------|-------|
+| TLS | `ENABLE_TLS=1` | stable | Requires `TLS_CERT_PATH` + `TLS_KEY_PATH` |
+| HTTP/3 | `ENABLE_HTTP3=1` | experimental | Requires `ENABLE_TLS=1`. Not for production yet. |
+| Dev dashboard | `ENABLE_DEV_DASHBOARD=1` | experimental | Auto-enabled in dev mode. Serves `/dashboard`. |
+| WebSocket | `ENABLE_WEBSOCKET=1` | experimental | Not yet implemented (OPEN_TASKS C1, C2). |
+| No-orphans | `BUN_FEATURE_FLAG_NO_ORPHANS=1` | stable | Set on worker subprocesses in pool.ts. |
+| HTTP/3 client | `BUN_FEATURE_FLAG_EXPERIMENTAL_HTTP3_CLIENT=1` | experimental | Used by render-mermaid.ts. |
+
+### Endpoints
+
+- `GET /features` — lists all feature flags with state (requested/active/blocked)
+- `GET /protocol` — shows scheme, HTTP/3 status, Alt-Svc header
+- `GET /dashboard` — HTML status page (when enabled)
+
+### Promotion path
+
+1. `experimental` → `stable`: when all tests pass and feature is verified
+2. `stable` → `promoted`: when enabled by default in the next release
+3. Update `src/features/registry.ts` to change status

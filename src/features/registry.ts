@@ -14,9 +14,14 @@
  *   - readyForPromotion: true when all tests pass and the feature is
  *     considered safe to enable by default in the next release
  *
+ * Three states are tracked per feature:
+ *   - requested: env var is set to "1" or "true" (user asked for it)
+ *   - active: feature is actually running (server.ts called markActive())
+ *   - blocked: requested but can't run (missing dependency, missing cert, etc.)
+ *
  * Usage:
- *   import { isFeatureEnabled, getFeatureStatus, listFeatures } from "./features/registry";
- *   if (isFeatureEnabled("http3")) { ... }
+ *   import { isFeatureEnabled, canEnable, markActive, listFeatures } from "./features/registry";
+ *   if (canEnable("http3")) { ... markActive("http3"); }
  */
 
 export type FeatureStatus = "experimental" | "stable" | "promoted";
@@ -24,7 +29,7 @@ export type FeatureStatus = "experimental" | "stable" | "promoted";
 export interface FeatureFlag {
   /** Unique key for the feature. */
   key: string;
-  /** Environment variable name (without the ENABLE_ prefix). */
+  /** Environment variable name. */
   envVar: string;
   /** Current promotion status. */
   status: FeatureStatus;
@@ -38,6 +43,17 @@ export interface FeatureFlag {
   readyForPromotion: boolean;
   /** Additional notes about the feature (limitations, ref links). */
   notes?: string;
+}
+
+export interface FeatureFlagWithState extends FeatureFlag {
+  /** True if the env var is set to "1" or "true" (user requested it). */
+  requested: boolean;
+  /** True if the feature is actually running at runtime. */
+  active: boolean;
+  /** True if requested but blocked (missing dependency or other issue). */
+  blocked: boolean;
+  /** Human-readable reason if blocked. */
+  blockedReason?: string;
 }
 
 // --- Feature definitions ---------------------------------------------------
@@ -70,7 +86,7 @@ const FEATURES: Record<string, FeatureFlag> = {
     description: "Serve a dev dashboard at /dashboard showing server status, feature flags, and protocol info.",
     dependencies: [],
     readyForPromotion: false,
-    notes: "Placeholder dashboard — will be replaced with React + HTML imports dashboard (OPEN_TASKS F1).",
+    notes: "Auto-enabled in development mode. Will be replaced with React + HTML imports dashboard (OPEN_TASKS F1).",
   },
 
   websocket: {
@@ -104,11 +120,19 @@ const FEATURES: Record<string, FeatureFlag> = {
   },
 };
 
+// --- Runtime state ---------------------------------------------------------
+// Tracks which features are actually running (set by server.ts via markActive).
+const activeFeatures = new Set<string>();
+
+// Tracks why a requested feature couldn't be activated.
+const blockedFeatures = new Map<string, string>();
+
 // --- Public API ------------------------------------------------------------
 
 /**
- * Check if a feature is enabled via its environment variable.
+ * Check if a feature is requested via its environment variable.
  * Returns true if the env var is set to "1" or "true".
+ * Note: "requested" does not mean "active" — use isActive() or canEnable().
  */
 export function isFeatureEnabled(key: string): boolean {
   const feature = FEATURES[key];
@@ -122,6 +146,34 @@ export function isFeatureEnabled(key: string): boolean {
 }
 
 /**
+ * Check if a feature is actually running at runtime.
+ * Returns true if markActive(key) was called.
+ */
+export function isActive(key: string): boolean {
+  return activeFeatures.has(key);
+}
+
+/**
+ * Mark a feature as actively running.
+ * Called by server.ts after successfully enabling a feature.
+ */
+export function markActive(key: string): void {
+  if (!FEATURES[key]) {
+    console.warn(`[features] cannot mark unknown feature as active: ${key}`);
+    return;
+  }
+  activeFeatures.add(key);
+}
+
+/**
+ * Mark a feature as blocked (requested but can't run).
+ * Called by server.ts when a feature can't be enabled.
+ */
+export function markBlocked(key: string, reason: string): void {
+  blockedFeatures.set(key, reason);
+}
+
+/**
  * Get the feature flag metadata for a feature.
  */
 export function getFeatureStatus(key: string): FeatureFlag | null {
@@ -129,29 +181,35 @@ export function getFeatureStatus(key: string): FeatureFlag | null {
 }
 
 /**
- * List all registered features with their current status.
+ * List all registered features with their runtime state.
  * Used by the /features endpoint.
  */
-export function listFeatures(): FeatureFlag[] {
-  return Object.values(FEATURES).map((f) => ({
-    ...f,
-    enabled: isFeatureEnabled(f.key),
-  }));
+export function listFeatures(): FeatureFlagWithState[] {
+  return Object.values(FEATURES).map((f) => {
+    const requested = isFeatureEnabled(f.key);
+    const active = activeFeatures.has(f.key);
+    const blockedReason = blockedFeatures.get(f.key);
+    return {
+      ...f,
+      requested,
+      active,
+      blocked: requested && !active,
+      blockedReason,
+    };
+  });
 }
 
 /**
  * Check if all dependencies of a feature are enabled.
  * Returns true if the feature can be safely enabled.
+ * Does NOT check if the feature itself is requested — use isFeatureEnabled() first.
  */
 export function canEnable(key: string): boolean {
   const feature = FEATURES[key];
   if (!feature) return false;
 
-  if (!isFeatureEnabled(key)) return false;
-
   for (const dep of feature.dependencies ?? []) {
     if (!isFeatureEnabled(dep)) {
-      console.warn(`[features] ${key} requires ${dep} to be enabled`);
       return false;
     }
   }
@@ -160,11 +218,39 @@ export function canEnable(key: string): boolean {
 }
 
 /**
- * Get a summary of feature flag status for logging at startup.
+ * Check if a feature is requested and all dependencies are satisfied.
+ * If dependencies are missing, marks the feature as blocked with a reason.
+ * Returns true if the feature should be activated.
+ */
+export function shouldActivate(key: string): boolean {
+  const feature = FEATURES[key];
+  if (!feature) return false;
+
+  if (!isFeatureEnabled(key)) return false;
+
+  const missingDeps = (feature.dependencies ?? []).filter((dep) => !isFeatureEnabled(dep));
+  if (missingDeps.length > 0) {
+    markBlocked(key, `requires ${missingDeps.join(", ")} to be enabled`);
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Get a summary of actively running features for logging at startup.
+ * Only shows features that are actually active (not just requested).
  */
 export function getFeatureSummary(): string {
-  const features = listFeatures();
-  const enabled = features.filter((f) => (f as FeatureFlag & { enabled: boolean }).enabled); // JUSTIFIED: listFeatures() adds `enabled` boolean not in return type
-  if (enabled.length === 0) return "none";
-  return enabled.map((f) => `${f.key}(${f.status})`).join(", ");
+  const active = listFeatures().filter((f) => f.active);
+  if (active.length === 0) return "none";
+  return active.map((f) => `${f.key}(${f.status})`).join(", ");
+}
+
+/**
+ * Reset runtime state (for tests).
+ */
+export function _reset(): void {
+  activeFeatures.clear();
+  blockedFeatures.clear();
 }
