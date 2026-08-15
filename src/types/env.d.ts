@@ -52,6 +52,38 @@ declare module "bun" {
     /** Comma-separated allowed origins. Empty = allow all in dev. */
     CORS_ALLOWED_ORIGINS?: string;
 
+    // --- TLS (dev-server.ts) ---
+    /** Path to TLS certificate file. Default: "dev-cert.pem" */
+    TLS_CERT_PATH?: string;
+    /** Path to TLS private key file. Default: "dev-key.pem" */
+    TLS_KEY_PATH?: string;
+
+    // --- Mermaid renderer (render-mermaid.ts) ---
+    /** Path to a Chromium-based browser binary. Required for rendering. */
+    MERMAID_BROWSER_PATH?: string;
+    /** Mermaid theme: "default" | "forest" | "dark" | "neutral". Default: "default" */
+    MERMAID_THEME?: string;
+    /** Output format: "svg" | "png" | "pdf". Default: "svg" */
+    MERMAID_FORMAT?: string;
+    /** Output directory for rendered files. Default: "." */
+    MERMAID_OUTPUT_DIR?: string;
+    /** Watchdog timeout for hung renders (ms). Default: "15000" */
+    MERMAID_TIMEOUT_MS?: string;
+
+    // --- Brand colors (render-mermaid.ts terminal output) ---
+    /** Canvas background (CSS color, passed to mermaid-cli -b flag). */
+    BRAND_COLOR_BG?: string;
+    /** Terminal label color (CSS color). */
+    BRAND_COLOR_LABEL?: string;
+    /** Terminal value color (CSS color). */
+    BRAND_COLOR_VALUE?: string;
+    /** Terminal success color (CSS color). */
+    BRAND_COLOR_OK?: string;
+    /** Terminal error color (CSS color). */
+    BRAND_COLOR_ERR?: string;
+    /** Terminal warning color (CSS color). */
+    BRAND_COLOR_WARN?: string;
+
     // --- Bun feature flags ---
     /** Enable experimental HTTP/2 fetch client. */
     BUN_FEATURE_FLAG_EXPERIMENTAL_HTTP2_CLIENT?: string;

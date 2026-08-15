@@ -120,6 +120,8 @@ All config is in `.env` (loaded automatically by Bun — no dotenv needed). Envi
 | `CIRCUIT_BREAKER_THRESHOLD` | `5` | Failures before circuit opens |
 | `CIRCUIT_BREAKER_COOLDOWN_MS` | `300000` | Cooldown before half-open probe (5 min) |
 | `CORS_ALLOWED_ORIGINS` | — | Comma-separated allowed origins (empty = allow all in dev) |
+| `TLS_CERT_PATH` | `dev-cert.pem` | Path to TLS certificate (for dev-server HTTP/3) |
+| `TLS_KEY_PATH` | `dev-key.pem` | Path to TLS private key (for dev-server HTTP/3) |
 
 ### Mermaid renderer
 
@@ -192,6 +194,7 @@ bun-automation-platform/
 | [Bun Automation Platform — v1.3.14](bun_automation_platform_v1314_20260814.svg) | Updated architecture with v1.3.14 features (earlier draft) | [`.mmd`](bun_automation_platform_v1314_20260814.mmd) |
 | [Bun Automation Platform — Original](bun_automation_platform_20260814.svg) | Initial implementation drill-down | [`.mmd`](bun_automation_platform_20260814.mmd) |
 | [Agent Dashboard (DeepSeek)](deepseek_mermaid_20260814_ef065a.svg) | Original DeepSeek-generated architecture diagram | [`.mmd`](deepseek_mermaid_20260814_ef065a.mmd) |
+| [Agent Dashboard (DeepSeek, PNG)](deepseek_mermaid_20260814_4f4804.png) | Original DeepSeek-generated architecture diagram (PNG render) | — |
 
 ### Bun API reference diagrams
 
@@ -218,3 +221,7 @@ bun-automation-platform/
 - **Process management:** `Bun.spawn` with IPC, `--no-orphans`, `process.execve`
 - **Networking:** `fetch()` with HTTP/3 (QUIC), shared SSL_CTX cache
 - **Rendering:** `@mermaid-js/mermaid-cli` via `Bun.spawn`
+
+## License
+
+[MIT](LICENSE) — Copyright (c) 2026 nolarose
