@@ -2,26 +2,32 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "type": "bun",
+      "type": "node",
       "request": "launch",
       "name": "Debug Server (src/server.ts)",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "--inspect-wait"],
       "program": "${workspaceFolder}/src/server.ts",
       "cwd": "${workspaceFolder}",
-      "stopOnEntry": false,
-      "watch": true
+      "console": "integratedTerminal",
+      "stopOnEntry": false
     },
     {
-      "type": "bun",
+      "type": "node",
       "request": "launch",
-      "name": "Run Tests (bun test)",
+      "name": "Debug Tests (bun test)",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["test", "--inspect-wait"],
       "program": "${workspaceFolder}/tests/server.test.ts",
-      "cwd": "${workspaceFolder}"
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
     },
     {
-      "type": "bun",
+      "type": "node",
       "request": "attach",
-      "name": "Attach to Web Inspector (port 6499)",
-      "url": "ws://localhost:6499/"
+      "name": "Attach to Bun Inspector",
+      "port": 6499,
+      "address": "127.0.0.1"
     }
   ]
 }
