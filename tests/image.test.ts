@@ -60,7 +60,9 @@ describe("Bun.Image processing", () => {
     expect(result.metadata.height).toBe(64);
     expect(result.fullSize).toBeGreaterThan(0);
     expect(result.thumbSize).toBeGreaterThan(0);
-    expect(result.dominantColor).toBe("#1f2020");
+    // K3: dominantColor is now extracted from a 1x1 resize — the test PNG
+    // is filled with RGB(120, 150, 200), so the average should match.
+    expect(result.dominantColor).toBe("#7896c8");
     expect(typeof result.placeholder).toBe("string");
   });
 
@@ -68,11 +70,12 @@ describe("Bun.Image processing", () => {
     const png = createTestPng();
     const result = await processScreenshot(png, "test-serve");
 
-    // H9: serveScreenshot is now async (calls .blob() on the Image pipeline)
+    // Bun.Image instances work directly as Response bodies with automatic
+    // Content-Type. Ref: https://bun.sh/blog/bun-v1.3.14#body-integration
     const res = await serveScreenshot(result.fullPath, 32, "webp");
     expect(res).toBeInstanceOf(Response);
     expect(res.status).toBe(200);
-    // H9: Verify the Content-Type header is set correctly
+    // Bun sets Content-Type automatically based on the format method
     expect(res.headers.get("Content-Type")).toBe("image/webp");
   });
 });

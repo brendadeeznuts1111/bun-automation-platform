@@ -12,14 +12,12 @@ import { describe, expect, it } from "bun:test";
 import { processScreenshot } from "../src/utils/image";
 
 describe("known limitations", () => {
-  // extractDominantColor in src/utils/image.ts is a stub that always
-  // returns "#1f2020" — it doesn't actually extract color from the image.
-  // When Bun.Image adds a pixel accessor, this test will start passing
-  // and Bun will alert us to remove the .failing mark.
-  it.failing("extractDominantColor returns the real dominant color (not the stub)", async () => {
-    // Minimal valid 1x1 red PNG (RGBA). The stub returns "#1f2020"
-    // regardless of input — a real implementation would return a color
-    // derived from the image pixels (close to red for this input).
+  // K3: extractDominantColor is now implemented — it resizes to 1x1, encodes
+  // as PNG, and parses the IDAT chunk to read the average RGB pixel.
+  // This was previously a stub returning "#1f2020". The .failing mark has
+  // been removed since the implementation now works.
+  it("extractDominantColor returns the real dominant color (not the stub)", async () => {
+    // Minimal valid 1x1 red PNG (RGBA). The average color should be red-ish.
     const redPng = new Uint8Array([
       137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0,
       1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68,

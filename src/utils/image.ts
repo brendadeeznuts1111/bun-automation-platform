@@ -59,37 +59,51 @@ export async function processScreenshot(
   // Ensure screenshot directory exists
   mkdirSync(SCREENSHOT_DIR, { recursive: true });
 
-  // Guard against decompression bombs: screenshots are at most 16384x16384
-  // (Bun.WebView max viewport), but we cap at 4096x4096 (~16MP) which is
-  // more than enough for any realistic screenshot.
-  const img = new Bun.Image(input, { maxPixels: 4096 * 4096 });
+  // K1: Bun.Image transform methods (.resize(), .webp(), etc.) return `this`
+  // and mutate the same instance. Using a single Image for parallel pipelines
+  // causes a race condition — the second .resize()/.webp() overwrites the
+  // first branch's state. Each parallel branch needs its own Image instance.
+  // Ref: https://bun.sh/blog/bun-v1.3.14#chainable-transforms
+  //   ".resize(w, h?, {filter, fit, withoutEnlargement})" returns this
 
-  // Extract metadata (runs on main thread, very fast — 0.004ms)
-  const meta = await img.metadata();
+  // Extract metadata first (runs on main thread, very fast — 0.004ms per
+  // the v1.3.14 benchmark). The Image instance is cheap to construct —
+  // the underlying read happens lazily when a terminal is awaited.
+  // Ref: https://bun.sh/blog/bun-v1.3.14#terminal-methods
+  const metaImg = new Bun.Image(input, { maxPixels: 4096 * 4096 });
+  const meta = await metaImg.metadata();
 
-  // M1: Parallelize the three independent encode terminals.
-  // Each terminal triggers a separate decode→transform→encode pipeline,
-  // but running them concurrently overlaps the off-thread work.
   const fullPath = join(SCREENSHOT_DIR, `${name}.webp`);
   const thumbPath = join(SCREENSHOT_DIR, `${name}_thumb.webp`);
 
+  // M1: Parallelize the three independent encode terminals.
+  // K1: Each branch gets its own Bun.Image instance to avoid the race.
+  // K2: Thumbnail uses mks2013 filter — optimized for downscaling quality.
+  // Ref: https://bun.sh/blog/bun-v1.3.14#resize-filters
+  //   "plus mks2013 and mks2021" — MKS filters for high-quality thumbnails
   const [, , placeholder] = await Promise.all([
     // Full-size WebP
-    img.webp({ quality: FULL_QUALITY }).write(fullPath),
-    // Thumbnail (resize + WebP)
-    img
-      .resize(THUMBNAIL_WIDTH, THUMBNAIL_WIDTH, { fit: "inside", withoutEnlargement: true })
+    new Bun.Image(input, { maxPixels: 4096 * 4096 })
+      .webp({ quality: FULL_QUALITY })
+      .write(fullPath),
+    // Thumbnail (resize + WebP) — mks2013 filter for downscaling
+    new Bun.Image(input, { maxPixels: 4096 * 4096 })
+      .resize(THUMBNAIL_WIDTH, THUMBNAIL_WIDTH, {
+        fit: "inside",
+        withoutEnlargement: true,
+        filter: "mks2013",
+      })
       .webp({ quality: THUMBNAIL_QUALITY })
       .write(thumbPath),
     // ThumbHash placeholder for blur-up loading
-    img.placeholder(),
+    new Bun.Image(input, { maxPixels: 4096 * 4096 }).placeholder(),
   ]);
 
   const fullSize = Bun.file(fullPath).size;
   const thumbSize = Bun.file(thumbPath).size;
 
-  // Extract dominant color from a tiny version for CSS background
-  const dominantColor = await extractDominantColor(img);
+  // Extract dominant color from a 1x1 resize for CSS background
+  const dominantColor = await extractDominantColor(input);
 
   return {
     fullPath,
@@ -103,18 +117,82 @@ export async function processScreenshot(
 }
 
 /**
- * Extract the dominant color from an image as a hex string.
+ * Extract the dominant/average color from an image as a hex string.
  *
- * Bun.Image doesn't expose per-pixel access, so we resize to 1x1 and
- * encode as JPEG base64. The JPEG base64 is not directly parseable for
- * pixel values without a decoder, so for now we return a default dark
- * background color. The ThumbHash placeholder (generated separately)
- * already encodes the dominant color for blur-up loading.
+ * Resizes the image to 1x1 (which averages all pixels), encodes as PNG,
+ * then parses the PNG IDAT chunk to read the single pixel's RGB values.
  *
- * TODO: When Bun.Image adds a pixel accessor, parse the 1x1 buffer directly.
+ * The PNG format for a 1x1 RGB image is straightforward:
+ *   - IHDR: width=1, height=1, bit depth=8, color type=2 (RGB)
+ *   - IDAT: deflate-compressed [filter_byte, R, G, B]
+ *   - IEND: empty
+ *
+ * We inflate the IDAT data and read bytes 1-3 (skip filter byte 0).
+ *
+ * Ref: https://bun.sh/blog/bun-v1.3.14#terminal-methods
+ *   ".buffer()" returns the encoded image as an ArrayBuffer
+ *   ".bytes()" returns the encoded image as a Uint8Array
  */
-async function extractDominantColor(_img: import("bun").Image): Promise<string> {
-  return "#1f2020"; // default dark background — thumbhash carries the real color
+async function extractDominantColor(
+  input: string | ArrayBuffer | Uint8Array | Blob | import("bun").BunFile,
+): Promise<string> {
+  try {
+    // Resize to 1x1 — this averages all pixels into a single color.
+    // Encode as PNG (lossless, simple to parse) and get the raw bytes.
+    const pngBytes = await new Bun.Image(input, { maxPixels: 4096 * 4096 })
+      .resize(1, 1, { fit: "fill" })
+      .png()
+      .bytes();
+
+    // Parse the PNG to find the IDAT chunk.
+    // PNG structure: 8-byte signature, then chunks of [length(4), type(4), data(length), crc(4)]
+    const view = new DataView(pngBytes.buffer, pngBytes.byteOffset, pngBytes.byteLength);
+    let offset = 8; // skip PNG signature
+    while (offset < pngBytes.length) {
+      const chunkLen = view.getUint32(offset);
+      const chunkType = String.fromCharCode(
+        pngBytes[offset + 4]!,
+        pngBytes[offset + 5]!,
+        pngBytes[offset + 6]!,
+        pngBytes[offset + 7]!,
+      );
+      offset += 8;
+
+      if (chunkType === "IDAT") {
+        // PNG IDAT contains zlib-wrapped deflate data (2-byte header + 
+        // deflate data + 4-byte adler32 checksum). Bun.inflateSync expects
+        // raw deflate (no zlib wrapper), so we strip the 2-byte header and
+        // 4-byte trailer. Use DecompressionStream as a fallback for robustness.
+        const idat = pngBytes.subarray(offset, offset + chunkLen);
+        const rawDeflate = idat.subarray(2, idat.length - 4);
+        let raw: Uint8Array;
+        try {
+          // Bun.inflateSync requires Uint8Array<ArrayBuffer> but .subarray()
+          // returns Uint8Array<ArrayBufferLike>. The underlying buffer is
+          // always a real ArrayBuffer (from .bytes() terminal).
+          // JUSTIFIED: ArrayBufferLike → ArrayBuffer for Bun.inflateSync
+          raw = Bun.inflateSync(rawDeflate as Uint8Array<ArrayBuffer>);
+        } catch {
+          // Fallback: use DecompressionStream which handles zlib format
+          const ds = new DecompressionStream("deflate");
+          const stream = new Blob([idat]).stream().pipeThrough(ds);
+          const buf = await new Response(stream).arrayBuffer();
+          raw = new Uint8Array(buf);
+        }
+        // For a 1x1 RGB PNG: raw = [filter_byte(0), R, G, B]
+        // For a 1x1 RGBA PNG: raw = [filter_byte(0), R, G, B, A]
+        const r = raw[1] ?? 0;
+        const g = raw[2] ?? 0;
+        const b = raw[3] ?? 0;
+        return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+      }
+
+      offset += chunkLen + 4; // skip data + CRC
+    }
+  } catch {
+    // Fall back to default if parsing fails
+  }
+  return "#1f2020"; // default dark background
 }
 
 /**
