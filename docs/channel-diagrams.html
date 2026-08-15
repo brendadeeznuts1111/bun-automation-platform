@@ -1227,6 +1227,220 @@ Allowed tags (unchanged): <code>div</code>, <code>span</code>, <code>details</co
 <blockquote>
 <p><strong>Note: CamelCase is NOT split.</strong> <code>CamelCaseHeading</code> → <code>camelcaseheading</code> (all one word). For word boundary slugs, preprocess to <code>Camel Case Heading</code> before rendering.</p>
 </blockquote>
+<h2 id="nested-inline-formatting-deep-audit">Nested Inline Formatting — Deep Audit</h2>
+<p>Tested 24 nested inline formatting combinations.</p>
+<h3 id="working-nesting-combinations">Working nesting combinations</h3>
+<table>
+<thead>
+<tr><th>Pattern</th><th>Output</th><th>Notes</th></tr>
+</thead>
+<tbody>
+<tr><td><code>*italic **bold** italic*</code></td><td><code>&lt;em&gt;italic &lt;strong&gt;bold&lt;/strong&gt; italic&lt;/em&gt;</code></td><td>Bold inside italic</td></tr>
+<tr><td><code>**bold *italic* bold**</code></td><td><code>&lt;strong&gt;bold &lt;em&gt;italic&lt;/em&gt; bold&lt;/strong&gt;</code></td><td>Italic inside bold</td></tr>
+<tr><td><code>**bold ~~strike~~ bold**</code></td><td><code>&lt;strong&gt;bold &lt;del&gt;strike&lt;/del&gt; bold&lt;/strong&gt;</code></td><td>Strike inside bold</td></tr>
+<tr><td><code>*italic ~~strike~~ italic*</code></td><td><code>&lt;em&gt;italic &lt;del&gt;strike&lt;/del&gt; italic&lt;/em&gt;</code></td><td>Strike inside italic</td></tr>
+<tr><td><code>**bold \</code>code` bold**`</td><td><code>&lt;strong&gt;bold &lt;code&gt;code&lt;/code&gt; bold&lt;/strong&gt;</code></td><td>Code inside bold</td></tr>
+<tr><td><code>**bold [link](url) bold**</code></td><td><code>&lt;strong&gt;bold &lt;a&gt;link&lt;/a&gt; bold&lt;/strong&gt;</code></td><td>Link inside bold</td></tr>
+<tr><td><code>[**bold link**](url)</code></td><td><code>&lt;a&gt;&lt;strong&gt;bold link&lt;/strong&gt;&lt;/a&gt;</code></td><td>Bold inside link</td></tr>
+<tr><td><code>*a **b ~~c \</code>d` c~~ b** a*`</td><td><code>&lt;em&gt;a &lt;strong&gt;b &lt;del&gt;c &lt;code&gt;d&lt;/code&gt; c&lt;/del&gt; b&lt;/strong&gt; a&lt;/em&gt;</code></td><td>4-level nesting</td></tr>
+</tbody>
+</table>
+<h3 id="code-blocks-are-opaque">Code blocks are opaque</h3>
+<table>
+<thead>
+<tr><th>Pattern</th><th>Output</th><th>Notes</th></tr>
+</thead>
+<tbody>
+<tr><td><code>`code **not bold** code`</code></td><td><code>&lt;code&gt;code **not bold** code&lt;/code&gt;</code></td><td>Formatting NOT parsed inside code</td></tr>
+<tr><td><code> </code>outer <code>inner</code> outer<code> </code></td><td><code>&lt;code&gt;outer </code>inner<code> outer&lt;/code&gt;</code></td><td>Inner backticks are literal</td></tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Note:</strong> Inline code is completely opaque — no markdown formatting is parsed inside backticks. This is correct per the CommonMark spec.</p>
+</blockquote>
+<h3 id="same-type-nesting-allowed-but-unusual">Same-type nesting (allowed but unusual)</h3>
+<table>
+<thead>
+<tr><th>Pattern</th><th>Output</th><th>Notes</th></tr>
+</thead>
+<tbody>
+<tr><td><code>**outer **inner** outer**</code></td><td><code>&lt;strong&gt;outer &lt;strong&gt;inner&lt;/strong&gt; outer&lt;/strong&gt;</code></td><td>Nested <code>&lt;strong&gt;</code></td></tr>
+<tr><td><code>*outer *inner* outer*</code></td><td><code>&lt;em&gt;outer &lt;em&gt;inner&lt;/em&gt; outer&lt;/em&gt;</code></td><td>Nested <code>&lt;em&gt;</code></td></tr>
+<tr><td><code>~~outer ~~inner~~ outer~~</code></td><td><code>&lt;del&gt;outer &lt;del&gt;inner&lt;/del&gt; outer&lt;/del&gt;</code></td><td>Nested <code>&lt;del&gt;</code></td></tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Note:</strong> Same-type nesting produces nested HTML elements. This is technically valid HTML but semantically redundant. Most renderers collapse these visually.</p>
+</blockquote>
+<h3 id="broken-nesting">Broken nesting</h3>
+<table>
+<thead>
+<tr><th>Pattern</th><th>Expected</th><th>Actual</th><th>Notes</th></tr>
+</thead>
+<tbody>
+<tr><td><code>[outer [inner](url2) outer](url1)</code></td><td>Nested link</td><td><code>[outer &lt;a&gt;inner&lt;/a&gt; outer](url1)</code> — outer link NOT parsed</td><td><strong>Bug 12</strong></td></tr>
+<tr><td><code>![text [link](url)](img.png)</code></td><td>Image with link in alt</td><td><code>&lt;img alt=&quot;text link&quot;&gt;</code> — link text extracted to alt, URL lost</td><td>Partial</td></tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Warning: Links inside links do NOT work.</strong> <code>[outer [inner](url) outer](url2)</code> renders the inner link but the outer link is NOT recognized — it becomes literal text. This is bug 12.</p>
+</blockquote>
+<h3 id="special-cases">Special cases</h3>
+<table>
+<thead>
+<tr><th>Pattern</th><th>Output</th><th>Notes</th></tr>
+</thead>
+<tbody>
+<tr><td><code>***bold italic***</code></td><td><code>&lt;em&gt;&lt;strong&gt;bold italic&lt;/strong&gt;&lt;/em&gt;</code></td><td>Triple asterisk = bold+italic</td></tr>
+<tr><td><code>[![alt](img.png)](url)</code></td><td><code>&lt;a&gt;&lt;img&gt;&lt;/a&gt;</code></td><td>Image inside link (works!)</td></tr>
+<tr><td><code>foo_bar_baz</code></td><td><code>foo_bar_baz</code> (literal)</td><td>Underscore emphasis requires word boundaries</td></tr>
+<tr><td><code>foo _bar_ baz</code></td><td><code>foo &lt;em&gt;bar&lt;/em&gt; baz</code></td><td>Underscore with spaces works</td></tr>
+<tr><td><code>this*is*test</code></td><td><code>this&lt;em&gt;is&lt;/em&gt;test</code></td><td>Asterisk works without spaces</td></tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Note:</strong> Underscore emphasis (<code>_text_</code>) requires word boundaries (spaces or punctuation) on both sides. Asterisk emphasis (<code>*text*</code>) works without spaces. This is per the CommonMark spec — underscores are more restrictive to avoid breaking <code>snake_case</code> words.</p>
+</blockquote>
+<h2 id="error-handling-malformed-markdown">Error Handling &amp; Malformed Markdown</h2>
+<p>Tested 21 malformed markdown inputs. The parser never crashes — it renders malformed input as literal text.</p>
+<h3 id="unclosed-formatting">Unclosed formatting</h3>
+<table>
+<thead>
+<tr><th>Input</th><th>Output</th><th>Behavior</th></tr>
+</thead>
+<tbody>
+<tr><td><code>**bold without closing</code></td><td><code>&lt;p&gt;**bold without closing&lt;/p&gt;</code></td><td>Literal text</td></tr>
+<tr><td><code>*italic without closing</code></td><td><code>&lt;p&gt;*italic without closing&lt;/p&gt;</code></td><td>Literal text</td></tr>
+<tr><td><code>```ts\ncode without closing</code></td><td><code>&lt;pre&gt;&lt;code&gt;code without closing&lt;/code&gt;&lt;/pre&gt;</code></td><td><strong>Renders as code block anyway</strong></td></tr>
+<tr><td><code>[text without closing](url</code></td><td><code>&lt;p&gt;[text without closing](&lt;a&gt;url&lt;/a&gt;&lt;/p&gt;</code></td><td>URL autolinked, rest literal</td></tr>
+<tr><td><code>![alt without closing](img.png</code></td><td><code>&lt;p&gt;![alt without closing](img.png&lt;/p&gt;</code></td><td>Literal text</td></tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Note:</strong> Unclosed fenced code blocks (<code>```ts</code> without closing <code>```</code>) still render as a code block — the parser treats EOF as an implicit closing fence. This is reasonable behavior.</p>
+</blockquote>
+<h3 id="empty-elements">Empty elements</h3>
+<table>
+<thead>
+<tr><th>Input</th><th>Output</th><th>Notes</th></tr>
+</thead>
+<tbody>
+<tr><td><code>[](url)</code></td><td><code>&lt;a href=&quot;url&quot;&gt;&lt;/a&gt;</code></td><td>Empty link text</td></tr>
+<tr><td><code>![](url)</code></td><td><code>&lt;img src=&quot;url&quot; alt=&quot;&quot; /&gt;</code></td><td>Empty image alt</td></tr>
+<tr><td><code>[](http://example.com)</code></td><td><code>&lt;a href=&quot;http://example.com&quot;&gt;&lt;/a&gt;</code></td><td>Empty link with URL</td></tr>
+<tr><td><code>[text]()</code></td><td><code>&lt;a href=&quot;&quot;&gt;text&lt;/a&gt;</code></td><td>Empty href</td></tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Note:</strong> Empty links and images are valid HTML — they produce empty <code>&lt;a&gt;</code> or <code>&lt;img&gt;</code> elements. No error is thrown.</p>
+</blockquote>
+<h3 id="edge-cases">Edge cases</h3>
+<table>
+<thead>
+<tr><th>Input</th><th>Output</th><th>Notes</th></tr>
+</thead>
+<tbody>
+<tr><td><code>*** *** ***</code></td><td><code>&lt;hr /&gt;</code></td><td>Three <code>***</code> = horizontal rule</td></tr>
+<tr><td><code>~~~ ~~~ ~~~</code></td><td>Code block with lang <code>~~~</code></td><td>Tilde-fenced code</td></tr>
+<tr><td>`</td><td></td><td></td></tr>
+<tr><td><code>[][][]</code></td><td><code>&lt;p&gt;[][][]&lt;/p&gt;</code></td><td>Empty brackets = literal</td></tr>
+<tr><td><code>text\x00null\x00bytes</code></td><td><code>&lt;p&gt;textnullbytes&lt;/p&gt;</code></td><td>Null bytes → Unicode replacement char</td></tr>
+<tr><td>10,000 char line</td><td><code>&lt;p&gt;AAAA...&lt;/p&gt;</code></td><td>No truncation, no crash</td></tr>
+<tr><td>50x nested <code>**</code></td><td><code>&lt;strong&gt;&lt;strong&gt;...text...&lt;/strong&gt;&lt;/strong&gt;</code></td><td>Deep nesting works</td></tr>
+<tr><td>100 headings</td><td>100 <code>&lt;h2&gt;</code> elements</td><td>No limit</td></tr>
+<tr><td>100 list items</td><td><code>&lt;ol&gt;</code> with 100 <code>&lt;li&gt;</code></td><td>No limit</td></tr>
+<tr><td>Circular ref <code>[a][a]\n\n[a]: [a][a]</code></td><td><code>&lt;a href=&quot;%5Ba%5D%5Ba%5D&quot;&gt;a&lt;/a&gt;</code></td><td>URL-encoded literal</td></tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Note:</strong> The parser never crashes on malformed input. All edge cases produce valid HTML. Null bytes are converted to the Unicode replacement character (U+FFFD).</p>
+</blockquote>
+<h2 id="bunmarkdownansi-deep-edge-cases">Bun.markdown.ansi() — Deep Edge Cases</h2>
+<p>Tested 19 ansi() edge cases.</p>
+<h3 id="ansi-color-codes-by-element-type">ANSI color codes by element type</h3>
+<table>
+<thead>
+<tr><th>Element</th><th>ANSI code</th><th>Color</th></tr>
+</thead>
+<tbody>
+<tr><td>H1</td><td><code>\x1b[1m\x1b[35m</code></td><td>Bold magenta</td></tr>
+<tr><td>H2</td><td><code>\x1b[1m\x1b[36m</code></td><td>Bold cyan</td></tr>
+<tr><td>H3</td><td><code>\x1b[1m\x1b[33m</code></td><td>Bold yellow</td></tr>
+<tr><td>H4</td><td><code>\x1b[1m\x1b[32m</code></td><td>Bold green</td></tr>
+<tr><td>H5</td><td><code>\x1b[1m\x1b[36m</code></td><td>Bold cyan</td></tr>
+<tr><td>H6</td><td><code>\x1b[1m\x1b[36m</code></td><td>Bold cyan</td></tr>
+<tr><td>Bold</td><td><code>\x1b[1m</code></td><td>Bold</td></tr>
+<tr><td>Italic</td><td><code>\x1b[3m</code></td><td>Italic</td></tr>
+<tr><td>Strikethrough</td><td><code>\x1b[9m</code></td><td>Strikethrough</td></tr>
+<tr><td>Code (inline)</td><td><code>\x1b[48;5;236m\x1b[38;5;215m</code></td><td>BG dark + FG orange</td></tr>
+<tr><td>Link</td><td><code>\x1b[34m\x1b[4m</code></td><td>Blue underline</td></tr>
+<tr><td>Image</td><td><code>\x1b[35m📷</code></td><td>Magenta + camera emoji</td></tr>
+<tr><td>Blockquote</td><td><code>\x1b[38;5;242m│</code></td><td>Gray bar prefix</td></tr>
+<tr><td>Task checked</td><td><code>\x1b[32m☒</code></td><td>Green checked box</td></tr>
+<tr><td>Task unchecked</td><td><code>\x1b[2m☐</code></td><td>Dim unchecked box</td></tr>
+<tr><td>Ordered list</td><td><code>\x1b[36m1.</code></td><td>Cyan number</td></tr>
+<tr><td>HR</td><td><code>\x1b[2m───</code></td><td>Dim horizontal line</td></tr>
+<tr><td>Table borders</td><td><code>\x1b[2m┌─┬─┐</code></td><td>Dim box-drawing</td></tr>
+<tr><td>Code block border</td><td><code>\x1b[2m┌─┐│└─</code></td><td>Dim box-drawing</td></tr>
+</tbody>
+</table>
+<h3 id="ansi-special-behaviors">ansi() special behaviors</h3>
+<table>
+<thead>
+<tr><th>Feature</th><th>Behavior</th></tr>
+</thead>
+<tbody>
+<tr><td>H1 underline</td><td><code>═══</code> (double-line) below heading</td></tr>
+<tr><td>H2 underline</td><td><code>───</code> (single-line) below heading</td></tr>
+<tr><td>H3-H6</td><td>No underline, just colored bold text</td></tr>
+<tr><td>Tables</td><td>Unicode box-drawing with column auto-sizing</td></tr>
+<tr><td>Code blocks</td><td><code>┌─ ts</code> header with language, <code>│</code> prefix per line</td></tr>
+<tr><td>Syntax highlighting</td><td>Keywords (const), types (number), literals (42) colored</td></tr>
+<tr><td>Images</td><td><code>📷 alt text</code> (camera emoji prefix)</td></tr>
+<tr><td>Links</td><td><code>text (url)</code> — link text underlined, URL in dim parens</td></tr>
+<tr><td>Empty doc</td><td>Empty string (no output)</td></tr>
+<tr><td>Whitespace only</td><td>Empty string</td></tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Note:</strong> <code>ansi()</code> does NOT support custom themes. Passing a callbacks object or options object as the second argument has no effect — the default theme is always used. The <code>hyperlinks: true</code> option is also ignored.</p>
+</blockquote>
+<blockquote>
+<p><strong>Note:</strong> <code>ansi()</code> enables all GFM features by default plus wikilinks, underline, and LaTeX math. It is the most feature-complete renderer, but the broken <code>latexMath</code> and <code>underline</code> options still have no visible effect even in <code>ansi()</code> output.</p>
+</blockquote>
+<h2 id="bun-filemd-cli">bun ./file.md CLI</h2>
+<p>Bun can render markdown files directly in the terminal: <code>bun ./file.md</code> outputs ANSI-colored markdown.</p>
+<pre><code class="language-sh">bun ./README.md    # renders README in terminal with colors
+bun ./docs/file.md # renders any .md file
+</code></pre>
+<p>The CLI uses <code>Bun.markdown.ansi()</code> internally — all the same colors, box-drawing tables, and syntax highlighting apply. Exit code is 0 on success.</p>
+<blockquote>
+<p><strong>Note:</strong> This works with any <code>.md</code> file — no configuration needed. The file extension must be <code>.md</code>.</p>
+</blockquote>
+<h2 id="performance-benchmarks">Performance Benchmarks</h2>
+<p>Benchmarked <code>html()</code>, <code>ansi()</code>, and <code>react()</code> with documents of increasing size (each block = heading + paragraph + table + task list + code block + blockquote + HR).</p>
+<table>
+<thead>
+<tr><th>Blocks</th><th>html()</th><th>ansi()</th><th>react()</th><th>html() output</th></tr>
+</thead>
+<tbody>
+<tr><td>100</td><td>0.2ms</td><td>0.7ms</td><td>0.5ms</td><td>59KB</td></tr>
+<tr><td>1,000</td><td>1.7ms</td><td>4.5ms</td><td>4.6ms</td><td>598KB</td></tr>
+<tr><td>5,000</td><td>8.0ms</td><td>23.4ms</td><td>28.0ms</td><td>3,029KB</td></tr>
+<tr><td>10,000</td><td>16.1ms</td><td>49.7ms</td><td>52.4ms</td><td>6,076KB</td></tr>
+</tbody>
+</table>
+<h3 id="performance-observations">Performance observations</h3>
+<ul>
+<li><code>html()</code> is ~3x faster than <code>ansi()</code> and <code>react()</code></li>
+<li><code>ansi()</code> and <code>react()</code> are similar speed (both ~3x slower than html)</li>
+<li>All three scale linearly — no O(n²) behavior</li>
+<li>10,000 blocks (6MB output) in 16-52ms — very fast</li>
+<li>No memory issues at any tested size</li>
+</ul>
+<blockquote>
+<p><strong>Note:</strong> The parser is implemented in Zig (port of md4c), which explains the sub-millisecond parsing for typical documents. The <code>ansi()</code> and <code>react()</code> renderers are slower because they do more work per element (ANSI escape generation / React element creation).</p>
+</blockquote>
 <h2 id="related">Related</h2>
 <ul>
 <li><a href="https://bun.com/docs/runtime/markdown">Bun.markdown docs</a> — GFM parser used for this page</li>
