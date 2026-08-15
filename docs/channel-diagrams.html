@@ -103,9 +103,28 @@
       padding-left: 1.5rem;
     }
 
-    li {
+    /* Nested ordered list counters — display as 1, 1.1, 1.1.1, 1.1.1.1 */
+    ol {
+      counter-reset: ol-item;
+    }
+    ol > li {
+      counter-increment: ol-item;
       margin: 0.3rem 0;
       color: var(--brand-value);
+    }
+    ol > li::marker {
+      content: counters(ol-item, ".") ". ";
+      color: var(--brand-label);
+      font-weight: 500;
+    }
+
+    /* Unordered lists keep default markers */
+    ul > li {
+      margin: 0.3rem 0;
+      color: var(--brand-value);
+    }
+    ul > li::marker {
+      color: var(--brand-label);
     }
 
     .task-list-item {
@@ -520,6 +539,80 @@
 <tr><td><code>collapseWhitespace</code></td><td><code>false</code></td><td>Collapse whitespace in text</td></tr>
 </tbody>
 </table>
+<h3 id="nested-lists-123">Nested Lists (1.2.3)</h3>
+<p><code>Bun.markdown.html()</code> renders nested ordered lists with proper <code>&lt;ol&gt;</code> nesting. Indent 3 spaces per level.</p>
+<pre><code class="language-markdown">1. Top level
+   1. Second level
+      1. Third level
+   2. Back to second
+2. Back to top
+</code></pre>
+<p>Renders as:</p>
+<ol>
+  <li>Top level
+    <ol>
+      <li>Second level
+        <ol>
+          <li>Third level</li>
+        </ol>
+      </li>
+      <li>Back to second</li>
+    </ol>
+  </li>
+  <li>Back to top</li>
+</ol>
+<h4 id="nesting-metadata-via-bunmarkdownrender">Nesting metadata via <code>Bun.markdown.render()</code></h4>
+<p>The <code>render()</code> API exposes list metadata via the second callback argument:</p>
+<table>
+<thead>
+<tr><th>Callback</th><th>Meta fields</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>list(children, meta)</code></td><td><code>ordered</code>, <code>start?</code>, <code>depth</code></td><td><code>depth</code> = nesting level (0 = top)</td></tr>
+<tr><td><code>listItem(children, meta)</code></td><td><code>index</code>, <code>depth</code>, <code>ordered</code>, <code>start?</code>, <code>checked?</code></td><td><code>checked</code> for <code>- [x]</code> / <code>- [ ]</code></td></tr>
+</tbody>
+</table>
+<p>Example — render nested lists with depth attributes:</p>
+<pre><code class="language-ts">const out = Bun.markdown.render(md, {
+  list(children, meta) {
+    const tag = meta.ordered ? &quot;ol&quot; : &quot;ul&quot;;
+    const start = meta.ordered &amp;&amp; meta.start !== 1
+      ? ` start=&quot;${meta.start}&quot;` : &quot;&quot;;
+    return `&lt;${tag}${start} data-depth=&quot;${meta.depth}&quot;&gt;${children}&lt;/${tag}&gt;`;
+  },
+  listItem(children, meta) {
+    return `&lt;li data-index=&quot;${meta.index}&quot; data-depth=&quot;${meta.depth}&quot;&gt;${children}&lt;/li&gt;`;
+  },
+});
+</code></pre>
+<h4 id="mixed-nesting-patterns">Mixed nesting patterns</h4>
+<table>
+<thead>
+<tr><th>Pattern</th><th>Syntax</th><th>Output</th></tr>
+</thead>
+<tbody>
+<tr><td>Ordered in ordered</td><td><code>1.</code> → <code>   1.</code> → <code>      1.</code></td><td><code>&lt;ol&gt;&lt;li&gt;&lt;ol&gt;&lt;li&gt;&lt;ol&gt;&lt;li&gt;</code></td></tr>
+<tr><td>Unordered in ordered</td><td><code>1.</code> → <code>   -</code></td><td><code>&lt;ol&gt;&lt;li&gt;&lt;ul&gt;&lt;li&gt;</code></td></tr>
+<tr><td>Task list in ordered</td><td><code>1.</code> → <code>   - [x]</code></td><td><code>&lt;ol&gt;&lt;li&gt;&lt;ul&gt;&lt;li class=&quot;task-list-item&quot;&gt;</code></td></tr>
+<tr><td>Code block in nested</td><td><code>1.</code> → <code>   1.</code> → <code>   ```ts</code></td><td><code>&lt;ol&gt;&lt;li&gt;&lt;ol&gt;&lt;li&gt;&lt;pre&gt;&lt;code&gt;</code></td></tr>
+<tr><td>Start at non-1</td><td><code>3.</code> → <code>4.</code> → <code>5.</code></td><td><code>&lt;ol start=&quot;3&quot;&gt;</code></td></tr>
+<tr><td>Loose (with paragraph)</td><td><code>1.\n\n   Text\n\n2.</code></td><td><code>&lt;li&gt;&lt;p&gt;...&lt;/p&gt;&lt;/li&gt;</code></td></tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Note:</strong> Indentation must be 3+ spaces for nesting. Two spaces does not trigger a nested list in GFM.</p>
+</blockquote>
+<h4 id="depth-limits">Depth limits</h4>
+<p>Tested up to 4 levels deep — <code>Bun.markdown.html()</code> handles arbitrary nesting:</p>
+<pre><code class="language-markdown">1. L1
+   1. L2
+      1. L3
+         1. L4
+      2. L3b
+   2. L2b
+2. L1b
+</code></pre>
+<p>Each level gets its own <code>&lt;ol&gt;</code> wrapper. The <code>render()</code> API reports <code>depth</code> as 0, 1, 2, 3 respectively.</p>
 <h2 id="related">Related</h2>
 <ul>
 <li><a href="https://bun.com/docs/runtime/markdown">Bun.markdown docs</a> — GFM parser used for this page</li>
