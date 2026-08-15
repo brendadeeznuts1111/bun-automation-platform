@@ -1,0 +1,69 @@
+classDiagram
+    class ChannelMessage {
+        +type: string
+    }
+
+    class Channel~TSend, TRecv~ {
+        <<interface>>
+        +readonly id: string
+        +readonly transport: ChannelTransport
+        +readonly connected: boolean
+        +send(msg: TSend) boolean
+        +on(type, handler) Unsubscribe
+        +onAny(handler) Unsubscribe
+        +close() void
+        +onClose(handler) Unsubscribe
+    }
+
+    class BaseChannel~TSend, TRecv~ {
+        <<abstract>>
+        #_connected: boolean
+        #handlers: Map
+        #anyHandlers: Set
+        #closeHandlers: Set
+        +send(msg)* boolean
+        +close()* void
+        +on(type, handler) Unsubscribe
+        +onAny(handler) Unsubscribe
+        +onClose(handler) Unsubscribe
+        #dispatch(msg) void
+        #notifyClosed(reason) void
+        +handleClose() void
+        +setSender(sender) void
+        +setId(id) void
+    }
+
+    class IPCChannel~TSend, TRecv~ {
+        -sender: Sender
+        -messageHandler: Function
+        +handleMessage(msg) void
+        +handleClose() void
+        +setSender(sender) void
+        +setId(id) void
+        +send(msg) boolean
+        +close() void
+    }
+
+    class WSChannel~TSend, TRecv~ {
+        -ws: WSLike
+        -server: ServerLike
+        +handleMessage(raw) void
+        +handleClose() void
+        +send(msg) boolean
+        +publish(topic, msg) boolean
+        +subscribe(topic) void
+        +unsubscribe(topic) void
+        +close(code, reason) void
+    }
+
+    class ChannelTransport {
+        <<type>>
+        "ipc"
+        "websocket"
+        "messageport"
+    }
+
+    Channel <|.. BaseChannel
+    BaseChannel <|-- IPCChannel
+    BaseChannel <|-- WSChannel
+    ChannelMessage ..> Channel : TSend, TRecv

@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Channel Architecture — Bun Automation Platform</title>
+  <style>
+    :root {
+      --brand-label: #8be9fd;
+      --brand-value: #f8f8f2;
+      --brand-ok: #50fa7b;
+      --brand-err: #ff5555;
+      --brand-warn: #ffb86c;
+      --brand-bg: #1f2020;
+      --brand-bg-rgb: rgb(31, 32, 32);
+      --brand-label-rgb: rgb(139, 233, 253);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+      background: var(--brand-bg);
+      color: var(--brand-value);
+      line-height: 1.6;
+    }
+
+    h1 {
+      color: var(--brand-label);
+      border-bottom: 2px solid var(--brand-label);
+      padding-bottom: 0.5rem;
+      font-size: 1.8rem;
+    }
+
+    h2 {
+      color: var(--brand-label);
+      margin-top: 2.5rem;
+      font-size: 1.4rem;
+    }
+
+    h3 {
+      color: var(--brand-warn);
+      margin-top: 1.5rem;
+      font-size: 1.1rem;
+    }
+
+    p { color: var(--brand-value); margin: 0.8rem 0; }
+
+    a {
+      color: var(--brand-label);
+      text-decoration: none;
+      border-bottom: 1px dotted var(--brand-label);
+    }
+    a:hover { border-bottom-style: solid; }
+
+    code {
+      font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+      font-size: 0.9em;
+      background: rgba(rgb(139, 233, 253), 0.12);
+      color: var(--brand-label);
+      padding: 0.15rem 0.4rem;
+      border-radius: 3px;
+    }
+
+    pre {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(rgb(139, 233, 253), 0.2);
+      border-radius: 6px;
+      padding: 1rem;
+      overflow-x: auto;
+    }
+
+    pre code {
+      background: none;
+      color: var(--brand-value);
+      padding: 0;
+    }
+
+    ul, ol {
+      padding-left: 1.5rem;
+    }
+
+    li {
+      margin: 0.3rem 0;
+      color: var(--brand-value);
+    }
+
+    .task-list-item {
+      list-style: none;
+      margin-left: -1.2rem;
+    }
+    .task-list-item input[type="checkbox"] {
+      margin-right: 0.5rem;
+      accent-color: var(--brand-ok);
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1rem 0;
+      font-size: 0.9rem;
+    }
+
+    th {
+      background: rgba(rgb(139, 233, 253), 0.15);
+      color: var(--brand-label);
+      text-align: left;
+      padding: 0.6rem 0.8rem;
+      border: 1px solid rgba(rgb(139, 233, 253), 0.3);
+    }
+
+    td {
+      padding: 0.6rem 0.8rem;
+      border: 1px solid rgba(rgb(139, 233, 253), 0.15);
+      color: var(--brand-value);
+    }
+
+    tr:nth-child(even) td {
+      background: rgba(0, 0, 0, 0.15);
+    }
+
+    blockquote {
+      border-left: 3px solid var(--brand-warn);
+      margin: 1rem 0;
+      padding: 0.5rem 1rem;
+      background: rgba(rgb(255, 184, 108), 0.08);
+      color: var(--brand-value);
+    }
+
+    blockquote p { margin: 0.3rem 0; }
+
+    details {
+      margin: 0.5rem 0;
+      border: 1px solid rgba(rgb(139, 233, 253), 0.2);
+      border-radius: 4px;
+      padding: 0.5rem 1rem;
+      background: rgba(0, 0, 0, 0.2);
+    }
+
+    details summary {
+      cursor: pointer;
+      color: var(--brand-label);
+      font-weight: 500;
+    }
+
+    details[open] summary {
+      margin-bottom: 0.5rem;
+    }
+
+    img {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      margin: 0 auto;
+    }
+
+    hr {
+      border: none;
+      border-top: 1px solid rgba(rgb(139, 233, 253), 0.2);
+      margin: 2rem 0;
+    }
+
+    .brand-bar {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+      margin-bottom: 2rem;
+      padding: 0.5rem 1rem;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 6px;
+      border: 1px solid rgba(rgb(139, 233, 253), 0.15);
+      font-size: 0.85rem;
+      flex-wrap: wrap;
+    }
+
+    .brand-swatch {
+      display: inline-block;
+      width: 1rem;
+      height: 1rem;
+      border-radius: 3px;
+      border: 1px solid rgba(255,255,255,0.2);
+      vertical-align: middle;
+      margin-right: 0.3rem;
+    }
+
+    .brand-item {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    .brand-item code {
+      font-size: 0.8em;
+    }
+  </style>
+</head>
+<body>
+  <h1>Channel Architecture</h1>
+  <p>Transport-agnostic typed message passing — IPC, WebSocket, and (future) MessagePort.</p>
+
+  <div class="brand-bar">
+    <span style="color: var(--brand-label); font-weight: 600;">Brand colors (Bun.color):</span>
+    <span class="brand-item"><span class="brand-swatch" style="background:#8be9fd"></span><code>label</code></span>
+    <span class="brand-item"><span class="brand-swatch" style="background:#f8f8f2"></span><code>value</code></span>
+    <span class="brand-item"><span class="brand-swatch" style="background:#50fa7b"></span><code>ok</code></span>
+    <span class="brand-item"><span class="brand-swatch" style="background:#ff5555"></span><code>err</code></span>
+    <span class="brand-item"><span class="brand-swatch" style="background:#ffb86c"></span><code>warn</code></span>
+    <span class="brand-item"><span class="brand-swatch" style="background:#1f2020"></span><code>bg</code></span>
+  </div>
+
+  <h2>Architecture Overview</h2>
+<p>High-level view of the <code>Channel&lt;TSend, TRecv&gt;</code> interface, <code>BaseChannel</code> abstract class, and transport implementations.</p>
+<p><img src="../channel-architecture.svg" alt="Channel Architecture" /></p>
+<details>
+<summary>Mermaid source</summary>
+<pre><code class="language-mermaid">graph TB
+    subgraph &quot;Channel Architecture&quot;
+        subgraph &quot;Interface Layer&quot;
+            Channel[&quot;Channel&amp;lt;TSend, TRecv&amp;gt;&lt;br/&gt;interface&quot;]
+            BaseChannel[&quot;BaseChannel&amp;lt;TSend, TRecv&amp;gt;&lt;br/&gt;abstract class&quot;]
+            ChannelMessage[&quot;ChannelMessage&lt;br/&gt;{ type: string }&quot;]
+        end
+
+        subgraph &quot;Transport Implementations&quot;
+            IPCChannel[&quot;IPCChannel&lt;br/&gt;parent ↔ worker&quot;]
+            WSChannel[&quot;WSChannel&lt;br/&gt;server ↔ client&quot;]
+            MPChannel[&quot;MessagePortChannel&lt;br/&gt;(future)&quot;]
+        end
+
+        subgraph &quot;IPC Transport (Bun.spawn)&quot;
+            Parent[&quot;Parent Process&lt;br/&gt;pool.ts&quot;]
+            Worker[&quot;Worker Process&lt;br/&gt;task-worker.ts&quot;]
+            Parent -.-&gt;|&quot;proc.send()&quot;| Worker
+            Worker -.-&gt;|&quot;process.send()&quot;| Parent
+        end
+
+        subgraph &quot;WebSocket Transport (Bun.serve)&quot;
+            Server[&quot;Bun Server&lt;br/&gt;server.ts&quot;]
+            Client[&quot;Browser Client&lt;br/&gt;/ws/task/:id&quot;]
+            Server -.-&gt;|&quot;ws.send() / publish()&quot;| Client
+            Client -.-&gt;|&quot;ws.send()&quot;| Server
+        end
+
+        ChannelMessage --&gt; BaseChannel
+        BaseChannel --&gt; IPCChannel
+        BaseChannel --&gt; WSChannel
+        BaseChannel -.-&gt; MPChannel
+
+        IPCChannel --&gt; Parent
+        IPCChannel --&gt; Worker
+        WSChannel --&gt; Server
+        WSChannel --&gt; Client
+    end
+
+    style Channel fill:#4A90D9,color:#fff,stroke:#2C5F8A
+    style BaseChannel fill:#6B5B95,color:#fff,stroke:#4A4565
+    style IPCChannel fill:#50C878,color:#fff,stroke:#3A9D5C
+    style WSChannel fill:#FF6B6B,color:#fff,stroke:#CC5454
+    style MPChannel fill:#DDD,color:#999,stroke:#BBB,stroke-dasharray: 5 5
+</code></pre>
+</details>
+<h2>Message Flow</h2>
+<p>Sequence diagram showing how a task flows from HTTP creation through IPC to WebSocket subscribers.</p>
+<p><img src="../channel-message-flow.svg" alt="Message Flow" /></p>
+<details>
+<summary>Mermaid source</summary>
+<pre><code class="language-mermaid">sequenceDiagram
+    participant C as Browser Client
+    participant S as Bun Server
+    participant P as Worker Pool
+    participant W as Worker Process
+
+    Note over C,W: WebSocket + IPC Channel Flow
+
+    C-&gt;&gt;S: WS Upgrade /ws/task/1
+    S--&gt;&gt;C: 101 Switching Protocols
+    Note over S: ws.subscribe(&quot;task:1&quot;)
+
+    C-&gt;&gt;S: POST /task {url}
+    S-&gt;&gt;P: submitTask(taskId=1)
+    P-&gt;&gt;W: channel.send({type:&quot;task&quot;,taskId:1})
+    Note over W: IPC Channel receives
+
+    W-&gt;&gt;P: channel.send({type:&quot;progress&quot;,progress:0})
+    Note over P: IPCChannel.handleMessage()
+    P-&gt;&gt;P: registerHandlers → on(&quot;progress&quot;)
+    P-&gt;&gt;S: publishToWebSocket(&quot;task:1&quot;, msg)
+    S-&gt;&gt;C: server.publish(&quot;task:1&quot;, {progress:0})
+
+    W-&gt;&gt;P: channel.send({type:&quot;progress&quot;,progress:25})
+    P-&gt;&gt;S: publishToWebSocket(&quot;task:1&quot;, msg)
+    S-&gt;&gt;C: {type:&quot;progress&quot;,progress:25}
+
+    W-&gt;&gt;P: channel.send({type:&quot;progress&quot;,progress:50})
+    P-&gt;&gt;S: publishToWebSocket(&quot;task:1&quot;, msg)
+    S-&gt;&gt;C: {type:&quot;progress&quot;,progress:50}
+
+    W-&gt;&gt;P: channel.send({type:&quot;progress&quot;,progress:75})
+    P-&gt;&gt;S: publishToWebSocket(&quot;task:1&quot;, msg)
+    S-&gt;&gt;C: {type:&quot;progress&quot;,progress:75}
+
+    W-&gt;&gt;P: channel.send({type:&quot;progress&quot;,progress:100})
+    P-&gt;&gt;S: publishToWebSocket(&quot;task:1&quot;, msg)
+    S-&gt;&gt;C: {type:&quot;progress&quot;,progress:100}
+
+    W-&gt;&gt;P: channel.send({type:&quot;result&quot;,result:...})
+    P-&gt;&gt;P: resolve(task promise)
+    P-&gt;&gt;S: publishToWebSocket(&quot;task:1&quot;, msg)
+    S-&gt;&gt;C: {type:&quot;result&quot;,result:...}
+
+    C-&gt;&gt;S: WS Close
+    Note over S: wsChannels cleanup&lt;br/&gt;delete empty Set
+</code></pre>
+</details>
+<h2>Class Hierarchy</h2>
+<p>UML class diagram showing the interface, abstract class, and concrete implementations.</p>
+<p><img src="../channel-class-hierarchy.svg" alt="Class Hierarchy" /></p>
+<details>
+<summary>Mermaid source</summary>
+<pre><code class="language-mermaid">classDiagram
+    class ChannelMessage {
+        +type: string
+    }
+
+    class Channel~TSend, TRecv~ {
+        &lt;&lt;interface&gt;&gt;
+        +readonly id: string
+        +readonly transport: ChannelTransport
+        +readonly connected: boolean
+        +send(msg: TSend) boolean
+        +on(type, handler) Unsubscribe
+        +onAny(handler) Unsubscribe
+        +close() void
+        +onClose(handler) Unsubscribe
+    }
+
+    class BaseChannel~TSend, TRecv~ {
+        &lt;&lt;abstract&gt;&gt;
+        #_connected: boolean
+        #handlers: Map
+        #anyHandlers: Set
+        #closeHandlers: Set
+        +send(msg)* boolean
+        +close()* void
+        +on(type, handler) Unsubscribe
+        +onAny(handler) Unsubscribe
+        +onClose(handler) Unsubscribe
+        #dispatch(msg) void
+        #notifyClosed(reason) void
+        +handleClose() void
+        +setSender(sender) void
+        +setId(id) void
+    }
+
+    class IPCChannel~TSend, TRecv~ {
+        -sender: Sender
+        -messageHandler: Function
+        +handleMessage(msg) void
+        +handleClose() void
+        +setSender(sender) void
+        +setId(id) void
+        +send(msg) boolean
+        +close() void
+    }
+
+    class WSChannel~TSend, TRecv~ {
+        -ws: WSLike
+        -server: ServerLike
+        +handleMessage(raw) void
+        +handleClose() void
+        +send(msg) boolean
+        +publish(topic, msg) boolean
+        +subscribe(topic) void
+        +unsubscribe(topic) void
+        +close(code, reason) void
+    }
+
+    class ChannelTransport {
+        &lt;&lt;type&gt;&gt;
+        &quot;ipc&quot;
+        &quot;websocket&quot;
+        &quot;messageport&quot;
+    }
+
+    Channel &lt;|.. BaseChannel
+    BaseChannel &lt;|-- IPCChannel
+    BaseChannel &lt;|-- WSChannel
+    ChannelMessage ..&gt; Channel : TSend, TRecv
+</code></pre>
+</details>
+<h2>File Reference</h2>
+<table>
+<thead>
+<tr><th>File</th><th>Transport</th><th>Status</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>src/types/channel.ts</code></td><td>—</td><td>stable</td><td>Channel interface + BaseChannel abstract class</td></tr>
+<tr><td><code>src/channels/ipc-channel.ts</code></td><td>IPC</td><td>stable</td><td>Parent ↔ worker via Bun.spawn</td></tr>
+<tr><td><code>src/channels/ws-channel.ts</code></td><td>WebSocket</td><td>stable</td><td>Server ↔ client via Bun.serve</td></tr>
+<tr><td><code>src/workers/pool.ts</code></td><td>IPC</td><td>stable</td><td>Worker pool using IPCChannel</td></tr>
+<tr><td><code>src/workers/task-worker.ts</code></td><td>IPC</td><td>stable</td><td>Worker using IPCChannel</td></tr>
+<tr><td><code>src/server.ts</code></td><td>WebSocket</td><td>stable</td><td>Server with WS upgrade + pub/sub relay</td></tr>
+<tr><td><code>tests/channels.test.ts</code></td><td>—</td><td>stable</td><td>49 tests covering all transports</td></tr>
+</tbody>
+</table>
+<h2>Implementation Status</h2>
+<ul>
+<li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled checked>C1: Channel interface (<code>src/types/channel.ts</code>)</li>
+<li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled checked>C2: IPCChannel implementation (<code>src/channels/ipc-channel.ts</code>)</li>
+<li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled checked>C3: WSChannel implementation (<code>src/channels/ws-channel.ts</code>)</li>
+<li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled checked>C4: Refactor pool.ts to use Channel interface</li>
+<li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled checked>C5: Refactor task-worker.ts to use Channel interface</li>
+<li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled checked>C6: Wire WebSocket into server.ts behind <code>ENABLE_WEBSOCKET</code> flag</li>
+<li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled checked>C7: Add <code>/ws/task/:id</code> endpoint for live task progress</li>
+<li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled checked>C8: 49 tests covering all transports + type safety</li>
+<li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled checked>C9: Feature registry marks websocket as active when enabled</li>
+<li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled checked>E1: End-to-end WebSocket test (6 messages: 5 progress + 1 result)</li>
+<li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled checked>E2: Worker IPC channel verified with real task execution</li>
+<li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled>MessagePortChannel (future — worker ↔ worker via postMessage)</li>
+</ul>
+<h2>Bug Fixes (Deeper Audit)</h2>
+<ol>
+<li><strong>IPCChannel missing <code>handleClose</code></strong> — channel stayed connected after IPC disconnect</li>
+<li><strong><code>wsChannels</code> Map memory leak</strong> — empty Sets never cleaned up</li>
+<li><strong>WSChannel <code>send()</code> backpressure</strong> — clarified -1/0/&gt;0 return semantics</li>
+<li><strong>WSChannel <code>handleMessage</code> redundant branch</strong> — simplified TextDecoder usage</li>
+<li><strong>pool.ts channel never closed on worker exit</strong> — added <code>channel.close()</code> in exit handler</li>
+<li><strong>BaseChannel <code>on()</code> after close</strong> — now returns no-op unsubscribe</li>
+<li><strong>BaseChannel <code>dispatch()</code> doesn't check <code>_connected</code></strong> — now returns early if closed</li>
+</ol>
+<blockquote>
+<p><strong>Note:</strong> All bug fixes have dedicated tests in <code>tests/channels.test.ts</code>. See the <a href="https://github.com/brendadeeznuts1111/bun-automation-platform/commit/be1b1fe">deeper audit commit</a> for details.</p>
+</blockquote>
+<h2>API Reference</h2>
+<h3>Channel&lt;TSend, TRecv&gt; interface</h3>
+<ul>
+<li><code>send(msg: TSend): boolean</code> — send a typed message, returns false if closed</li>
+<li><code>on(type, handler): Unsubscribe</code> — subscribe to a specific message type</li>
+<li><code>onAny(handler): Unsubscribe</code> — subscribe to all messages</li>
+<li><code>close(): void</code> — close the channel, remove all handlers</li>
+<li><code>onClose(handler): Unsubscribe</code> — called when the channel closes</li>
+</ul>
+<h3>IPCChannel (parent ↔ worker)</h3>
+<ul>
+<li><code>handleMessage(msg)</code> — parent-side: called from Bun.spawn ipc callback</li>
+<li><code>handleClose()</code> — called on IPC disconnect (Bug 1 fix)</li>
+<li><code>setSender(proc)</code> — deferred init after Bun.spawn returns</li>
+<li><code>setId(id)</code> — update id after proc.pid is known</li>
+</ul>
+<h3>WSChannel (server ↔ client)</h3>
+<ul>
+<li><code>handleMessage(raw)</code> — parse JSON (string, ArrayBuffer, Uint8Array)</li>
+<li><code>publish(topic, msg)</code> — broadcast to all subscribers via server.publish</li>
+<li><code>subscribe(topic)</code> / <code>unsubscribe(topic)</code> — Bun native pub/sub</li>
+<li><code>close(code?, reason?)</code> — close the WebSocket connection</li>
+</ul>
+<h2>Related</h2>
+<ul>
+<li><a href="https://bun.com/docs/runtime/markdown">Bun.markdown docs</a> — GFM parser used for this page</li>
+<li><a href="https://bun.com/docs/runtime/bun-apis">Bun.color docs</a> — color format converter for branding</li>
+<li><a href="https://bun.com/docs/runtime/http/websockets">Bun.serve WebSocket docs</a> — pub/sub API</li>
+<li><a href="https://bun.com/docs/runtime/spawn">Bun.spawn IPC docs</a> — parent-child IPC</li>
+</ul>
+
+</body>
+</html>

@@ -1,0 +1,44 @@
+graph TB
+    subgraph "Channel Architecture"
+        subgraph "Interface Layer"
+            Channel["Channel&lt;TSend, TRecv&gt;<br/>interface"]
+            BaseChannel["BaseChannel&lt;TSend, TRecv&gt;<br/>abstract class"]
+            ChannelMessage["ChannelMessage<br/>{ type: string }"]
+        end
+
+        subgraph "Transport Implementations"
+            IPCChannel["IPCChannel<br/>parent ↔ worker"]
+            WSChannel["WSChannel<br/>server ↔ client"]
+            MPChannel["MessagePortChannel<br/>(future)"]
+        end
+
+        subgraph "IPC Transport (Bun.spawn)"
+            Parent["Parent Process<br/>pool.ts"]
+            Worker["Worker Process<br/>task-worker.ts"]
+            Parent -.->|"proc.send()"| Worker
+            Worker -.->|"process.send()"| Parent
+        end
+
+        subgraph "WebSocket Transport (Bun.serve)"
+            Server["Bun Server<br/>server.ts"]
+            Client["Browser Client<br/>/ws/task/:id"]
+            Server -.->|"ws.send() / publish()"| Client
+            Client -.->|"ws.send()"| Server
+        end
+
+        ChannelMessage --> BaseChannel
+        BaseChannel --> IPCChannel
+        BaseChannel --> WSChannel
+        BaseChannel -.-> MPChannel
+
+        IPCChannel --> Parent
+        IPCChannel --> Worker
+        WSChannel --> Server
+        WSChannel --> Client
+    end
+
+    style Channel fill:#4A90D9,color:#fff,stroke:#2C5F8A
+    style BaseChannel fill:#6B5B95,color:#fff,stroke:#4A4565
+    style IPCChannel fill:#50C878,color:#fff,stroke:#3A9D5C
+    style WSChannel fill:#FF6B6B,color:#fff,stroke:#CC5454
+    style MPChannel fill:#DDD,color:#999,stroke:#BBB,stroke-dasharray: 5 5

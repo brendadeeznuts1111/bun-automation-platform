@@ -1,0 +1,46 @@
+sequenceDiagram
+    participant C as Browser Client
+    participant S as Bun Server
+    participant P as Worker Pool
+    participant W as Worker Process
+
+    Note over C,W: WebSocket + IPC Channel Flow
+
+    C->>S: WS Upgrade /ws/task/1
+    S-->>C: 101 Switching Protocols
+    Note over S: ws.subscribe("task:1")
+
+    C->>S: POST /task {url}
+    S->>P: submitTask(taskId=1)
+    P->>W: channel.send({type:"task",taskId:1})
+    Note over W: IPC Channel receives
+
+    W->>P: channel.send({type:"progress",progress:0})
+    Note over P: IPCChannel.handleMessage()
+    P->>P: registerHandlers → on("progress")
+    P->>S: publishToWebSocket("task:1", msg)
+    S->>C: server.publish("task:1", {progress:0})
+
+    W->>P: channel.send({type:"progress",progress:25})
+    P->>S: publishToWebSocket("task:1", msg)
+    S->>C: {type:"progress",progress:25}
+
+    W->>P: channel.send({type:"progress",progress:50})
+    P->>S: publishToWebSocket("task:1", msg)
+    S->>C: {type:"progress",progress:50}
+
+    W->>P: channel.send({type:"progress",progress:75})
+    P->>S: publishToWebSocket("task:1", msg)
+    S->>C: {type:"progress",progress:75}
+
+    W->>P: channel.send({type:"progress",progress:100})
+    P->>S: publishToWebSocket("task:1", msg)
+    S->>C: {type:"progress",progress:100}
+
+    W->>P: channel.send({type:"result",result:...})
+    P->>P: resolve(task promise)
+    P->>S: publishToWebSocket("task:1", msg)
+    S->>C: {type:"result",result:...}
+
+    C->>S: WS Close
+    Note over S: wsChannels cleanup<br/>delete empty Set
