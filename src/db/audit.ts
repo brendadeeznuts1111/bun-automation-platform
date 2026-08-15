@@ -38,7 +38,7 @@ export function getAuditLog(
   agentId?: number,
 ): AuditLogRow[] {
   return read((db) => {
-    if (agentId) {
+    if (agentId !== undefined) {
       return db
         .query(
           `SELECT id, agent_id, action, resource, details, ip_address, created_at

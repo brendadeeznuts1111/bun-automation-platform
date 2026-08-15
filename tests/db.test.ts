@@ -61,4 +61,25 @@ describe("Database & Audit Layer", () => {
     }
     expect(logs[0]?.action).toBe("test_audit_event");
   });
+
+  it("filters by agent_id=0 without returning all rows (regression)", async () => {
+    // getAuditLog previously used `if (agentId)` which is falsy for 0,
+    // skipping the filter and returning all logs. agent_id=0 is a valid
+    // value (audit_log.agent_id is a nullable INTEGER, no FK constraint).
+    const zeroAction = `zero-agent-${Date.now()}`;
+    const otherAction = `other-agent-${Date.now()}`;
+
+    await audit({ agent_id: 0, action: zeroAction });
+    await audit({ agent_id: 99999, action: otherAction });
+
+    const zeroLogs = getAuditLog(50, 0, 0);
+    expect(zeroLogs.length).toBeGreaterThanOrEqual(1);
+    for (const row of zeroLogs) {
+      expect(row).toBeValidAuditEntry();
+      expect(row.agent_id).toBe(0);
+    }
+
+    // The other agent's entry must NOT appear when filtering for agent 0
+    expect(zeroLogs.some((r) => r.action === otherAction)).toBe(false);
+  });
 });
