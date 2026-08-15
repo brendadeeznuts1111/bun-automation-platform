@@ -46,3 +46,7 @@ server.exe
 
 # User-pasted clipboard artifacts
 user_pasted_clipboard*
+
+# In-progress browser downloads and disk images
+*.crdownload
+*.dmg
