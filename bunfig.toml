@@ -40,3 +40,8 @@ coverageReporter = ["text", "lcov"]
 coverageDir = "./coverage"
 coverageSkipTestFiles = true
 coverageThreshold = { lines = 0.85, functions = 0.85 }
+
+[test.reporter]
+# JUnit XML for CI ingestion (GitHub Actions, GitLab, Jenkins). Console
+# output is unchanged — this writes an additional XML file at end of run.
+junit = "./coverage/junit.xml"

@@ -1,10 +1,20 @@
-import { beforeAll, describe, expect, it } from "bun:test";
+import { beforeAll, beforeEach, describe, expect, it } from "bun:test";
 import { migrate, read, write } from "../src/db";
 import { audit, getAuditLog } from "../src/db/audit";
 
 describe("Database & Audit Layer", () => {
   beforeAll(() => {
     migrate();
+  });
+
+  // Clean test-generated rows before each test so tests don't inherit
+  // prior test state. Uses unique action/site prefixes as a safety net,
+  // but this ensures exact counts for assertions.
+  beforeEach(() => {
+    write((db) => {
+      db.exec("DELETE FROM audit_log WHERE action LIKE 'test_%' OR action LIKE 'zero-agent-%' OR action LIKE 'other-agent-%'");
+      db.exec("DELETE FROM circuit_breakers WHERE site LIKE 'db-mutex-%'");
+    });
   });
 
   it("performs concurrent reads via read pool", async () => {
@@ -52,7 +62,7 @@ describe("Database & Audit Layer", () => {
     });
 
     const logs = getAuditLog(10, 0, uniqueAgentId);
-    expect(logs.length).toBeGreaterThanOrEqual(1);
+    expect(logs.length).toBe(1);
 
     // Every returned row must be a valid audit entry AND match the filter.
     for (const row of logs) {
@@ -73,7 +83,7 @@ describe("Database & Audit Layer", () => {
     await audit({ agent_id: 99999, action: otherAction });
 
     const zeroLogs = getAuditLog(50, 0, 0);
-    expect(zeroLogs.length).toBeGreaterThanOrEqual(1);
+    expect(zeroLogs.length).toBe(1);
     for (const row of zeroLogs) {
       expect(row).toBeValidAuditEntry();
       expect(row.agent_id).toBe(0);
