@@ -31,6 +31,9 @@ const NAV_TIMEOUT = parseInt(process.env.NAV_TIMEOUT ?? "30000", 10);
 
 /** Race a promise against a timeout, rejecting with a clear error. */
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  // M5: setTimeout is correct here (not Bun.sleep) because we need to cancel
+  // the timer when the promise settles first. Bun.sleep doesn't accept an
+  // AbortSignal, so it can't be cancelled — the timer would leak.
   // D2: Clear the timer when the promise settles first to prevent a leaked
   // timer and an unhandled rejection from the timeout promise.
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -199,9 +202,20 @@ async function executeTask(task: TaskRow): Promise<string> {
   process.send?.({ type: "progress", taskId: task.id, progress: 25 });
   updateProgress(task.id, 25);
 
-  // Step 2: Capture screenshot (m7: use blob encoding — zero-copy on WebKit)
-  const screenshotBlob = await view.screenshot({ format: "png" });
-  screenshotResult = await processScreenshot(screenshotBlob, `task-${task.id}`);
+  // M3: Use encoding: "buffer" instead of the default "blob".
+  // "buffer" returns a Node Buffer (Uint8Array) which enables zero-copy
+  // ArrayBuffer borrowing in Bun.Image (per the v1.3.14 blog post).
+  // "blob" returns a Blob which is NOT zero-copy for Bun.Image input.
+  // Ref: https://bun.sh/blog/bun-v1.3.14#input-sources
+  //   "ArrayBuffer/TypedArray (zero-copy), Blob/BunFile/S3File"
+  // Ref: node_modules/bun-types/bun.d.ts — screenshot encoding docs
+  //   "buffer" — Node Buffer. WebKit: zero-copy (mmap'd pages as ArrayBuffer)
+  //
+  // M4: Keep format: "png" (lossless) — we convert to WebP in processScreenshot.
+  // "webp" would be smaller but requires Chrome backend (not available on macOS
+  // with the default WebKit backend). PNG is cross-platform and lossless.
+  const screenshotBuf = await view.screenshot({ format: "png", encoding: "buffer" });
+  screenshotResult = await processScreenshot(screenshotBuf, `task-${task.id}`);
 
   process.send?.({ type: "progress", taskId: task.id, progress: 50 });
   updateProgress(task.id, 50);

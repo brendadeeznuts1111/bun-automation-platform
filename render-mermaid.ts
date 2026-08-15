@@ -316,7 +316,14 @@ const watchdog = setTimeout(() => {
 }, WATCHDOG_MS);
 
 try {
-  // Poll globalThis.__mermaidResult until mermaid.render() completes
+  // M1/M7: Wait for the page to load before evaluating.
+  // evaluate() can only have one call in flight at a time per view
+  // (ERR_INVALID_STATE if a second concurrent call is made).
+  // Ref: node_modules/bun-types/bun.d.ts — "Only one evaluate() may be
+  // in flight at a time per view"
+  //
+  // The page sets globalThis.__mermaidResult when mermaid.render() completes.
+  // We poll for it — each evaluate() completes before the next starts (await).
   let result: { ok: boolean; svg?: string; error?: string } | null = null;
   const deadline = Date.now() + WATCHDOG_MS;
   while (!result && Date.now() < deadline && !killed) {

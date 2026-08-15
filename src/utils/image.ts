@@ -77,8 +77,12 @@ export async function processScreenshot(
   // terminal is awaited), so creating 5 instances is cheap. For ArrayBuffer
   // inputs, the blog confirms "zero-copy ArrayBuffer borrowing".
   // Ref: https://bun.sh/blog/bun-v1.3.14#input-sources
-  const [, , placeholder, meta, dominantColor] = await Promise.all([
-    // Full-size WebP
+  //
+  // M2: .write() returns Promise<number> (bytes written) — use that directly
+  // instead of calling Bun.file().size after (avoids 2 extra stat calls).
+  // Ref: node_modules/bun-types/bun.d.ts — write(dest): Promise<number>
+  const [fullSize, thumbSize, placeholder, meta, dominantColor] = await Promise.all([
+    // Full-size WebP — write() returns bytes written
     new Bun.Image(input, { maxPixels: 4096 * 4096 })
       .webp({ quality: FULL_QUALITY })
       .write(fullPath),
@@ -98,11 +102,6 @@ export async function processScreenshot(
     // Dominant color (1x1 resize → PNG → parse IDAT)
     extractDominantColor(input),
   ]);
-
-  // Bun.file().size is synchronous — no await needed.
-  // Ref: H5 verification — Bun.file().size returns number, not Promise
-  const fullSize = Bun.file(fullPath).size;
-  const thumbSize = Bun.file(thumbPath).size;
 
   return {
     fullPath,

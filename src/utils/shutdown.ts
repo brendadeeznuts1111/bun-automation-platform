@@ -65,8 +65,10 @@ export async function shutdown(server: AnyServer, reason: string): Promise<void>
   }
 
   // 3. Wait for workers with timeout
+  // M6: Use Bun.sleep instead of setTimeout wrapper — native API, no timer leak
+  // (Promise.race resolves when either settles; the sleep just becomes garbage)
   if (workerPromises.length > 0) {
-    const timeout = new Promise<void>((resolve) => setTimeout(resolve, SHUTDOWN_TIMEOUT_MS));
+    const timeout = Bun.sleep(SHUTDOWN_TIMEOUT_MS);
     const workersDone = Promise.allSettled(workerPromises).then(() => {});
 
     await Promise.race([workersDone, timeout]);
