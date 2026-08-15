@@ -25,12 +25,56 @@ import { generateCsrfToken, checkCsrf } from "./middleware/csrf";
 import { installShutdownHandlers, isShuttingDown } from "./utils/shutdown";
 import { initWorkerPool, submitTask, getPoolStatus } from "./workers/pool";
 import { serveScreenshot } from "./utils/image";
+import { isFeatureEnabled, canEnable, listFeatures, getFeatureSummary } from "./features/registry";
 
 // --- Config ----------------------------------------------------------------
 
 const PORT = parseInt(process.env.PORT ?? "3000", 10);
 const HOST = process.env.HOST ?? "0.0.0.0";
 const NODE_ENV = process.env.NODE_ENV ?? "development";
+
+// --- Feature flags ---------------------------------------------------------
+// R3: Conditionally enable TLS, HTTP/3, and dev dashboard behind flags.
+// Each flag is tracked in src/features/registry.ts with promotion status.
+
+const ENABLE_TLS = canEnable("tls");
+const ENABLE_HTTP3 = canEnable("http3");
+const ENABLE_DEV_DASHBOARD = isFeatureEnabled("devDashboard") ||
+  (NODE_ENV === "development" && process.env.ENABLE_DEV_DASHBOARD !== "0");
+
+// TLS cert/key — only loaded if ENABLE_TLS is true
+let tlsConfig: { cert: string; key: string } | undefined;
+if (ENABLE_TLS) {
+  const certPath = process.env.TLS_CERT_PATH ?? "dev-cert.pem";
+  const keyPath = process.env.TLS_KEY_PATH ?? "dev-key.pem";
+  const certFile = Bun.file(certPath);
+  const keyFile = Bun.file(keyPath);
+  if (!(await certFile.exists()) || !(await keyFile.exists())) {
+    console.error(
+      `[server] ENABLE_TLS=1 but cert/key not found at ${certPath}/${keyPath}.\n` +
+      `Generate with:\n` +
+      `  openssl req -x509 -newkey rsa:2048 -keyout dev-key.pem -out dev-cert.pem -days 365 -nodes -subj "/CN=localhost"`,
+    );
+    process.exit(1);
+  }
+  tlsConfig = { cert: await certFile.text(), key: await keyFile.text() };
+  console.log(`[server] TLS enabled (cert: ${certPath})`);
+}
+
+if (ENABLE_HTTP3) {
+  if (!ENABLE_TLS) {
+    console.error("[server] ENABLE_HTTP3=1 requires ENABLE_TLS=1 (HTTP/3 mandates TLS)");
+    process.exit(1);
+  }
+  console.log("[server] HTTP/3 (QUIC) enabled — experimental, not for production yet");
+  console.log("         Ref: https://bun.sh/blog/bun-v1.3.14#http-3-quic-support-in-bun-serve");
+}
+
+if (ENABLE_DEV_DASHBOARD) {
+  console.log("[server] Dev dashboard enabled at /dashboard");
+}
+
+console.log(`[server] feature flags: ${getFeatureSummary()}`);
 
 // F7: Pre-compute a real Argon2id hash at startup for the login timing oracle
 // mitigation (E2). Using a real hash with the same parameters as
@@ -450,7 +494,96 @@ const auditHandler = withAuth<"">((req, ctx) => {
 
 // --- Server ----------------------------------------------------------------
 
-const server = Bun.serve({
+// R5: /protocol endpoint — shows which HTTP version the client used.
+// Bun doesn't expose the negotiated protocol directly, but we can infer
+// from the request URL scheme (https = TLS, http = plaintext) and
+// whether Alt-Svc is being used (HTTP/3 clients have it cached).
+const protocolHandler = withMiddleware((req: BunRequest<"">) => {
+  const url = new URL(req.url);
+  return json({
+    scheme: url.protocol.replace(":", ""),
+    method: req.method,
+    url: req.url,
+    userAgent: req.headers.get("user-agent"),
+    http3Enabled: ENABLE_HTTP3,
+    altSvc: ENABLE_HTTP3 ? `h3=":${PORT}"; ma=86400` : null,
+    note: "Check browser devtools Network tab — protocol column shows h3 or http/1.1",
+  });
+});
+
+// R6: /features endpoint — lists all feature flags and their status.
+const featuresHandler = withMiddleware((): Response => {
+  return json({ features: listFeatures() });
+});
+
+// R5: Dev dashboard — simple HTML page showing server status.
+// Will be replaced with React + HTML imports dashboard (OPEN_TASKS F1).
+const dashboardHandler = withMiddleware((): Response => {
+  const pool = getPoolStatus();
+  const features = listFeatures()
+    // JUSTIFIED: listFeatures() adds an `enabled` boolean not in the FeatureFlag type
+    .map((f) => `<tr><td>${f.key}</td><td>${f.status}</td><td>${(f as { enabled?: boolean }).enabled ? "✅" : "❌"}</td><td>${f.description}</td></tr>`)
+    .join("\n");
+  const html = `<!DOCTYPE html>
+<html>
+<head><title>Bun Automation Platform — Dashboard</title></head>
+<body style="font-family: sans-serif; max-width: 800px; margin: 2rem auto;">
+  <h1>Bun Automation Platform</h1>
+  <p>Server running on Bun v${Bun.version}</p>
+  <h2>Status</h2>
+  <ul>
+    <li>Environment: ${NODE_ENV}</li>
+    <li>TLS: ${ENABLE_TLS ? "✅ enabled" : "❌ disabled"}</li>
+    <li>HTTP/3: ${ENABLE_HTTP3 ? "✅ enabled (experimental)" : "❌ disabled"}</li>
+    <li>Workers: ${pool.total} total, ${pool.busy} busy, ${pool.idle} idle</li>
+    <li>Uptime: ${Math.floor(process.uptime())}s</li>
+  </ul>
+  <h2>Feature Flags</h2>
+  <table border="1" cellpadding="4" style="border-collapse: collapse;">
+    <tr><th>Feature</th><th>Status</th><th>Enabled</th><th>Description</th></tr>
+    ${features}
+  </table>
+  <h2>Endpoints</h2>
+  <ul>
+    <li><a href="/health">/health</a> — health check</li>
+    <li><a href="/metrics">/metrics</a> — Prometheus metrics</li>
+    <li><a href="/protocol">/protocol</a> — protocol info</li>
+    <li><a href="/features">/features</a> — feature flags</li>
+    <li><a href="/dashboard">/dashboard</a> — this page</li>
+  </ul>
+</body>
+</html>`;
+  return new Response(html, { headers: { "Content-Type": "text/html" } });
+});
+
+// Build the routes object — conditionally include dashboard routes
+const routes: Record<string, unknown> = {
+  // Public routes (no auth)
+  "/health": { GET: healthHandler },
+  "/metrics": { GET: metricsHandler },
+  "/login": { POST: loginHandler },
+  "/protocol": { GET: protocolHandler },
+  "/features": { GET: featuresHandler },
+
+  // Auth-required routes
+  "/tasks": { GET: listTasksHandler },
+  "/task": { POST: createTaskHandler },       // also requires CSRF
+  "/task/:id": { GET: getTaskHandler },
+  "/sessions": { GET: listSessionsHandler },
+  "/screenshot/:id": { GET: getScreenshotHandler },
+  "/audit": { GET: auditHandler },
+};
+
+// R3: Conditionally add dashboard route
+if (ENABLE_DEV_DASHBOARD) {
+  routes["/dashboard"] = { GET: dashboardHandler };
+}
+
+// Build the serve config — conditionally add TLS + HTTP/3.
+// We use a plain object and cast at the end because Bun.serve's Options
+// type is a complex union that doesn't cleanly accept conditional props
+// like `tls` and `http3` (http3 is also not yet in all bun-types versions).
+const serveConfig: Record<string, unknown> = {
   port: PORT,
   hostname: HOST,
   // WebView tasks can take 30+ seconds; default 10s would kill long handlers.
@@ -464,23 +597,10 @@ const server = Bun.serve({
   // m5: Enable HMR + console relay in development (useful when dashboard is added)
   development: NODE_ENV === "development" ? { hmr: true, console: true } : undefined,
 
-  routes: {
-    // Public routes (no auth)
-    "/health": { GET: healthHandler },
-    "/metrics": { GET: metricsHandler },
-    "/login": { POST: loginHandler },
-
-    // Auth-required routes
-    "/tasks": { GET: listTasksHandler },
-    "/task": { POST: createTaskHandler },       // also requires CSRF
-    "/task/:id": { GET: getTaskHandler },
-    "/sessions": { GET: listSessionsHandler },
-    "/screenshot/:id": { GET: getScreenshotHandler },
-    "/audit": { GET: auditHandler },
-  },
+  routes,
 
   // Fallback for unmatched routes + CORS preflight (OPTIONS)
-  async fetch(req) {
+  async fetch(req: Request) {
     // CORS preflight for any route
     const preflight = handlePreflight(req);
     if (preflight) return preflight;
@@ -490,17 +610,39 @@ const server = Bun.serve({
 
   // M3: Top-level error handler — catches unhandled exceptions in route handlers
   // that escape withMiddleware. Returns a structured 500 instead of Bun's default.
-  error(error) {
+  error(error: Error) {
     console.error("[server] unhandled error:", error);
     return Response.json({ error: "internal server error" }, { status: 500 });
   },
-});
+};
+
+// R3: Conditionally add TLS config
+if (ENABLE_TLS && tlsConfig) {
+  serveConfig.tls = tlsConfig;
+}
+
+// R3: Conditionally add HTTP/3 (requires TLS)
+if (ENABLE_HTTP3 && tlsConfig) {
+  // JUSTIFIED: http3 is a valid Bun.serve option per v1.3.14 blog but not in bun-types yet
+  serveConfig.http3 = true;
+}
+
+// serveConfig is built as Record<string, unknown> for conditional props
+// (tls, http3) that aren't in all bun-types versions. Cast through unknown
+// to the Options type Bun.serve expects. The object shape is correct at runtime.
+const server = Bun.serve(serveConfig as unknown as Parameters<typeof Bun.serve>[0]); // JUSTIFIED: double cast via unknown — Options is a complex union that rejects Record
 
 // --- Shutdown --------------------------------------------------------------
 
 installShutdownHandlers(server);
 
-console.log(`[server] listening on http://${HOST}:${PORT}`);
+const protocol = ENABLE_TLS ? "https" : "http";
+console.log(`[server] listening on ${protocol}://${HOST}:${PORT}`);
+if (ENABLE_HTTP3) {
+  console.log(`[server]   HTTP/1.1+2: TCP/${PORT}`);
+  console.log(`[server]   HTTP/3:    UDP/${PORT} (QUIC, experimental)`);
+  console.log(`[server]   Alt-Svc:   h3=":${PORT}"; ma=86400`);
+}
 console.log(`[server] endpoints:`);
 console.log(`  GET  /health         — health check + worker pool status (public)`);
 console.log(`  GET  /metrics        — Prometheus-format metrics (public)`);
@@ -511,3 +653,8 @@ console.log(`  GET  /task/:id       — get task by ID (auth required)`);
 console.log(`  GET  /sessions       — list sessions (auth required)`);
 console.log(`  GET  /screenshot/:id — serve screenshot (auth required)`);
 console.log(`  GET  /audit          — audit log (auth required)`);
+console.log(`  GET  /protocol       — protocol info (public)`);
+console.log(`  GET  /features       — feature flags + promotion status (public)`);
+if (ENABLE_DEV_DASHBOARD) {
+  console.log(`  GET  /dashboard      — dev dashboard (public)`);
+}

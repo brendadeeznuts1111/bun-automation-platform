@@ -272,15 +272,9 @@ test("rate limit allows up to max", () => {
 
 ## I. v1.3.14 Feature Adoption
 
-### I1. `--no-orphans` for worker processes
+### I1. `--no-orphans` for worker processes — [RESOLVED ✅]
 
-**Release note:** `--no-orphans` flag exits child processes when the parent dies. Prevents zombie workers if the main server crashes.
-
-**Files:** `src/workers/pool.ts:54-70` (Bun.spawn cmd array — add `--no-orphans` flag)
-
-**Action:** Add `--no-orphans` to the worker spawn command in `pool.ts`, or set it via `BUN_OPTIONS` env. Currently we strip `BUN_OPTIONS` — need to selectively pass `--no-orphans`.
-
-**Ref:** [v1.3.14 blog — `--no-orphans`](https://bun.com/blog/bun-v1.3.14#no-orphans-exit-when-the-parent-process-dies)
+**Current:** `src/workers/pool.ts` sets `BUN_FEATURE_FLAG_NO_ORPHANS: "1"` in the worker spawn environment. This ensures worker processes terminate automatically when the parent dies. Tracked in `src/features/registry.ts` as a stable feature ready for promotion. Tests in `tests/v1.3.14-fixes.test.ts` verify the flag is passed and workers don't inherit `--hot`.
 
 ### I2. `process.execve()` for zero-overhead worker restart
 
@@ -292,13 +286,11 @@ test("rate limit allows up to max", () => {
 
 **Ref:** [v1.3.14 blog — `process.execve()` support](https://bun.com/blog/bun-v1.3.14#process-execve-support)
 
-### I3. HTTP/3 (QUIC) support
+### I3. HTTP/3 (QUIC) support — [RESOLVED ✅ (behind flag)]
 
-**Release note:** `Bun.serve({ tls: {...}, http3: true })` — experimental HTTP/3 over QUIC.
+**Current:** `src/server.ts` conditionally enables HTTP/3 (QUIC) via the `ENABLE_HTTP3=1` feature flag. Requires `ENABLE_TLS=1` (HTTP/3 mandates TLS). When enabled, Bun.serve binds TCP for HTTP/1.1+2 and UDP for HTTP/3 on the same port. Browsers auto-upgrade via Alt-Svc header. The standalone `dev-server.ts` has been consolidated into `src/server.ts` — use `bun run dev:tls` to start with TLS+HTTP/3+dashboard.
 
-**Files:** `src/server.ts:340-355` (Bun.serve config — add tls + http3 options)
-
-**Action:** When TLS is configured, enable `http3: true`. Clients with HTTP/3 support get lower latency. Requires TLS certs.
+**Feature flag status:** `experimental` (per v1.3.14 blog: "Do not deploy http3: true to production yet"). Tracked in `src/features/registry.ts` with `readyForPromotion: false`. The `/features` endpoint shows the current status. When the feature is deemed stable, update the registry to `status: "stable"` and `readyForPromotion: true`.
 
 **Ref:** [v1.3.14 blog — HTTP/3 (QUIC) support in `Bun.serve`](https://bun.com/blog/bun-v1.3.14#http-3-quic-support-in-bun-serve) · [Server docs](https://bun.com/docs/runtime/http/server)
 

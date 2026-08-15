@@ -103,5 +103,15 @@ declare module "bun" {
     BUN_FEATURE_FLAG_EXPERIMENTAL_HTTP3_CLIENT?: string;
     /** Exit automatically when parent process dies (set on worker subprocesses). */
     BUN_FEATURE_FLAG_NO_ORPHANS?: string;
+
+    // --- Feature flags (gated features in src/server.ts) ---
+    /** Enable TLS (HTTPS). Requires TLS_CERT_PATH + TLS_KEY_PATH. Default: off. */
+    ENABLE_TLS?: string;
+    /** Enable HTTP/3 (QUIC) over UDP. Requires ENABLE_TLS=1. Default: off. */
+    ENABLE_HTTP3?: string;
+    /** Enable dev dashboard at /dashboard. Default: on in development, off in production. */
+    ENABLE_DEV_DASHBOARD?: string;
+    /** Enable WebSocket endpoints (/ws/task/:id, /ws/control/:id). Default: off. */
+    ENABLE_WEBSOCKET?: string;
   }
 }
