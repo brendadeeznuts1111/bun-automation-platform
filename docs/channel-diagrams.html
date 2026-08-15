@@ -613,6 +613,106 @@
 2. L1b
 </code></pre>
 <p>Each level gets its own <code>&lt;ol&gt;</code> wrapper. The <code>render()</code> API reports <code>depth</code> as 0, 1, 2, 3 respectively.</p>
+<h3 id="edge-cases-parser-bugs">Edge Cases &amp; Parser Bugs</h3>
+<p>Tested 22 edge cases against <code>Bun.markdown.html()</code>. Most work correctly; two are parser bugs.</p>
+<h4 id="indentation-sensitivity">Indentation sensitivity</h4>
+<table>
+<thead>
+<tr><th>Indent</th><th>Nests?</th><th>Example</th></tr>
+</thead>
+<tbody>
+<tr><td>2 spaces</td><td>No — flat list</td><td><code>1. Top\n  1. Nested</code> → two top-level items</td></tr>
+<tr><td>3 spaces</td><td>Yes</td><td><code>1. Top\n   1. Nested</code> → nested <code>&lt;ol&gt;</code></td></tr>
+<tr><td>4 spaces</td><td>Yes</td><td><code>1. Top\n    1. Nested</code> → nested <code>&lt;ol&gt;</code></td></tr>
+<tr><td>Tab</td><td>Yes</td><td><code>1. Top\n\t1. Nested</code> → nested <code>&lt;ol&gt;</code></td></tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Note:</strong> 2-space indent does NOT trigger nesting for ordered lists (parent marker <code>1.</code> is 2 chars + 1 space = 3 col). For unordered lists (<code>-</code>), 2 spaces IS enough (marker is 1 char + 1 space = 2 col).</p>
+</blockquote>
+<h4 id="bug-nested-list-with-non-1-start-number">Bug: Nested list with non-1 start number</h4>
+<p>When the first nested item starts at a number other than 1, the parser does NOT recognize it as a nested list — it renders as literal text inside the parent item.</p>
+<pre><code class="language-markdown">1. Top
+   5. Starts at 5
+   6. Six
+2. Back
+</code></pre>
+<p>Expected: nested <code>&lt;ol start=&quot;5&quot;&gt;</code>. Actual: <code>&lt;li&gt;Top 5. Starts at 5 6. Six&lt;/li&gt;</code> — the nested list is not parsed.</p>
+<blockquote>
+<p><strong>Warning:</strong> This is a parser bug in Bun.markdown (md4c). Nested ordered lists MUST start at <code>1.</code> to be recognized. Use <code>1.</code> for the first nested item even if you want a different display start — then use CSS <code>start</code> attribute or <code>Bun.markdown.render()</code> to override.</p>
+</blockquote>
+<h4 id="bug-empty-first-nested-item-breaks-nesting">Bug: Empty first nested item breaks nesting</h4>
+<p>When the first nested item is empty (<code>1.</code> with no content), the parser does NOT recognize the nested list.</p>
+<pre><code class="language-markdown">1. Top
+   1.
+   2. Nested second
+</code></pre>
+<p>Expected: nested <code>&lt;ol&gt;</code> with empty first <code>&lt;li&gt;</code>. Actual: <code>&lt;li&gt;Top 1. 2. Nested second&lt;/li&gt;</code> — rendered as literal text.</p>
+<blockquote>
+<p><strong>Warning:</strong> The first nested list item must have content for the parser to recognize the nested list. Empty items are only valid as non-first items in a nested list.</p>
+</blockquote>
+<h4 id="working-edge-cases">Working edge cases</h4>
+<table>
+<thead>
+<tr><th>Pattern</th><th>Works?</th><th>Output</th></tr>
+</thead>
+<tbody>
+<tr><td>5-6 levels deep</td><td>Yes</td><td>Properly nested <code>&lt;ol&gt;</code> wrappers</td></tr>
+<tr><td>Two separate lists (blank line + text)</td><td>Yes</td><td>Two separate <code>&lt;ol&gt;</code> elements</td></tr>
+<tr><td>List interrupted by heading</td><td>Yes</td><td><code>&lt;ol&gt;</code> + <code>&lt;h2&gt;</code> + new <code>&lt;ol&gt;</code></td></tr>
+<tr><td>Multi-paragraph items (loose list)</td><td>Yes</td><td><code>&lt;li&gt;&lt;p&gt;...&lt;/p&gt;&lt;p&gt;...&lt;/p&gt;&lt;/li&gt;</code></td></tr>
+<tr><td>Blockquote in list item</td><td>Yes</td><td><code>&lt;li&gt;Item &lt;blockquote&gt;...&lt;/blockquote&gt;&lt;/li&gt;</code></td></tr>
+<tr><td>Empty top-level item</td><td>Yes</td><td><code>&lt;li&gt;&lt;/li&gt;</code> (empty but valid)</td></tr>
+<tr><td>Whitespace-only item</td><td>Yes</td><td><code>&lt;li&gt;&lt;/li&gt;</code> (treated as empty)</td></tr>
+<tr><td>Trailing spaces</td><td>Yes</td><td>Trimmed</td></tr>
+<tr><td>Single item list</td><td>Yes</td><td><code>&lt;ol&gt;&lt;li&gt;...&lt;/li&gt;&lt;/ol&gt;</code></td></tr>
+<tr><td>List after paragraph (no blank line)</td><td>Yes</td><td><code>&lt;p&gt;...&lt;/p&gt;&lt;ol&gt;...&lt;/ol&gt;</code></td></tr>
+<tr><td>Tab indentation</td><td>Yes</td><td>Treated same as 3+ spaces</td></tr>
+<tr><td>Nested task lists (3 levels)</td><td>Yes</td><td><code>&lt;ol&gt;&lt;li&gt;&lt;ul&gt;&lt;li class=task-list-item&gt;&lt;ul&gt;...</code></td></tr>
+<tr><td>Fenced code in nested list</td><td>Yes</td><td><code>&lt;ol&gt;&lt;li&gt;&lt;ol&gt;&lt;li&gt;&lt;pre&gt;&lt;code&gt;</code></td></tr>
+<tr><td>Indented code block (8 spaces) in loose list</td><td>Yes</td><td><code>&lt;li&gt;&lt;p&gt;...&lt;/p&gt;&lt;pre&gt;&lt;code&gt;</code></td></tr>
+<tr><td>Non-1 start on outer list</td><td>Yes</td><td><code>&lt;ol start=&quot;3&quot;&gt;</code></td></tr>
+<tr><td>Mixed ordered/unordered nesting</td><td>Yes</td><td><code>&lt;ol&gt;&lt;li&gt;&lt;ul&gt;</code> and <code>&lt;ul&gt;&lt;li&gt;&lt;ol&gt;</code></td></tr>
+</tbody>
+</table>
+<h3 id="render-metadata-deep-dive">render() Metadata Deep Dive</h3>
+<p>The <code>render()</code> callback metadata for nested lists:</p>
+<table>
+<thead>
+<tr><th>Field</th><th>Type</th><th>Behavior</th></tr>
+</thead>
+<tbody>
+<tr><td><code>depth</code></td><td>number</td><td>0-based nesting level (0 = top, 1 = first nest, etc.)</td></tr>
+<tr><td><code>index</code></td><td>number</td><td>0-based position within parent list (resets per list)</td></tr>
+<tr><td><code>ordered</code></td><td>boolean</td><td>Whether the parent list is ordered</td></tr>
+<tr><td><code>start</code></td><td>number</td><td>Parent list's start number (inherited by all items)</td></tr>
+<tr><td><code>checked</code></td><td>boolean/undefined</td><td><code>true</code> for <code>[x]</code>, <code>false</code> for <code>[ ]</code>, <code>undefined</code> for non-task</td></tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Note:</strong> The <code>start</code> field on <code>listItem</code> metadata reports the PARENT list's start, not the item's own number. For a list starting at 3, all items report <code>start=3</code> regardless of their position.</p>
+</blockquote>
+<h4 id="render-callback-execution-order">render() callback execution order</h4>
+<p>Callbacks fire inside-out (deepest first):</p>
+<pre><code>listItem(depth=4) → list(depth=4) → listItem(depth=3) → list(depth=3) →
+listItem(depth=2) → list(depth=2) → listItem(depth=1) → list(depth=1) →
+listItem(depth=0) → list(depth=0)
+</code></pre>
+<p>This means children are fully rendered before their parent's <code>list()</code> callback fires, so <code>children</code> is always a complete HTML string.</p>
+<h3 id="css-counter-behavior-with-start">CSS Counter Behavior with <code>start</code></h3>
+<p>The CSS <code>counters(ol-item, &quot;.&quot;)</code> approach inherits the <code>start</code> attribute correctly:</p>
+<pre><code class="language-css">ol { counter-reset: ol-item; }
+ol &gt; li { counter-increment: ol-item; }
+ol &gt; li::marker { content: counters(ol-item, &quot;.&quot;) &quot;. &quot;; }
+</code></pre>
+<ul>
+<li><code>&lt;ol start=&quot;3&quot;&gt;</code> → items render as <code>3.</code>, <code>4.</code>, <code>5.</code> (counter starts at 3)</li>
+<li>Nested under item 3 → <code>3.1.</code>, <code>3.2.</code>, <code>3.3.</code> (counter chains via <code>counters()</code>)</li>
+<li>The <code>start</code> attribute on <code>&lt;ol&gt;</code> sets the CSS counter's initial value</li>
+</ul>
+<blockquote>
+<p><strong>Warning:</strong> CSS <code>counters()</code> does NOT respect <code>start</code> on nested <code>&lt;ol&gt;</code> elements in all browsers. Safari and Firefox handle this differently. For reliable cross-browser <code>1.2.3</code> numbering with non-1 starts, use <code>Bun.markdown.render()</code> to generate explicit marker text.</p>
+</blockquote>
 <h2 id="related">Related</h2>
 <ul>
 <li><a href="https://bun.com/docs/runtime/markdown">Bun.markdown docs</a> — GFM parser used for this page</li>
