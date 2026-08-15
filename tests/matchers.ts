@@ -51,7 +51,7 @@ expect.extend({
     if (typeof row.id !== "number" || !Number.isInteger(row.id) || row.id <= 0) {
       errors.push(`id should be a positive integer, got ${printReceived(row.id)}`);
     }
-    if (typeof row.agent_id !== "number" || row.agent_id !== null && !Number.isInteger(row.agent_id)) {
+    if (row.agent_id !== null && (typeof row.agent_id !== "number" || !Number.isInteger(row.agent_id))) {
       errors.push(`agent_id should be an integer or null, got ${printReceived(row.agent_id)}`);
     }
     if (typeof row.action !== "string" || row.action.length === 0) {
