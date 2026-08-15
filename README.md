@@ -169,9 +169,13 @@ bun-automation-platform/
 ├── render-mermaid.ts          # Mermaid renderer (Bun.spawn + using + watchdog + HTTP/3)
 ├── dev-server.ts              # Dev server with HTTP/3 (QUIC) + Alt-Svc
 ├── seed-agent.ts              # Seed a test agent
+├── entitlements.plist         # macOS codesigning entitlements for standalone binary
 ├── bunfig.toml                # Bun config (globalStore = true)
 ├── tsconfig.json              # Strict TypeScript config (bundler mode, path aliases)
 ├── package.json               # Scripts: start, dev, build, seed, test, check
+├── .github/workflows/ci.yml   # GitHub Actions CI (oven-sh/setup-bun@v2)
+├── .vscode/launch.json        # Debugger configs (Bun Native Debugger & Web Inspector)
+├── tests/                     # Comprehensive bun:test suite (6 test files, 33 tests)
 ├── .env                       # Shared config (browser path, theme, colors)
 ├── .env.development           # Dev overrides (verbose fetch, force color, --hot)
 ├── .env.production            # Prod overrides (no color, no telemetry)

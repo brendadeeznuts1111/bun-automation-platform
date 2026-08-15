@@ -1,0 +1,27 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "bun",
+      "request": "launch",
+      "name": "Debug Server (src/server.ts)",
+      "program": "${workspaceFolder}/src/server.ts",
+      "cwd": "${workspaceFolder}",
+      "stopOnEntry": false,
+      "watch": true
+    },
+    {
+      "type": "bun",
+      "request": "launch",
+      "name": "Run Tests (bun test)",
+      "program": "${workspaceFolder}/tests/server.test.ts",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "bun",
+      "request": "attach",
+      "name": "Attach to Web Inspector (port 6499)",
+      "url": "ws://localhost:6499/"
+    }
+  ]
+}

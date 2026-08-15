@@ -341,6 +341,24 @@ Same as `Options` plus:
 
 ---
 
+## Runtime & Debugging Guides Reference
+
+A complete cross-reference of Bun's 9 official **Runtime & Debugging** guides and their implementation in this platform:
+
+| # | Guide / Feature | Canonical Link | Project Implementation | Key Command / Code |
+|---|-----------------|----------------|------------------------|-------------------|
+| 1 | **TypeScript types** | [Guide](https://bun.com/docs/guides/runtime/typescript) | `@types/bun` pinned in `devDependencies`; strict `compilerOptions` with `"types": ["bun"]` | `bun add -d @types/bun` |
+| 2 | **Re-map import paths** | [Guide](https://bun.com/docs/guides/runtime/tsconfig-paths) | `tsconfig.json` paths mapping (`@/*`, `@db/*`, `@middleware/*`, `@utils/*`, `@workers/*`) | `import { write } from "@db/index";` |
+| 3 | **VS Code debugger** | [Guide](https://bun.com/docs/guides/runtime/vscode-debugger) | `.vscode/launch.json` configuration for native Bun debugger (`type: "bun"`) | `Bun: Debug File` |
+| 4 | **Web debugger** | [Guide](https://bun.com/docs/guides/runtime/web-debugger) | WebKit Inspector protocol debugging on port `6499` via `debug.bun.sh` | `bun --inspect src/server.ts` |
+| 5 | **Heap snapshots** | [Guide](https://bun.com/docs/guides/runtime/heap-snapshot) | `bun:jsc` diagnostics (`heapStats()`, `memoryUsage()`, `generateHeapSnapshotForDebugging()`) | `import { heapStats } from "bun:jsc";` |
+| 6 | **Build-time constants** | [Guide](https://bun.com/docs/guides/runtime/build-time-constants) | Global build flags replaced at transpile/bundle time | `bun build --define process.env.FLAG=true` |
+| 7 | **Define constants** | [Guide](https://bun.com/docs/guides/runtime/define-constant) | `--define` identifiers replaced at runtime or compile time | `bun run --define FEATURE=true src/server.ts` |
+| 8 | **GitHub Actions** | [Guide](https://bun.com/docs/guides/runtime/cicd) | `.github/workflows/ci.yml` using official `oven-sh/setup-bun@v2` | `uses: oven-sh/setup-bun@v2` |
+| 9 | **Codesign on macOS** | [Guide](https://bun.com/docs/guides/runtime/codesign-macos-executable) | `entitlements.plist` + `codesign` for standalone binaries (`bun build --compile`) | `codesign --entitlements entitlements.plist -s "ID" ./server` |
+
+---
+
 ## Explanation of Key Integrations
 
 | Integration Point | Bun APIs Used |
