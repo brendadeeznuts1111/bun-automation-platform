@@ -1042,6 +1042,191 @@ await write(Bun.stdout, ansi);
 <tr><td><code>html(children)</code></td><td>—</td><td>Raw HTML block</td></tr>
 </tbody>
 </table>
+<h3 id="inline-render-callbacks">Inline render() callbacks</h3>
+<table>
+<thead>
+<tr><th>Callback</th><th>Meta</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>strong(children)</code></td><td>—</td><td><code>**bold**</code></td></tr>
+<tr><td><code>em(children)</code></td><td>—</td><td><code>*italic*</code> / <code>_italic_</code></td></tr>
+<tr><td><code>del(children)</code></td><td>—</td><td><code>~~strikethrough~~</code></td></tr>
+<tr><td><code>codespan(children)</code></td><td>—</td><td><code>`code`</code></td></tr>
+<tr><td><code>link(children, { href })</code></td><td>URL</td><td><code>[text](url)</code></td></tr>
+<tr><td><code>image(children, { src })</code></td><td>URL</td><td><code>![alt](url)</code></td></tr>
+<tr><td><code>text(children)</code></td><td>—</td><td>Plain text node</td></tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Note:</strong> Inline callbacks fire for each inline element within a block. The <code>text()</code> callback fires for every plain text segment — use it to intercept or transform raw text.</p>
+</blockquote>
+<h2 id="bunmarkdownreact-react-jsx-output">Bun.markdown.react() — React JSX Output</h2>
+<p><code>Bun.markdown.react()</code> renders markdown into React JSX elements (transitional elements with <code>$$typeof: Symbol(react.transitional.element)</code>).</p>
+<pre><code class="language-ts">const element = Bun.markdown.react(&quot;# Hello **world**&quot;);
+// Returns a React Fragment containing &lt;h1&gt; and &lt;p&gt; elements
+</code></pre>
+<h3 id="element-tree-structure">Element tree structure</h3>
+<p>The returned element is a <code>&lt;Fragment&gt;</code> containing top-level blocks:</p>
+<pre><code>&lt;Fragment&gt;
+  &lt;h1&gt;Heading&lt;/h1&gt;
+  &lt;table&gt;&lt;thead&gt;&lt;tr&gt;&lt;th/&gt;&lt;th/&gt;&lt;/tr&gt;&lt;/thead&gt;&lt;tbody&gt;...&lt;/tbody&gt;&lt;/table&gt;
+  &lt;ul&gt;&lt;li/&gt;&lt;li/&gt;&lt;/ul&gt;
+  &lt;ol&gt;&lt;li&gt;&lt;ol&gt;&lt;li/&gt;&lt;/ol&gt;&lt;/li&gt;&lt;li/&gt;&lt;/ol&gt;
+  &lt;blockquote&gt;&lt;p&gt;Quote&lt;/p&gt;&lt;/blockquote&gt;
+  &lt;pre&gt;&lt;code/&gt;&lt;/pre&gt;
+  &lt;p&gt;&lt;del/&gt;&lt;strong/&gt;&lt;em/&gt;&lt;/p&gt;
+&lt;/Fragment&gt;
+</code></pre>
+<h3 id="custom-components">Custom components</h3>
+<p>Pass a components map to override element rendering:</p>
+<pre><code class="language-ts">const result = Bun.markdown.react(md, {
+  heading: ({ children, level }) =&gt; ({
+    type: &quot;h&quot; + level,
+    props: { children, className: &quot;title-&quot; + level },
+  }),
+  strong: ({ children }) =&gt; ({ type: &quot;b&quot;, props: { children } }),
+});
+</code></pre>
+<h3 id="react-element-types-produced">React element types produced</h3>
+<table>
+<thead>
+<tr><th>Markdown</th><th>React element</th></tr>
+</thead>
+<tbody>
+<tr><td><code># H1</code></td><td><code>&lt;h1&gt;</code></td></tr>
+<tr><td>Table</td><td><code>&lt;table&gt;&lt;thead&gt;&lt;tbody&gt;&lt;tr&gt;&lt;th&gt;&lt;td&gt;</code></td></tr>
+<tr><td><code>- item</code></td><td><code>&lt;ul&gt;&lt;li&gt;</code></td></tr>
+<tr><td><code>1. item</code></td><td><code>&lt;ol&gt;&lt;li&gt;</code></td></tr>
+<tr><td><code>- [x]</code></td><td><code>&lt;ul&gt;&lt;li&gt;</code> (no checkbox attribute on React element)</td></tr>
+<tr><td><code>&gt; quote</code></td><td><code>&lt;blockquote&gt;&lt;p&gt;</code></td></tr>
+<tr><td><code>```code```</code></td><td><code>&lt;pre&gt;&lt;code&gt;</code></td></tr>
+<tr><td><code>~~strike~~</code></td><td><code>&lt;del&gt;</code></td></tr>
+<tr><td><code>**bold**</code></td><td><code>&lt;strong&gt;</code></td></tr>
+<tr><td><code>*italic*</code></td><td><code>&lt;em&gt;</code></td></tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Note:</strong> Task list checkboxes (<code>- [x]</code>) do NOT produce <code>&lt;input&gt;</code> elements in React output — they produce plain <code>&lt;li&gt;</code> elements. Use <code>Bun.markdown.html()</code> if you need the checkbox <code>&lt;input&gt;</code> element.</p>
+</blockquote>
+<h2 id="option-behavior-deep-audit">Option Behavior — Deep Audit</h2>
+<p>Tested all 12 <code>Bun.markdown.html()</code> options. Several do NOT work as documented.</p>
+<h3 id="working-options">Working options</h3>
+<table>
+<thead>
+<tr><th>Option</th><th>Behavior</th><th>Verified</th></tr>
+</thead>
+<tbody>
+<tr><td><code>tables: false</code></td><td>Disables GFM tables — renders as paragraph text</td><td>Yes</td></tr>
+<tr><td><code>strikethrough: false</code></td><td>Disables <code>~~</code> — renders as literal <code>~~text~~</code></td><td>Yes</td></tr>
+<tr><td><code>tasklists: false</code></td><td>Disables <code>- [x]</code> — renders as literal <code>[x] Done</code></td><td>Yes</td></tr>
+<tr><td><code>autolinks: true</code></td><td>Autolinks bare URLs and emails</td><td>Yes</td></tr>
+<tr><td><code>headings: { ids: true }</code></td><td>Generates <code>id</code> attributes on headings</td><td>Yes</td></tr>
+<tr><td><code>collapseWhitespace: true</code></td><td>Collapses multiple spaces to single</td><td>Yes</td></tr>
+<tr><td><code>permissiveAtxHeaders: true</code></td><td>Allows <code>#NoSpace</code> (no space after <code>#</code>)</td><td>Yes</td></tr>
+<tr><td><code>noIndentedCodeBlocks: true</code></td><td>Disables 4-space indented code blocks</td><td>Yes</td></tr>
+</tbody>
+</table>
+<h3 id="broken-no-op-options">Broken / no-op options</h3>
+<table>
+<thead>
+<tr><th>Option</th><th>Expected</th><th>Actual</th><th>Status</th></tr>
+</thead>
+<tbody>
+<tr><td><code>noHtmlBlocks: true</code></td><td>Escape or remove block HTML</td><td><code>&lt;div&gt;</code> passes through unchanged</td><td><strong>Broken</strong></td></tr>
+<tr><td><code>noHtmlSpans: true</code></td><td>Escape inline HTML</td><td><code>&lt;span&gt;</code> is escaped to <code>&amp;lt;span&amp;gt;</code> (works for spans)</td><td>Partial</td></tr>
+<tr><td><code>tagFilter: true</code></td><td>Filter dangerous HTML tags</td><td>Escapes opening <code>&lt;</code> of <code>&lt;script&gt;</code>, <code>&lt;iframe&gt;</code> but not closing <code>&lt;/script&gt;</code></td><td><strong>Partial</strong></td></tr>
+<tr><td><code>underline: true</code></td><td><code>__text__</code> → <code>&lt;u&gt;</code></td><td>Still renders <code>&lt;strong&gt;</code> — no effect</td><td><strong>Broken</strong></td></tr>
+<tr><td><code>hardSoftBreaks: true</code></td><td>Soft breaks → <code>&lt;br&gt;</code></td><td>No <code>&lt;br&gt;</code> added — no effect</td><td><strong>Broken</strong></td></tr>
+<tr><td><code>wikiLinks: true</code></td><td><code>[[target]]</code> → link</td><td>Produces <code>&lt;x-wikilink data-target=&quot;...&quot;&gt;</code> custom element (not <code>&lt;a&gt;</code>)</td><td>Works (non-standard)</td></tr>
+<tr><td><code>latexMath: true</code></td><td><code>$x^2$</code> → math element</td><td>No change — <code>$x^2$</code> stays as text</td><td><strong>Broken</strong></td></tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Warning: <code>noHtmlBlocks</code> does NOT escape or remove block-level HTML.</strong> <code>&lt;div&gt;</code>, <code>&lt;script&gt;</code>, and other block HTML tags pass through unchanged. This is a security concern — use <code>tagFilter: true</code> instead (which partially works by escaping opening tags of dangerous elements).</p>
+</blockquote>
+<blockquote>
+<p><strong>Warning: <code>underline: true</code> has no effect.</strong> <code>__text__</code> still renders as <code>&lt;strong&gt;</code>, not <code>&lt;u&gt;</code>. The option is accepted without error but ignored.</p>
+</blockquote>
+<blockquote>
+<p><strong>Warning: <code>hardSoftBreaks: true</code> has no effect.</strong> Soft line breaks (single newline within a paragraph) are not converted to <code>&lt;br&gt;</code>. Both <code>true</code> and <code>false</code> produce the same output.</p>
+</blockquote>
+<blockquote>
+<p><strong>Warning: <code>latexMath: true</code> has no effect in <code>html()</code>.</strong> LaTeX math (<code>$x^2$</code> and <code>$$display$$</code>) is not rendered. The option may only work with <code>ansi()</code> output.</p>
+</blockquote>
+<h3 id="tagfilter-behavior-partial">tagFilter behavior (partial)</h3>
+<p><code>tagFilter: true</code> escapes the opening <code>&lt;</code> of dangerous tags but NOT the closing <code>&lt;/tag&gt;</code>:</p>
+<pre><code>Input:  &lt;script&gt;alert(1)&lt;/script&gt;
+Output: &amp;lt;script&gt;alert(1)&amp;lt;/script&gt;
+</code></pre>
+<p>Filtered tags (opening <code>&lt;</code> escaped): <code>script</code>, <code>iframe</code>
+Allowed tags (unchanged): <code>div</code>, <code>span</code>, <code>details</code>, <code>summary</code></p>
+<blockquote>
+<p><strong>Warning:</strong> <code>tagFilter</code> only escapes the opening <code>&lt;</code> — the closing <code>&lt;/tag&gt;</code> has its <code>&lt;</code> escaped too but the content between tags is NOT escaped. This is incomplete XSS protection. For untrusted content, use <code>noHtmlSpans: true</code> (which escapes all inline HTML) or sanitize the output separately.</p>
+</blockquote>
+<h3 id="wikilinks-output-format">wikiLinks output format</h3>
+<p><code>wikiLinks: true</code> produces custom elements, not standard <code>&lt;a&gt;</code> tags:</p>
+<pre><code>[[Wiki Link]]          → &lt;x-wikilink data-target=&quot;Wiki Link&quot;&gt;Wiki Link&lt;/x-wikilink&gt;
+[[target|display]]     → &lt;x-wikilink data-target=&quot;target&quot;&gt;display&lt;/x-wikilink&gt;
+</code></pre>
+<p>You must style <code>x-wikilink</code> with CSS or process it client-side to convert to <code>&lt;a href&gt;</code>. The <code>data-target</code> attribute contains the link target.</p>
+<h2 id="heading-id-slug-generation-deep-audit">Heading ID Slug Generation — Deep Audit</h2>
+<p>Tested 28 heading variations to determine slug generation rules.</p>
+<h3 id="slug-rules">Slug rules</h3>
+<ol>
+<li><strong>Lowercase</strong> — all letters converted to lowercase</li>
+<li><strong>Spaces → hyphens</strong> — single or multiple spaces become single <code>-</code></li>
+<li><strong>Strip non-alphanumeric</strong> — punctuation (<code>,!.&amp;;:?</code>) is removed</li>
+<li><strong>Strip underscores</strong> — <code>Hello_World</code> → <code>helloworld</code> (underscore removed, not hyphen)</li>
+<li><strong>Strip accents</strong> — <code>Héllo Wörld</code> → <code>hllo-wrld</code> (diacritics removed, not converted)</li>
+<li><strong>Strip CJK</strong> — <code>Hello 世界</code> → <code>hello-cjk</code> (CJK chars removed, trailing word kept)</li>
+<li><strong>Strip emoji</strong> — <code>Hello 🔥</code> → <code>hello-emoji</code> (emoji removed)</li>
+<li><strong>Keep hyphens</strong> — <code>kebab-case</code> → <code>kebab-case</code> (existing hyphens preserved)</li>
+<li><strong>Keep digits</strong> — <code>API v2.0</code> → <code>api-v20-version</code> (dots removed, digits kept)</li>
+<li><strong>Strip leading/trailing hyphens</strong> — <code>   Leading</code> → <code>leading-spaces</code></li>
+<li><strong>No collapse of existing hyphens</strong> — <code>already-has-hyphens</code> stays as-is</li>
+</ol>
+<h3 id="duplicate-heading-deduplication">Duplicate heading deduplication</h3>
+<p>When multiple headings produce the same slug, a numeric suffix is appended:</p>
+<pre><code>## Same Title    → id=&quot;same-title&quot;
+## Same Title    → id=&quot;same-title-1&quot;
+## Same Title    → id=&quot;same-title-2&quot;
+## Same Title (with suffix) → id=&quot;same-title-with-suffix&quot;
+## Different     → id=&quot;different&quot;
+## Same Title    → id=&quot;same-title-3&quot;
+</code></pre>
+<p>The counter continues incrementing across the entire document, even if other headings appear between duplicates.</p>
+<h3 id="slug-generation-examples">Slug generation examples</h3>
+<table>
+<thead>
+<tr><th>Heading text</th><th>Generated ID</th><th>Notes</th></tr>
+</thead>
+<tbody>
+<tr><td><code>Hello World</code></td><td><code>hello-world</code></td><td>Basic</td></tr>
+<tr><td><code>Hello   World</code></td><td><code>hello-world-multiple-spaces</code></td><td>Multiple spaces → single <code>-</code></td></tr>
+<tr><td><code>Hello, World!</code></td><td><code>hello-world-punctuation</code></td><td>Punctuation stripped</td></tr>
+<tr><td><code>Hello_World</code></td><td><code>helloworld</code></td><td>Underscore stripped (not converted to <code>-</code>)</td></tr>
+<tr><td><code>Hello-World</code></td><td><code>hello-world-1</code></td><td>Hyphen kept, <code>-1</code> for dedup</td></tr>
+<tr><td><code>Héllo Wörld</code></td><td><code>hllo-wrld</code></td><td>Accents stripped (not transliterated)</td></tr>
+<tr><td><code>Hello 世界</code></td><td><code>hello-cjk</code></td><td>CJK stripped</td></tr>
+<tr><td><code>Hello 🔥</code></td><td><code>hello-emoji</code></td><td>Emoji stripped</td></tr>
+<tr><td><code>HELLO WORLD</code></td><td><code>hello-world-caps</code></td><td>Lowercased</td></tr>
+<tr><td><code>2024-01-15</code></td><td><code>2024-01-15-date</code></td><td>Digits and hyphens kept</td></tr>
+<tr><td><code>API v2.0</code></td><td><code>api-v20-version</code></td><td>Dot stripped, <code>2.0</code> → <code>20</code></td></tr>
+<tr><td><code>C++ / Rust</code></td><td><code>c-rust-special-chars</code></td><td><code>+</code> and <code>/</code> stripped</td></tr>
+<tr><td><code>CamelCaseHeading</code></td><td><code>camelcaseheading</code></td><td>Lowercased, no word boundaries</td></tr>
+<tr><td><code>snake_case_heading</code></td><td><code>snakecaseheading</code></td><td>Underscores stripped</td></tr>
+<tr><td><code>kebab-case-heading</code></td><td><code>kebab-case-heading</code></td><td>Hyphens preserved</td></tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Warning: Underscores are stripped, not converted to hyphens.</strong> <code>snake_case</code> → <code>snakecase</code> (no separator). If you want <code>snake-case</code>, preprocess the heading text before passing to <code>Bun.markdown.html()</code>.</p>
+</blockquote>
+<blockquote>
+<p><strong>Warning: Accented characters are stripped, not transliterated.</strong> <code>Héllo</code> → <code>hllo</code> (not <code>hello</code>). For proper transliteration (é → e), preprocess with a library like <code>transliteration</code> before rendering.</p>
+</blockquote>
+<blockquote>
+<p><strong>Note: CamelCase is NOT split.</strong> <code>CamelCaseHeading</code> → <code>camelcaseheading</code> (all one word). For word boundary slugs, preprocess to <code>Camel Case Heading</code> before rendering.</p>
+</blockquote>
 <h2 id="related">Related</h2>
 <ul>
 <li><a href="https://bun.com/docs/runtime/markdown">Bun.markdown docs</a> — GFM parser used for this page</li>
