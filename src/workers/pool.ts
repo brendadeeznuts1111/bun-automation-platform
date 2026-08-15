@@ -59,6 +59,16 @@ function spawnWorker(): WorkerSlot {
     onDisconnect: () => {
       // IPC channel closed — child exited or called disconnect
     },
+    // M2: onExit gives us signalCode + error for better diagnostics
+    // (proc.exited.then only provides exitCode)
+    onExit(_proc, exitCode, signalCode, error) {
+      if (error) {
+        console.error(`[workers] worker exited with error:`, error.message);
+      }
+      if (signalCode) {
+        console.log(`[workers] worker killed by signal ${signalCode} (code=${exitCode})`);
+      }
+    },
     stdin: "ignore",
     stdout: "inherit",
     stderr: "inherit",

@@ -48,8 +48,10 @@ export async function shutdown(server: AnyServer, reason: string): Promise<void>
   console.log(`[shutdown] initiated: ${reason}`);
   console.log(`[shutdown] ${activeWorkers.size} active workers`);
 
-  // 1. Stop accepting new connections (non-blocking stop, allow in-flight)
-  server.stop(true); // stop = true to forcefully close after timeout
+  // 1. Stop accepting new connections — graceful (allow in-flight to complete).
+  // m6: Use server.stop() without force=true. The SHUTDOWN_TIMEOUT_MS below
+  // ensures we don't hang forever waiting for slow requests.
+  server.stop();
 
   // 2. Send shutdown signal to all workers
   const workerPromises: Promise<number>[] = [];

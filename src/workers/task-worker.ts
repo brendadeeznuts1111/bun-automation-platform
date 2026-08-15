@@ -27,7 +27,28 @@ const PROFILE_DIR = resolve(process.env.PROFILE_DIR ?? "./data/profiles");
 const VIEWPORT_WIDTH = parseInt(process.env.VIEWPORT_WIDTH ?? "1280", 10);
 const VIEWPORT_HEIGHT = parseInt(process.env.VIEWPORT_HEIGHT ?? "720", 10);
 const NAV_TIMEOUT = parseInt(process.env.NAV_TIMEOUT ?? "30000", 10);
-void NAV_TIMEOUT; // reserved for future navigate timeout option
+
+/** Race a promise against a timeout, rejecting with a clear error. */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timeout after ${ms}ms`)), ms),
+    ),
+  ]);
+}
+
+/** Detect macOS < 15.2 where WebKit persistent storage is unsupported. */
+function supportsPersistentStorage(): boolean {
+  if (process.platform !== "darwin") return true; // Linux uses Chrome backend
+  // Bun.osVersion is available on macOS — parse major.minor
+  const version = (Bun as { osVersion?: string }).osVersion ?? "";
+  const parts = version.split(".");
+  const major = parseInt(parts[0] ?? "0", 10);
+  const minor = parseInt(parts[1] ?? "0", 10);
+  // macOS 15.2+ required for WebKit dataStore
+  return major > 15 || (major === 15 && minor >= 2);
+}
 
 // --- Task loading ----------------------------------------------------------
 
@@ -89,16 +110,23 @@ async function executeTask(task: TaskRow): Promise<string> {
   mkdirSync(agentProfileDir, { recursive: true });
 
   // Build WebView options
+  // m8: On macOS < 15.2, WebKit persistent storage is unsupported — fall back to ephemeral.
+  const usePersistent = supportsPersistentStorage();
+  if (usePersistent) {
+    mkdirSync(agentProfileDir, { recursive: true });
+  }
   const viewOptions: ConstructorParameters<typeof Bun.WebView>[0] = {
     width: VIEWPORT_WIDTH,
     height: VIEWPORT_HEIGHT,
-    dataStore: { directory: agentProfileDir },
+    // m8: Fall back to ephemeral on old macOS — sessions won't persist but task still runs
+    dataStore: usePersistent ? { directory: agentProfileDir } : "ephemeral",
+    // m2: Capture page-side console output for debugging automation failures
+    console: (type, ...args) => {
+      if (type === "error" || type === "warn") {
+        console.error(`[webview:${task.id}] page ${type}:`, ...args);
+      }
+    },
   };
-
-  // Set custom user agent if provided
-  if (task.user_agent) {
-    // Will be set via CDP after navigation (Chrome backend) or evaluate
-  }
 
   let screenshotResult: ScreenshotResult | null = null;
   let cookies = "";
@@ -109,20 +137,37 @@ async function executeTask(task: TaskRow): Promise<string> {
   // await using — automatic view.close() on scope exit (including errors)
   await using view = new Bun.WebView(viewOptions);
 
-  // Step 1: Navigate to the task URL
+  // m3: Set navigation callbacks for observability (fires before navigate() settles)
+  view.onNavigated = (url, title) => {
+    console.log(`[webview:${task.id}] navigated to ${url} (${title})`);
+  };
+  view.onNavigationFailed = (error) => {
+    console.error(`[webview:${task.id}] navigation failed:`, error.message);
+  };
+
+  // Step 1: Navigate to the task URL (C2: with timeout to prevent hanging forever)
   process.send?.({ type: "progress", taskId: task.id, progress: 0 });
   updateProgress(task.id, 0);
 
-  await view.navigate(task.url);
+  await withTimeout(view.navigate(task.url), NAV_TIMEOUT, "navigate");
   pageTitle = view.title ?? "";
   finalUrl = view.url ?? task.url;
+
+  // m1: Override user agent via CDP if provided (Chrome backend only)
+  if (task.user_agent) {
+    try {
+      await view.cdp("Emulation.setUserAgentOverride", { userAgent: task.user_agent });
+    } catch {
+      // WebKit backend doesn't support CDP — user agent override silently skipped
+    }
+  }
 
   process.send?.({ type: "progress", taskId: task.id, progress: 25 });
   updateProgress(task.id, 25);
 
-  // Step 2: Capture screenshot
-  const screenshotBuf = await view.screenshot({ format: "png", encoding: "buffer" });
-  screenshotResult = await processScreenshot(screenshotBuf, `task-${task.id}`);
+  // Step 2: Capture screenshot (m7: use blob encoding — zero-copy on WebKit)
+  const screenshotBlob = await view.screenshot({ format: "png" });
+  screenshotResult = await processScreenshot(screenshotBlob, `task-${task.id}`);
 
   process.send?.({ type: "progress", taskId: task.id, progress: 50 });
   updateProgress(task.id, 50);
@@ -206,10 +251,9 @@ process.on("message", async (msg: ParentToWorkerMessage) => {
   if (msg.type === "shutdown") {
     console.log(`[worker:${process.pid}] received shutdown signal`);
     clearInterval(keepAlive);
-    // Close any open WebView instances before exiting
-    try {
-      Bun.WebView.closeAll();
-    } catch {}
+    // C3: Don't call Bun.WebView.closeAll() — `await using view` handles per-view
+    // cleanup, and Bun automatically calls closeAll() at process exit.
+    // Manual closeAll() does SIGKILL which could race with await using's close().
     process.exit(0);
   }
 

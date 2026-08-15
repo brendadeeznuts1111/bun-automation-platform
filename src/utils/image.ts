@@ -67,21 +67,26 @@ export async function processScreenshot(
   // Extract metadata (runs on main thread, very fast — 0.004ms)
   const meta = await img.metadata();
 
-  // Generate full-size WebP
+  // M1: Parallelize the three independent encode terminals.
+  // Each terminal triggers a separate decode→transform→encode pipeline,
+  // but running them concurrently overlaps the off-thread work.
   const fullPath = join(SCREENSHOT_DIR, `${name}.webp`);
-  await img.webp({ quality: FULL_QUALITY }).write(fullPath);
-  const fullSize = Bun.file(fullPath).size;
-
-  // Generate thumbnail (resize + WebP)
   const thumbPath = join(SCREENSHOT_DIR, `${name}_thumb.webp`);
-  await img
-    .resize(THUMBNAIL_WIDTH, THUMBNAIL_WIDTH, { fit: "inside", withoutEnlargement: true })
-    .webp({ quality: THUMBNAIL_QUALITY })
-    .write(thumbPath);
-  const thumbSize = Bun.file(thumbPath).size;
 
-  // Generate ThumbHash placeholder for blur-up loading
-  const placeholder = await img.placeholder();
+  const [, , placeholder] = await Promise.all([
+    // Full-size WebP
+    img.webp({ quality: FULL_QUALITY }).write(fullPath),
+    // Thumbnail (resize + WebP)
+    img
+      .resize(THUMBNAIL_WIDTH, THUMBNAIL_WIDTH, { fit: "inside", withoutEnlargement: true })
+      .webp({ quality: THUMBNAIL_QUALITY })
+      .write(thumbPath),
+    // ThumbHash placeholder for blur-up loading
+    img.placeholder(),
+  ]);
+
+  const fullSize = Bun.file(fullPath).size;
+  const thumbSize = Bun.file(thumbPath).size;
 
   // Extract dominant color from a tiny version for CSS background
   const dominantColor = await extractDominantColor(img);

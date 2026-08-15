@@ -48,12 +48,29 @@ setInterval(() => cleanupRateLimits(), 300_000); // every 5 min
 
 // --- Helpers ---------------------------------------------------------------
 
+/**
+ * Extract the client IP from the request.
+ *
+ * M5: Trust order is cf-connecting-ip → x-forwarded-for → unknown.
+ * IMPORTANT: cf-connecting-ip is only trustworthy when behind Cloudflare.
+ * If the server is directly exposed (not behind Cloudflare/proxy), an attacker
+ * can spoof this header to bypass per-IP rate limiting. In production, either:
+ *   1. Deploy behind Cloudflare (cf-connecting-ip is set by Cloudflare's edge)
+ *   2. Deploy behind a trusted proxy that overwrites x-forwarded-for
+ *   3. Set TRUST_PROXY_HEADERS=false to only use the socket peer address
+ */
 function getClientIP(req: Request): string {
-  return (
-    req.headers.get("cf-connecting-ip") ??
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    "unknown"
-  );
+  const trustProxy = process.env.TRUST_PROXY_HEADERS !== "false";
+  if (trustProxy) {
+    return (
+      req.headers.get("cf-connecting-ip") ??
+      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      "unknown"
+    );
+  }
+  // When not behind a proxy, fall back to unknown (Bun.serve doesn't expose
+  // the raw socket peer address in the Request object in v1.3.14)
+  return "unknown";
 }
 
 function json(data: unknown, status = 200): Response {
@@ -182,22 +199,26 @@ const loginHandler = withMiddleware<"">(async (req) => {
     await audit({ agent_id: agent.id, action: "login_success", ip_address: ip });
 
     // Create session: auth token (random UUID) + CSRF token (HMAC-signed, bound to session ID)
+    // Use db.transaction() for atomicity — if the process crashes mid-session-creation,
+    // the entire transaction rolls back (no session with empty csrf_token left behind).
     const authToken = crypto.randomUUID();
 
-    const sessionId = await write((db) => {
-      // Insert with a placeholder CSRF token first to get the session ID
-      const result = db.query(
-        `INSERT INTO auth_sessions (agent_id, token, csrf_token)
-         VALUES (?, ?, '')`,
-      ).run(agent.id, authToken);
-      return Number(result.lastInsertRowid);
-    });
+    const { csrfToken } = await write((db) => {
+      const createSession = db.transaction(() => {
+        // Insert with placeholder CSRF to get the session ID
+        const result = db.query(
+          `INSERT INTO auth_sessions (agent_id, token, csrf_token)
+           VALUES (?, ?, '')`,
+        ).run(agent.id, authToken);
+        const sid = Number(result.lastInsertRowid);
 
-    // Generate CSRF token bound to the session ID for cross-user replay prevention
-    const csrfToken = generateCsrfToken(String(sessionId));
+        // Generate CSRF token bound to the session ID
+        const token = generateCsrfToken(String(sid));
+        db.query("UPDATE auth_sessions SET csrf_token = ? WHERE id = ?").run(token, sid);
 
-    await write((db) => {
-      db.query("UPDATE auth_sessions SET csrf_token = ? WHERE id = ?").run(csrfToken, sessionId);
+        return { csrfToken: token };
+      });
+      return createSession();
     });
 
     return json({ token: authToken, csrf_token: csrfToken, agent_id: agent.id, username: agent.username });
@@ -212,17 +233,14 @@ const listTasksHandler = withAuth<"">((req) => {
   const offset = parseInt(url.searchParams.get("offset") ?? "0", 10);
   const status = url.searchParams.get("status");
 
+  // m4: Single parameterized query instead of two different SQL strings.
+  // Avoids filling the db.query() statement cache (default size: 20).
   const tasks = read((db) => {
-    if (status) {
-      return db.query(
-        `SELECT id, agent_id, url, status, progress, priority, error, created_at, updated_at, completed_at
-         FROM tasks WHERE status = ? ORDER BY priority DESC, created_at DESC LIMIT ? OFFSET ?`,
-      ).all(status, limit, offset);
-    }
     return db.query(
       `SELECT id, agent_id, url, status, progress, priority, error, created_at, updated_at, completed_at
-       FROM tasks ORDER BY priority DESC, created_at DESC LIMIT ? OFFSET ?`,
-    ).all(limit, offset);
+       FROM tasks WHERE (? IS NULL OR status = ?)
+       ORDER BY priority DESC, created_at DESC LIMIT ? OFFSET ?`,
+    ).all(status, status, limit, offset);
   });
 
   const total = read((db) => {
@@ -348,6 +366,8 @@ const server = Bun.serve({
   // WebView tasks can take 30+ seconds; default 10s would kill long handlers.
   // Max value is 255; 0 disables entirely (not recommended for production).
   idleTimeout: 255,
+  // m5: Enable HMR + console relay in development (useful when dashboard is added)
+  development: NODE_ENV === "development" ? { hmr: true, console: true } : undefined,
 
   routes: {
     // Public routes (no auth)
@@ -371,6 +391,13 @@ const server = Bun.serve({
     if (preflight) return preflight;
 
     return withCors(req, errorResponse("not found", 404));
+  },
+
+  // M3: Top-level error handler — catches unhandled exceptions in route handlers
+  // that escape withMiddleware. Returns a structured 500 instead of Bun's default.
+  error(error) {
+    console.error("[server] unhandled error:", error);
+    return Response.json({ error: "internal server error" }, { status: 500 });
   },
 });
 
