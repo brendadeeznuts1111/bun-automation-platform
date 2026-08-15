@@ -63,7 +63,7 @@ declare module "bun" {
     NAV_TIMEOUT?: string;
     /** WebView viewport width in pixels. Default: "1280" */
     VIEWPORT_WIDTH?: string;
-    /** WebView viewport height in pixels. Default: "800" */
+    /** WebView viewport height in pixels. Default: "720" */
     VIEWPORT_HEIGHT?: string;
     /** Directory for persistent WebView profiles (cookies, localStorage). */
     PROFILE_DIR?: string;
@@ -99,7 +99,7 @@ declare module "bun" {
     BRAND_COLOR_WARN?: string;
 
     // --- Bun feature flags ---
-    /** Enable experimental HTTP/2 fetch client. */
-    BUN_FEATURE_FLAG_EXPERIMENTAL_HTTP2_CLIENT?: string;
+    /** Enable experimental HTTP/3 fetch client (used by render-mermaid.ts). */
+    BUN_FEATURE_FLAG_EXPERIMENTAL_HTTP3_CLIENT?: string;
   }
 }

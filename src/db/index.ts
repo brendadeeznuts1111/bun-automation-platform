@@ -188,6 +188,7 @@ export function migrate(): void {
   // Run migrations synchronously on the writer connection (before server starts)
   writer.exec("CREATE TABLE IF NOT EXISTS _meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);");
 
+  // JUSTIFIED: bun:sqlite .get() returns unknown; narrowing to the _meta row type
   const row = writer.query("SELECT value FROM _meta WHERE key = 'schema_version'").get() as
     | { value: string }
     | null;

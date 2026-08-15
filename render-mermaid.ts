@@ -124,9 +124,12 @@ if (isUrl) {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.log(`  ${c.warn("retry:")} HTTP/3 unavailable (${msg}), using default`);
-    // JUSTIFIED: tlsOpts shape is BunFetchRequestInit["tls"] which is valid for
+    // tlsOpts shape is BunFetchRequestInit["tls"] which is valid for
     // fetch() but not in the standard RequestInit type. Same gap as above.
-    const res = await fetch(inputArg, tlsOpts as any);
+    // Using `as RequestInit` would be wrong (tls is not in RequestInit), so
+    // we cast to the minimal shape Bun accepts.
+    // JUSTIFIED: tls opts not in standard RequestInit type
+    const res = await fetch(inputArg, tlsOpts as { tls?: { rejectUnauthorized?: boolean } });
     if (!res.ok) {
       console.error(`${c.err("error:")} fetch failed: ${res.status} ${res.statusText}`);
       process.exit(1);

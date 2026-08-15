@@ -31,7 +31,9 @@ setInterval(() => {
       sessionCache.delete(key);
     }
   }
-}, 60_000).unref?.(); // unref so it doesn't block process exit
+// N7: Timer.unref() is always available (per bun-types/globals.d.ts).
+// The previous `?.` was unnecessary defensive coding.
+}, 60_000).unref(); // unref so it doesn't block process exit
 
 /** Invalidate a cached session (call on logout). */
 export function invalidateSession(token: string): void {

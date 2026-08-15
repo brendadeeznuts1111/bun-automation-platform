@@ -28,6 +28,7 @@ function parseSqliteDate(dateStr: string): number {
 /** Get the current state of a site's circuit breaker. */
 export function getCircuitStatus(site: string): CircuitStatus {
   const row = read((db) => {
+    // JUSTIFIED: bun:sqlite .get() returns unknown; narrowing to the circuit breaker row type
     return db.query("SELECT failures, tripped_at FROM circuit_breakers WHERE site = ?").get(site) as
       | { failures: number; tripped_at: string | null }
       | null;

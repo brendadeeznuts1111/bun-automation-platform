@@ -23,6 +23,11 @@ interface PendingTask {
 }
 
 interface WorkerSlot {
+  // N2: proc is assigned synchronously in spawnWorker() before the slot is
+  // returned. Using `| undefined` + a runtime check would be cleaner but
+  // every consumer (handleWorkerMessage, dispatchNext, getPoolStatus) would
+  // need to handle undefined. Since spawnWorker() always assigns proc before
+  // returning, we keep it non-optional and cast at the assignment site.
   proc: import("bun").Subprocess<"ignore", "inherit", "inherit">;
   busy: boolean;
   currentTask: PendingTask | null;
@@ -43,13 +48,16 @@ export async function initWorkerPool(): Promise<void> {
 }
 
 function spawnWorker(): WorkerSlot {
-  const slot: WorkerSlot = {
-    proc: undefined!,
+  // N2: proc is assigned after Bun.spawn() returns. We use a partial slot
+  // and cast to WorkerSlot — proc is set on line 82 before the slot is used.
+  const slot = {
     busy: false,
-    currentTask: null,
+    // JUSTIFIED: null is valid for PendingTask | null; TS infers null type
+    currentTask: null as PendingTask | null,
     untrack: () => {},
     exited: false,
-  };
+    // JUSTIFIED: proc is assigned below before slot is returned/used
+  } as WorkerSlot;
 
   const proc = Bun.spawn({
     cmd: [process.execPath, WORKER_SCRIPT],
