@@ -75,11 +75,9 @@ declare module "bun" {
     TLS_KEY_PATH?: string;
 
     // --- Mermaid renderer (render-mermaid.ts) ---
-    /** Path to a Chromium-based browser binary. Required for rendering. */
-    MERMAID_BROWSER_PATH?: string;
     /** Mermaid theme: "default" | "forest" | "dark" | "neutral". Default: "default" */
     MERMAID_THEME?: string;
-    /** Output format: "svg" | "png" | "pdf". Default: "svg" */
+    /** Output format: "svg" | "png". Default: "svg" (PDF not supported with Bun.WebView) */
     MERMAID_FORMAT?: string;
     /** Output directory for rendered files. Default: "." */
     MERMAID_OUTPUT_DIR?: string;
