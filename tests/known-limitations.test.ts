@@ -17,13 +17,16 @@ describe("known limitations", () => {
   // When Bun.Image adds a pixel accessor, this test will start passing
   // and Bun will alert us to remove the .failing mark.
   it.failing("extractDominantColor returns the real dominant color (not the stub)", async () => {
-    // Use the existing test screenshot from the image test.
-    // The stub returns "#1f2020" regardless of input — a real
-    // implementation would return a color derived from the image.
-    const result = await processScreenshot(
-      new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-      "test-failing-color",
-    );
+    // Minimal valid 1x1 red PNG (RGBA). The stub returns "#1f2020"
+    // regardless of input — a real implementation would return a color
+    // derived from the image pixels (close to red for this input).
+    const redPng = new Uint8Array([
+      137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0,
+      1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68,
+      65, 84, 120, 218, 99, 252, 255, 159, 161, 30, 0, 7, 130, 2, 127, 61,
+      200, 72, 239, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
+    ]);
+    const result = await processScreenshot(redPng, "test-failing-color");
     expect(result.dominantColor).not.toBe("#1f2020");
   });
 });
