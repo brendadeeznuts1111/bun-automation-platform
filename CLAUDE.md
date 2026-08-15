@@ -51,18 +51,29 @@ Git hooks are per-clone (not shared via git), so each developer sets this up onc
 cat > .git/hooks/pre-push << 'HOOK'
 #!/bin/sh
 echo "▶ pre-push: running bun test..."
+if ! command -v bun >/dev/null 2>&1; then
+  echo "✗ bun not found in PATH. Install Bun or bypass with: git push --no-verify"
+  exit 1
+fi
 cd "$(git rev-parse --show-toplevel)"
 output=$(bun test 2>&1)
 exit_code=$?
-echo "$output" | tail -15
-fail_line=$(echo "$output" | grep -E "^[[:space:]]*[0-9]+ fail" | head -1)
-fail_count=$(echo "$fail_line" | grep -oE '[0-9]+' | head -1)
-fail_count=${fail_count:-1}
+fail_count=$(echo "$output" | awk '/[0-9]+ fail/ {print $1; exit}')
+fail_count=${fail_count:-0}
 pass_line=$(echo "$output" | grep -E "^[[:space:]]*[0-9]+ pass" | head -1)
-if [ -z "$pass_line" ] || [ "$fail_count" -ne 0 ]; then
-  echo "✗ bun test failed. Push blocked. Bypass: git push --no-verify"
+if [ -z "$pass_line" ]; then
+  echo "$output"
+  echo "✗ bun test produced no output or crashed (exit $exit_code). Push blocked."
+  echo "  Bypass with: git push --no-verify"
   exit 1
 fi
+if [ "$fail_count" -ne 0 ]; then
+  echo "$output"
+  echo "✗ bun test failed ($fail_count failures, exit $exit_code). Push blocked."
+  echo "  Bypass with: git push --no-verify"
+  exit 1
+fi
+echo "$output" | tail -15
 echo "✓ bun test passed ($pass_line). Proceeding with push."
 exit 0
 HOOK
@@ -70,6 +81,8 @@ chmod +x .git/hooks/pre-push
 ```
 
 The hook parses `N fail` from the output instead of relying on `bun test`'s exit code, because the lcov/JUnit reporters return exit 1 when no TTY is present (git hooks run without a terminal). Bypass with `git push --no-verify`.
+
+**Important:** This is a local gate, not a replacement for server-side CI. It protects your machine from pushing broken code, but collaborators can bypass it with `git push --no-verify`. For production-grade protection, set up CI (e.g., self-hosted GitHub Actions runner or make the repo public for free GitHub Actions).
 
 ### Bun test documentation
 
