@@ -69,6 +69,114 @@ describe("Bun Native APIs & Utilities", () => {
     expect(custom).toContain("__bold__");
   });
 
+  it("Bun.markdown supports all 15 parser options and GFM extensions", () => {
+    const md = "# Header\n\n| A | B |\n|---|---|\n| 1 | 2 |\n\n- [x] Done\n- [ ] Todo\n\nVisit www.example.com\n\n<script>alert(1)</script>\n\n$x = y^2$\n\n[[PageTarget|Custom Label]]";
+
+    const html = Bun.markdown.html(md, {
+      tables: true,
+      strikethrough: true,
+      tasklists: true,
+      hardSoftBreaks: true,
+      wikiLinks: true,
+      underline: true,
+      latexMath: true,
+      collapseWhitespace: true,
+      permissiveAtxHeaders: true,
+      noIndentedCodeBlocks: true,
+      noHtmlBlocks: false,
+      noHtmlSpans: false,
+      tagFilter: true,
+      autolinks: { url: true, www: true, email: true },
+      headings: { ids: true, autolink: true },
+    });
+
+    expect(html).toContain('id="header"');
+    expect(html).toContain("<table>");
+    expect(html).toContain('type="checkbox"');
+    expect(html).toContain("&lt;script>alert(1)&lt;/script>"); // tagFilter replaces opening < with &lt;
+    expect(html).toContain('<x-wikilink data-target="PageTarget">Custom Label</x-wikilink>'); // wikiLinks
+    expect(typeof html).toBe("string");
+  });
+
+  it("Bun.markdown passes correct metadata to render callbacks", () => {
+    const md = "# Test Heading\n\n```js\nconsole.log('hi');\n```\n\n1. First\n2. Second\n\n| Col1 |\n|---|\n| Val1 |\n\n[Bun](https://bun.com 'Bun Homepage')\n\n![Logo](https://bun.com/logo.png 'Logo Title')";
+
+    let capturedLevel = 0;
+    let capturedLang = "";
+    let capturedListOrdered = false;
+    let capturedItemIndex = -1;
+    let capturedAlign: string | undefined;
+    let capturedHref = "";
+    let capturedSrc = "";
+    let capturedTextDirect = "";
+
+    Bun.markdown.render(md, {
+      heading: (children, meta) => {
+        capturedLevel = meta.level;
+        return children;
+      },
+      code: (children, meta) => {
+        capturedLang = meta?.language ?? "";
+        return children;
+      },
+      list: (children, meta) => {
+        capturedListOrdered = meta.ordered;
+        return children;
+      },
+      listItem: (children, meta) => {
+        capturedItemIndex = meta.index;
+        return children;
+      },
+      th: (children, meta) => {
+        capturedAlign = meta?.align;
+        return children;
+      },
+      link: (children, meta) => {
+        capturedHref = meta.href;
+        return children;
+      },
+      image: (children, meta) => {
+        capturedSrc = meta.src;
+        return children;
+      },
+      text: (t) => {
+        capturedTextDirect += t;
+        return t;
+      },
+    });
+
+    expect(capturedLevel).toBe(1);
+    expect(capturedLang).toBe("js");
+    expect(capturedListOrdered).toBe(true);
+    expect(capturedItemIndex).toBeGreaterThanOrEqual(0);
+    expect(capturedAlign).toBeUndefined(); // default alignment
+    expect(capturedHref).toBe("https://bun.com");
+    expect(capturedSrc).toBe("https://bun.com/logo.png");
+    expect(capturedTextDirect.length).toBeGreaterThan(0);
+  });
+
+  it("Bun.markdown.react supports React 18 and 19 element types", () => {
+    const text = "## React Heading\n\n[Link](https://bun.com)";
+
+    // Default: React 19 (react.transitional.element)
+    const el19 = Bun.markdown.react(text) as { $$typeof?: symbol };
+    expect(String(el19.$$typeof)).toBe("Symbol(react.transitional.element)");
+
+    // React 18: (react.element)
+    const el18 = Bun.markdown.react(text, undefined, { reactVersion: 18 }) as { $$typeof?: symbol };
+    expect(String(el18.$$typeof)).toBe("Symbol(react.element)");
+  });
+
+  it("Bun.markdown.ansi respects AnsiTheme options", () => {
+    const md = "# Title\n\n[Docs](https://bun.com)\n\nParagraph text word wrapping test.";
+
+    const plain = Bun.markdown.ansi(md, { colors: false, columns: 40 });
+    expect(plain).not.toContain("\x1b[");
+
+    const linked = Bun.markdown.ansi("[Link](https://bun.com)", { hyperlinks: true });
+    expect(linked).toContain("https://bun.com");
+  });
+
   it("bun:sqlite executes prepared statements and transactions", () => {
     const db = new Database(":memory:");
     db.exec("CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT);");
