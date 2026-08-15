@@ -1,231 +1,310 @@
 # Bun Automation Platform
 
-A production-grade browser automation platform built on Bun v1.3.14 — orchestrates headless browser sessions, processes screenshots, and exposes a REST API for task management. Includes a Mermaid diagram rendering pipeline and architecture blueprints.
+[![Bun](https://img.shields.io/badge/Bun-v1.3.14-black?logo=bun)](https://bun.com)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue?logo=typescript)](https://www.typescriptlang.org)
+[![Tests](https://img.shields.io/badge/Tests-33%20passed-success)](https://bun.com/docs/cli/test)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
+A production-grade browser automation platform built natively on **Bun v1.3.14+**. Orchestrates headless browser sessions, processes screenshots via `Bun.Image`, provides atomic SQLite persistence with WAL mode, and exposes a high-performance REST API. Includes an automated Mermaid diagram rendering pipeline and architecture blueprints.
+
+---
+
+## Table of Contents
+
+- [Features](#features)
+- [Documentation](#documentation)
+- [Quick Start](#quick-start)
+- [API Endpoints](#api-endpoints)
+- [Testing](#testing)
+- [Build Standalone Executable](#build-standalone-executable)
+- [Runtime & Debugging](#runtime--debugging)
+- [Configuration](#configuration)
+- [Mermaid Renderer](#mermaid-renderer)
+- [Project Layout](#project-layout)
+- [Architecture & Diagrams](#architecture--diagrams)
+- [Tech Stack](#tech-stack)
+- [License](#license)
+
+---
 
 ## Features
 
-- **REST API** — agent auth, task creation, session listing, screenshot serving, audit log
-- **Worker pool** — pre-spawned Bun processes with native IPC, circuit breaker, retry logic
-- **SQLite data layer** — WAL mode, read pool, serialized writes, auto-migration
-- **Screenshot pipeline** — `Bun.Image` resize/WebP conversion with thumbnail support
-- **Production middleware** — rate limiting (rolling window), CORS, audit logging
-- **Graceful shutdown** — SIGTERM handling, worker drain, IPC coordination
-- **Mermaid renderer** — `Bun.spawn` + `using` + watchdog + HTTP/3 URL fetch
-- **Prometheus metrics** — `/metrics` endpoint with task counts and pool status
+- **High-Performance REST API** — Agent authentication, task queueing, session inspection, and audit logging.
+- **Worker Process Pool** — Pre-spawned worker processes communicating via native `Bun.spawn` IPC with circuit breaker and exponential backoff retry.
+- **SQLite Data Layer** — Built on `bun:sqlite` with WAL mode, serialized write mutex, connection pooling, and auto-migrations.
+- **Zero-Dependency Image Pipeline** — Built on `Bun.Image` for asynchronous WebP conversion, thumbnailing, and ThumbHash blur placeholders.
+- **Production Middleware** — Atomic rolling-window rate limiting (`INSERT ... RETURNING count`), CORS preflight handling, and audit trails.
+- **Graceful Lifecycle** — Signal handling (`SIGTERM`, `SIGINT`, `SIGHUP`), worker drain timeouts, and clean database shutdown.
+- **Mermaid Diagram Pipeline** — Automated diagram rendering via `Bun.spawn`, native `using` resource disposal, and HTTP/3 URL fetching.
+- **Observability** — Built-in `/health` status and Prometheus-compatible `/metrics` exporter.
 
-## Docs
+---
 
-| File | Description |
-|------|-------------|
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Complete unified platform architecture with all v1.3.14 features |
-| [BUN_API_REFERENCE.md](BUN_API_REFERENCE.md) | Every Bun API used in the platform — version, stability, code examples, links |
-| [OPEN_TASKS.md](OPEN_TASKS.md) | Grounded task outline with Bun doc references + `Bun.markdown` deep reference |
-| [BACKLOG.md](BACKLOG.md) | Gap analysis: production hardening, scalability, security, UX, and roadmap |
+## Documentation
 
-## Quick start
+| Document | Description |
+|:---|:---|
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Complete unified platform architecture, system diagrams, and v1.3.14 capabilities |
+| [`BUN_API_REFERENCE.md`](BUN_API_REFERENCE.md) | Comprehensive API reference table with version mapping, code examples, and docs links |
+| [`OPEN_TASKS.md`](OPEN_TASKS.md) | Grounded task backlog with Bun documentation references and `Bun.markdown` deep reference |
+| [`BACKLOG.md`](BACKLOG.md) | Production hardening, scalability analysis, security mitigations, and roadmap |
+
+---
+
+## Quick Start
+
+### 1. Install Dependencies
 
 ```bash
 bun install
-
-# Start the platform server (default: http://0.0.0.0:3000)
-bun run start
-
-# Seed a test agent
-bun run seed
-
-# Type-check
-bun run check
-
-# Run tests
-bun test
 ```
 
-### API endpoints
+### 2. Run the Platform Server
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/health` | Health check + worker pool status |
-| `GET` | `/metrics` | Prometheus-format metrics |
-| `POST` | `/login` | Agent authentication (`username`, `password` → `token`) |
-| `GET` | `/tasks` | List tasks (`?limit=50&offset=0&status=pending`) |
-| `POST` | `/task` | Create task (`agent_id`, `url`, `priority?`) — dispatches to worker pool |
-| `GET` | `/task/:id` | Get task by ID |
-| `GET` | `/sessions` | List sessions (pagination) |
-| `GET` | `/screenshot/:id` | Serve screenshot (`?w=400&format=jpeg`) |
-| `GET` | `/audit` | Audit log (`?limit=50&offset=0&agent_id=1`) |
+```bash
+# Start server in production mode
+bun run start
 
-### Build a standalone executable
+# Start server with hot reloading
+bun run dev
+```
+
+### 3. Seed an Agent
+
+```bash
+bun run seed
+```
+
+---
+
+## API Endpoints
+
+The server listens on `http://0.0.0.0:3000` by default:
+
+| Method | Endpoint | Description |
+|:---|:---|:---|
+| `GET` | `/health` | Health check, uptime, and worker pool metrics |
+| `GET` | `/metrics` | Prometheus-formatted metrics exporter |
+| `POST` | `/login` | Agent authentication (returns session token) |
+| `GET` | `/tasks` | List tasks with pagination (`?limit=50&offset=0&status=pending`) |
+| `POST` | `/task` | Enqueue a new automation task to the worker pool |
+| `GET` | `/task/:id` | Fetch task state, progress, and execution results |
+| `GET` | `/sessions` | List active and expired browser sessions |
+| `GET` | `/screenshot/:id` | Serve processed screenshots (`?w=400&format=webp\|jpeg\|png`) |
+| `GET` | `/audit` | Query system audit logs with optional agent filter |
+
+---
+
+## Testing
+
+The test suite runs with Bun's native test runner (`bun:test`):
+
+```bash
+# Run all tests
+bun test
+
+# Run tests in watch mode
+bun test --watch
+
+# Run TypeScript typecheck
+bun run check
+```
+
+### Test Suite Overview
+
+| Test Suite | File | Description |
+|:---|:---|:---|
+| **Server Integration** | [`tests/server.test.ts`](tests/server.test.ts) | End-to-end HTTP endpoint verification (`/health`, `/metrics`, `/tasks`, `/audit`) |
+| **Native APIs & CLI** | [`tests/bun-apis.test.ts`](tests/bun-apis.test.ts) | Password hashing, CSRF, color formatting, compression, hashing, and markdown |
+| **Rate Limiter** | [`tests/rate-limit.test.ts`](tests/rate-limit.test.ts) | Atomic SQLite sliding-window concurrency and threshold enforcement |
+| **Circuit Breaker** | [`tests/circuit-breaker.test.ts`](tests/circuit-breaker.test.ts) | Per-host failure threshold tracking, tripping, and reset transitions |
+| **Image Pipeline** | [`tests/image.test.ts`](tests/image.test.ts) | `Bun.Image` resizing, WebP compression, and metadata generation |
+| **Retry Helper** | [`tests/retry.test.ts`](tests/retry.test.ts) | Exponential backoff, jitter calculation, and error filtering |
+
+---
+
+## Build Standalone Executable
+
+Compile the entire application into a single self-contained binary with zero external dependencies:
 
 ```bash
 bun run build
-# → ./server (61 MB, self-contained, no Bun runtime needed)
+# Output: ./server (self-contained executable)
 ```
 
-## Mermaid renderer
+---
+
+## Runtime & Debugging
+
+The platform implements configurations aligned with Bun's official runtime guides:
+
+| Feature | Configuration / Tool | Description |
+|:---|:---|:---|
+| **TypeScript** | [`tsconfig.json`](tsconfig.json) | Configured with `types: ["bun"]` and `moduleResolution: "bundler"` |
+| **Path Aliases** | [`tsconfig.json`](tsconfig.json) | Clean imports via `@/*`, `@db/*`, `@middleware/*`, `@utils/*`, `@workers/*` |
+| **VS Code Debugger** | [`.vscode/launch.json`](.vscode/launch.json) | Interactive debugging with native `type: "bun"` launch configurations |
+| **Web Inspector** | `bun --inspect src/server.ts` | Remote debugging on port `6499` via [debug.bun.sh](https://debug.bun.sh) |
+| **Heap Diagnostics** | `bun:jsc` | Runtime memory statistics via `heapStats()`, `memoryUsage()`, and snapshots |
+| **CI / CD** | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | Automated GitHub Actions workflow using `oven-sh/setup-bun@v2` |
+| **macOS Codesigning** | [`entitlements.plist`](entitlements.plist) | Hardened runtime entitlements for Gatekeeper validation on macOS |
+
+---
+
+## Configuration
+
+Configuration is loaded automatically by Bun from `.env` files. Environment-specific overrides reside in `.env.development` and `.env.production`.
+
+### Server Settings
+
+| Variable | Default | Description |
+|:---|:---|:---|
+| `PORT` | `3000` | HTTP server listening port |
+| `HOST` | `0.0.0.0` | HTTP server host binding |
+| `NODE_ENV` | `development` | Active environment (`development` \| `production`) |
+| `DB_PATH` | `./data/platform.db` | File path for SQLite database |
+| `DB_READERS` | `4` | Number of read-only SQLite connections in pool |
+| `WORKER_POOL_SIZE` | `4` | Number of pre-spawned worker processes |
+| `SHUTDOWN_TIMEOUT_MS` | `30000` | Maximum wait time for worker drain during shutdown |
+| `SCREENSHOT_DIR` | `./data/screenshots` | Target directory for processed screenshot storage |
+| `THUMBNAIL_WIDTH` | `400` | Max width for thumbnail images (in pixels) |
+| `THUMBNAIL_QUALITY` | `85` | WebP compression quality for thumbnails (`1–100`) |
+| `SCREENSHOT_QUALITY` | `90` | WebP compression quality for full screenshots (`1–100`) |
+| `CIRCUIT_BREAKER_THRESHOLD` | `5` | Consecutive failures before circuit trips open |
+| `CIRCUIT_BREAKER_COOLDOWN_MS` | `300000` | Circuit breaker recovery cooldown period (5 minutes) |
+| `CORS_ALLOWED_ORIGINS` | `""` | Comma-separated list of allowed origins (empty = allow in dev) |
+| `TLS_CERT_PATH` | `dev-cert.pem` | Path to TLS certificate for HTTP/3 dev server |
+| `TLS_KEY_PATH` | `dev-key.pem` | Path to TLS private key for HTTP/3 dev server |
+
+### Mermaid Renderer Settings
+
+| Variable | Default | Description |
+|:---|:---|:---|
+| `MERMAID_BROWSER_PATH` | — | Path to Chromium executable binary |
+| `MERMAID_THEME` | `default` | Diagram theme (`default` \| `forest` \| `dark` \| `neutral`) |
+| `MERMAID_FORMAT` | `svg` | Export format (`svg` \| `png` \| `pdf`) |
+| `MERMAID_OUTPUT_DIR` | `.` | Target output directory for rendered files |
+| `MERMAID_TIMEOUT_MS` | `15000` | Watchdog timeout for hanging render processes |
+
+---
+
+## Mermaid Renderer
+
+The pipeline invokes `@mermaid-js/mermaid-cli` from Bun with robust process isolation:
 
 ```bash
 # Render to SVG (default)
 bun run render-mermaid.ts bun_no_orphans_20260814.mmd
 
-# Render to PNG with explicit output name
+# Render to PNG with explicit output filename
 MERMAID_FORMAT=png bun run render-mermaid.ts bun_no_orphans_20260814.mmd custom.png
 
-# Render from a URL (tries HTTP/3, falls back to HTTP/1.1)
+# Render directly from a remote URL (HTTP/3 with HTTP/1.1 fallback)
 bun run render-mermaid.ts https://example.com/diagram.mmd
 ```
 
-The renderer handles the hard parts of invoking mermaid-cli from within Bun:
-
-- **`Bun.spawn` with inherited stdio** — avoids the `$` template pipe deadlock that hangs nested mmdc calls
-- **Strips `BUN_OPTIONS`** from child env — `--hot` keeps the event loop alive after render, causing mmdc to never exit
-- **`TempDir` with `Symbol.dispose`** — temp Chrome profile dir auto-cleans via `using` (Bun v1.3.14 native)
-- **Watchdog timeout** — kills hung mmdc processes after `MERMAID_TIMEOUT_MS`
-- **Stale-dir sweep** — cleans up temp dirs from SIGKILL'd runs (age-thresholded, concurrent-safe)
-- **`process.execPath`** — uses the current Bun binary, not a hardcoded path
-- **URL input with HTTP/3** — accepts URLs as input, fetches via QUIC with HTTP/1.1 fallback
-
-## Dev server (HTTP/3 + QUIC)
+### Dev Server (HTTP/3 + QUIC)
 
 ```bash
-# Generate self-signed cert (one-time)
+# Generate self-signed certificate
 openssl req -x509 -newkey rsa:2048 -keyout dev-key.pem -out dev-cert.pem -days 365 -nodes -subj "/CN=localhost"
 
-# Start the dev server
+# Start HTTP/3 dev server
 bun run dev-server.ts
 ```
 
-- HTTP/1.1 on TCP, HTTP/3 on UDP (same port)
-- `Alt-Svc` header for browser auto-upgrade
-- Endpoints: `/`, `/health`, `/protocol`
+---
 
-## Configuration
-
-All config is in `.env` (loaded automatically by Bun — no dotenv needed). Environment-specific overrides in `.env.development` and `.env.production`.
-
-### Server
-
-| Env var | Default | Description |
-|---------|---------|-------------|
-| `PORT` | `3000` | HTTP listen port |
-| `HOST` | `0.0.0.0` | HTTP listen host |
-| `NODE_ENV` | `development` | Runtime environment |
-| `DB_PATH` | `./data/platform.db` | SQLite database file |
-| `DB_READERS` | `4` | Read-only SQLite connections |
-| `WORKER_POOL_SIZE` | `4` | Pre-spawned worker processes |
-| `SHUTDOWN_TIMEOUT_MS` | `30000` | Max wait for workers during shutdown |
-| `SCREENSHOT_DIR` | `./data/screenshots` | Processed screenshot directory |
-| `THUMBNAIL_WIDTH` | `400` | Thumbnail width in pixels |
-| `THUMBNAIL_QUALITY` | `85` | Thumbnail WebP quality (1–100) |
-| `SCREENSHOT_QUALITY` | `90` | Full-size WebP quality (1–100) |
-| `CIRCUIT_BREAKER_THRESHOLD` | `5` | Failures before circuit opens |
-| `CIRCUIT_BREAKER_COOLDOWN_MS` | `300000` | Cooldown before half-open probe (5 min) |
-| `CORS_ALLOWED_ORIGINS` | — | Comma-separated allowed origins (empty = allow all in dev) |
-| `TLS_CERT_PATH` | `dev-cert.pem` | Path to TLS certificate (for dev-server HTTP/3) |
-| `TLS_KEY_PATH` | `dev-key.pem` | Path to TLS private key (for dev-server HTTP/3) |
-
-### Mermaid renderer
-
-| Env var | Default | Description |
-|---------|---------|-------------|
-| `MERMAID_BROWSER_PATH` | — | Path to a Chromium binary (required) |
-| `MERMAID_THEME` | `default` | `default` \| `forest` \| `dark` \| `neutral` |
-| `MERMAID_FORMAT` | `svg` | `svg` \| `png` \| `pdf` |
-| `MERMAID_OUTPUT_DIR` | `.` | Output directory |
-| `MERMAID_TIMEOUT_MS` | `15000` | Watchdog timeout for hung renders |
-
-### Brand colors
-
-| Env var | Description |
-|---------|-------------|
-| `BRAND_COLOR_BG` | Canvas background (CSS color, passed to `-b`) |
-| `BRAND_COLOR_LABEL` | Terminal label color |
-| `BRAND_COLOR_VALUE` | Terminal value color |
-| `BRAND_COLOR_OK` | Terminal success color |
-| `BRAND_COLOR_ERR` | Terminal error color |
-| `BRAND_COLOR_WARN` | Terminal warning color |
-
-## Project layout
+## Project Layout
 
 ```
 bun-automation-platform/
 ├── src/
-│   ├── server.ts              # Main server — Bun.serve, routes, auth, tasks, sessions
+│   ├── server.ts              # Bun.serve HTTP server, REST endpoints & routing
 │   ├── db/
-│   │   ├── index.ts           # SQLite layer — WAL, read pool, write mutex, migrations
-│   │   └── audit.ts           # Audit log queries
+│   │   ├── index.ts           # SQLite WAL pool, serialized write mutex & schema
+│   │   └── audit.ts           # Audit log entry recording and pagination
 │   ├── middleware/
-│   │   ├── cors.ts            # CORS preflight + headers
-│   │   └── rate-limit.ts      # Rolling-window rate limiting (SQLite)
+│   │   ├── cors.ts            # CORS preflight options & header injection
+│   │   └── rate-limit.ts      # Atomic sliding-window rate limiting
 │   ├── utils/
-│   │   ├── circuit-breaker.ts # Per-host circuit breaker
-│   │   ├── image.ts           # Bun.Image screenshot processing (resize, WebP)
-│   │   ├── retry.ts           # Exponential backoff retry
-│   │   └── shutdown.ts        # Graceful shutdown (SIGTERM, worker drain)
+│   │   ├── circuit-breaker.ts # Site-specific failure threshold breaker
+│   │   ├── image.ts           # Bun.Image processing, WebP & ThumbHash
+│   │   ├── retry.ts           # Exponential backoff with jitter helper
+│   │   └── shutdown.ts        # Coordinated SIGTERM worker shutdown
 │   ├── workers/
-│   │   ├── pool.ts            # Pre-spawned worker pool with IPC
-│   │   └── task-worker.ts     # Task execution (WebView stub, retry, circuit breaker)
+│   │   ├── pool.ts            # IPC-managed child process worker pool
+│   │   └── task-worker.ts     # Task execution lifecycle & progress updates
 │   └── types/
-│       └── env.d.ts           # Typed env vars (augments Bun.Env)
-├── render-mermaid.ts          # Mermaid renderer (Bun.spawn + using + watchdog + HTTP/3)
-├── dev-server.ts              # Dev server with HTTP/3 (QUIC) + Alt-Svc
-├── seed-agent.ts              # Seed a test agent
-├── entitlements.plist         # macOS codesigning entitlements for standalone binary
-├── bunfig.toml                # Bun config (globalStore = true)
-├── tsconfig.json              # Strict TypeScript config (bundler mode, path aliases)
-├── package.json               # Scripts: start, dev, build, seed, test, check
-├── .github/workflows/ci.yml   # GitHub Actions CI (oven-sh/setup-bun@v2)
-├── .vscode/launch.json        # Debugger configs (Bun Native Debugger & Web Inspector)
-├── tests/                     # Comprehensive bun:test suite (6 test files, 33 tests)
-├── .env                       # Shared config (browser path, theme, colors)
-├── .env.development           # Dev overrides (verbose fetch, force color, --hot)
-├── .env.production            # Prod overrides (no color, no telemetry)
-├── ARCHITECTURE.md            # Unified platform architecture
-├── BUN_API_REFERENCE.md       # Complete Bun API reference table
-├── OPEN_TASKS.md              # Grounded task outline + Bun.markdown deep reference
-├── BACKLOG.md                 # Gap analysis and roadmap
-├── *.mmd                      # Mermaid diagram sources
-├── *.svg                      # Rendered diagram output
-└── data/                      # SQLite database (gitignored)
+│       └── env.d.ts           # Typed environment variable declarations
+├── tests/
+│   ├── server.test.ts          # Server REST API integration test suite
+│   ├── bun-apis.test.ts        # Native Bun APIs & utilities test suite
+│   ├── rate-limit.test.ts      # Concurrency & rate-limiting test suite
+│   ├── circuit-breaker.test.ts # Circuit breaker state transitions test suite
+│   ├── image.test.ts           # Bun.Image transform & serving test suite
+│   └── retry.test.ts           # Exponential backoff & jitter test suite
+├── .github/workflows/ci.yml   # GitHub Actions automated test & build workflow
+├── .vscode/launch.json        # Visual Studio Code & Windsurf debugger profile
+├── entitlements.plist         # macOS Gatekeeper signing entitlements
+├── render-mermaid.ts          # Mermaid diagram CLI renderer pipeline
+├── dev-server.ts              # HTTP/3 dev server with Alt-Svc upgrade
+├── seed-agent.ts              # Idempotent database agent initialization
+├── bunfig.toml                # Project Bun configuration (globalStore = true)
+├── tsconfig.json              # Strict TypeScript compiler options & paths
+├── package.json               # Scripts, metadata, and dependencies
+├── .env                       # Base configuration file
+├── .env.development           # Development environment overrides
+├── .env.production            # Production environment overrides
+├── ARCHITECTURE.md            # Platform architecture documentation
+├── BUN_API_REFERENCE.md       # Native Bun API reference table
+├── OPEN_TASKS.md              # Backlog with canonical documentation links
+└── BACKLOG.md                 # Gap analysis and production roadmap
 ```
 
-## Diagram index
+---
 
-### Architecture blueprints
+## Architecture & Diagrams
+
+### Architecture Blueprints
 
 | Diagram | Description | Source |
-|---------|-------------|--------|
+|:---|:---|:---|
 | [Bun Automation Platform — Final](bun_automation_platform_final_v1314_20260814.svg) | Complete unified architecture with all v1.3.14 features | [`.mmd`](bun_automation_platform_final_v1314_20260814.mmd) |
 | [Bun Automation Platform — v1.3.14](bun_automation_platform_v1314_20260814.svg) | Updated architecture with v1.3.14 features (earlier draft) | [`.mmd`](bun_automation_platform_v1314_20260814.mmd) |
 | [Bun Automation Platform — Original](bun_automation_platform_20260814.svg) | Initial implementation drill-down | [`.mmd`](bun_automation_platform_20260814.mmd) |
 | [Agent Dashboard (DeepSeek)](deepseek_mermaid_20260814_ef065a.svg) | Original DeepSeek-generated architecture diagram | [`.mmd`](deepseek_mermaid_20260814_ef065a.mmd) |
-| [Agent Dashboard (DeepSeek, PNG)](deepseek_mermaid_20260814_4f4804.png) | Original DeepSeek-generated architecture diagram (PNG render) | — |
+| [Agent Dashboard (DeepSeek, PNG)](deepseek_mermaid_20260814_4f4804.png) | High-resolution rasterized diagram render | — |
 
-### Bun API reference diagrams
+### Bun API Reference Diagrams
 
 | Diagram | Description | Source |
-|---------|-------------|--------|
+|:---|:---|:---|
 | [`Bun.color` API](bun_color_api_20260814.svg) | API surface — formats, inputs, outputs, ANSI, bundle-time macro | [`.mmd`](bun_color_api_20260814.mmd) |
 | [`Bun.color` + Env Vars](bun_color_envvars_20260814.svg) | Integration matrix between color and environment variables | [`.mmd`](bun_color_envvars_20260814.mmd) |
 | [Bun Config Env Vars](bun_config_envvars_20260814.svg) | Runtime configuration environment variables | [`.mmd`](bun_config_envvars_20260814.mmd) |
 | [Bun .env Examples](bun_env_examples_20260814.svg) | Production vs development env file examples | [`.mmd`](bun_env_examples_20260814.mmd) |
 
-### Feature deep-dives
+### Feature Deep-Dives
 
 | Diagram | Description | Source |
-|---------|-------------|--------|
-| [`--no-orphans`](bun_no_orphans_20260814.svg) | Kernel-level child process cleanup (prctl/kqueue/stop-verify-kill) | [`.mmd`](bun_no_orphans_20260814.mmd) |
+|:---|:---|:---|
+| [`--no-orphans`](bun_no_orphans_20260814.svg) | Kernel-level child process cleanup (prctl / kqueue / stop-verify-kill) | [`.mmd`](bun_no_orphans_20260814.mmd) |
 
-## Tech stack
+---
 
-- **Runtime:** Bun v1.3.14+ (Zig-based, JavaScriptCore)
-- **Language:** TypeScript (strict mode, bundler resolution, path aliases)
-- **Database:** `bun:sqlite` (WAL mode, read pool, write mutex)
-- **Browser automation:** `Bun.WebView` (WebKit on macOS, Chrome/CDP elsewhere)
-- **Image processing:** `Bun.Image` (JPEG, PNG, WebP, HEIC, AVIF)
-- **Process management:** `Bun.spawn` with IPC, `--no-orphans`, `process.execve`
-- **Networking:** `fetch()` with HTTP/3 (QUIC), shared SSL_CTX cache
-- **Rendering:** `@mermaid-js/mermaid-cli` via `Bun.spawn`
+## Tech Stack
+
+- **Runtime:** [Bun v1.3.14+](https://bun.com) (Zig-based, JavaScriptCore)
+- **Language:** [TypeScript](https://www.typescriptlang.org) (strict mode, bundler resolution, path aliases)
+- **Database:** `bun:sqlite` (SQLite 3.53.0 with WAL mode, read pool, serialized write mutex)
+- **Browser Automation:** `Bun.WebView` (WebKit on macOS, Chrome/CDP on Linux/Windows)
+- **Image Processing:** `Bun.Image` (JPEG, PNG, WebP, HEIC, AVIF, ThumbHash)
+- **Process Orchestration:** `Bun.spawn` with native IPC, `--no-orphans`, and `process.execve`
+- **Networking:** HTTP/3 (QUIC) in `fetch()` & `Bun.serve`, shared `SSL_CTX` cache
+- **Diagram Rendering:** `@mermaid-js/mermaid-cli` via isolated `Bun.spawn` child processes
+
+---
 
 ## License
 
-[MIT](LICENSE) — Copyright (c) 2026 nolarose
+[MIT](LICENSE) © 2026 nolarose
