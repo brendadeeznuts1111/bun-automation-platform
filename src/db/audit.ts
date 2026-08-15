@@ -6,6 +6,7 @@
  */
 
 import { write, read } from "../db";
+import type { AuditLogRow } from "../types/models";
 
 export interface AuditEntry {
   agent_id?: number;
@@ -35,15 +36,21 @@ export function getAuditLog(
   limit = 50,
   offset = 0,
   agentId?: number,
-): { id: number; agent_id: number | null; action: string; resource: string | null; details: string | null; ip_address: string | null; created_at: string }[] {
+): AuditLogRow[] {
   return read((db) => {
     if (agentId) {
-      return db.query(
-        `SELECT * FROM audit_log WHERE agent_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-      ).all(agentId, limit, offset) as any;
+      return db
+        .query(
+          `SELECT id, agent_id, action, resource, details, ip_address, created_at
+           FROM audit_log WHERE agent_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+        )
+        .all(agentId, limit, offset) as AuditLogRow[];
     }
-    return db.query(
-      `SELECT * FROM audit_log ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-    ).all(limit, offset) as any;
+    return db
+      .query(
+        `SELECT id, agent_id, action, resource, details, ip_address, created_at
+         FROM audit_log ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+      )
+      .all(limit, offset) as AuditLogRow[];
   });
 }

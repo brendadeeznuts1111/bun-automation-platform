@@ -18,7 +18,7 @@ interface WorkerHandle {
   pid: number;
   send: (msg: unknown) => void;
   exited: Promise<number>;
-  kill: (signal?: string) => void;
+  kill: (signal?: number | NodeJS.Signals) => void;
 }
 
 const SHUTDOWN_TIMEOUT_MS = parseInt(process.env.SHUTDOWN_TIMEOUT_MS ?? "30000", 10);

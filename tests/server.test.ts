@@ -50,9 +50,17 @@ describe("Server API Integration", () => {
   });
 
   it("GET /health returns status ok and worker pool info", async () => {
+    interface HealthResponse {
+      status: string;
+      uptime: number;
+      version: string;
+      workers: { total: number; busy: number; idle: number; queued: number };
+      shuttingDown: boolean;
+    }
+
     const res = await fetch(`http://localhost:${TEST_PORT}/health`);
     expect(res.status).toBe(200);
-    const data = (await res.json()) as any;
+    const data = (await res.json()) as HealthResponse;
     expect(data.status).toBe("ok");
     expect(data.workers.total).toBe(1);
   });
@@ -75,17 +83,30 @@ describe("Server API Integration", () => {
   });
 
   it("GET /tasks returns paginated task list", async () => {
+    interface TasksResponse {
+      tasks: unknown[];
+      total: number;
+      limit: number;
+      offset: number;
+    }
+
     const res = await fetch(`http://localhost:${TEST_PORT}/tasks?limit=10`);
     expect(res.status).toBe(200);
-    const data = (await res.json()) as any;
+    const data = (await res.json()) as TasksResponse;
     expect(Array.isArray(data.tasks)).toBe(true);
     expect(typeof data.total).toBe("number");
   });
 
   it("GET /audit returns paginated audit log entries", async () => {
+    interface AuditResponse {
+      logs: unknown[];
+      limit: number;
+      offset: number;
+    }
+
     const res = await fetch(`http://localhost:${TEST_PORT}/audit?limit=10`);
     expect(res.status).toBe(200);
-    const data = (await res.json()) as any;
+    const data = (await res.json()) as AuditResponse;
     expect(Array.isArray(data.logs)).toBe(true);
   });
 });

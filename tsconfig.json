@@ -16,6 +16,7 @@
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
+    "isolatedModules": true,
     "noEmit": true,
     "resolveJsonModule": true,
 
@@ -25,18 +26,26 @@
       "@db/*": ["./src/db/*"],
       "@middleware/*": ["./src/middleware/*"],
       "@utils/*": ["./src/utils/*"],
-      "@workers/*": ["./src/workers/*"]
+      "@workers/*": ["./src/workers/*"],
+      "@models/*": ["./src/types/*"]
     },
 
-    // ----- Type Checking (strict) -----
+    // ----- Type Checking (maximum strictness) -----
     "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "useUnknownInCatchVariables": true,
     "skipLibCheck": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
     "forceConsistentCasingInFileNames": true,
 
-    // ----- Stricter flags -----
+    // ----- Stricter quality flags -----
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noImplicitReturns": true,

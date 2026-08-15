@@ -11,6 +11,7 @@
 
 import { resolve } from "node:path";
 import { trackWorker, isShuttingDown } from "../utils/shutdown";
+import type { WorkerToParentMessage } from "../types/ipc";
 
 const POOL_SIZE = parseInt(process.env.WORKER_POOL_SIZE ?? "4", 10);
 const WORKER_SCRIPT = resolve(import.meta.dir, "../workers/task-worker.ts");
@@ -52,7 +53,7 @@ function spawnWorker(): WorkerSlot {
 
   const proc = Bun.spawn({
     cmd: [process.execPath, WORKER_SCRIPT],
-    ipc: (message: any) => {
+    ipc: (message: WorkerToParentMessage) => {
       handleWorkerMessage(slot, message);
     },
     onDisconnect: () => {
@@ -77,7 +78,7 @@ function spawnWorker(): WorkerSlot {
     exited: proc.exited,
     kill: (sig) => {
       try {
-        proc.kill(sig as any);
+        proc.kill(sig);
       } catch {}
     },
   });
@@ -112,7 +113,7 @@ function spawnWorker(): WorkerSlot {
   return slot;
 }
 
-function handleWorkerMessage(slot: WorkerSlot, msg: any): void {
+function handleWorkerMessage(slot: WorkerSlot, msg: WorkerToParentMessage): void {
   if (!slot.currentTask && msg.type !== "ready") return;
 
   switch (msg.type) {

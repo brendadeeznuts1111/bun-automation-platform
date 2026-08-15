@@ -13,20 +13,18 @@ import { write, read } from "../db";
 import { withRetry } from "../utils/retry";
 import { recordSuccess, recordFailure } from "../utils/circuit-breaker";
 import { processScreenshot, type ScreenshotResult } from "../utils/image";
-
-interface TaskRow {
-  id: number;
-  agent_id: number;
-  url: string;
-  proxy: string | null;
-  user_agent: string | null;
-  geo_lat: number | null;
-  geo_lon: number | null;
-}
+import type { ParentToWorkerMessage, WorkerToParentMessage } from "../types/ipc";
+import type { TaskRow } from "../types/models";
 
 function loadTask(taskId: number): TaskRow | null {
   return read((db) => {
-    return db.query("SELECT id, agent_id, url, proxy, user_agent, geo_lat, geo_lon FROM tasks WHERE id = ?").get(taskId) as TaskRow | null;
+    return db
+      .query(
+        `SELECT id, agent_id, url, status, progress, priority, proxy, user_agent,
+                geo_lat, geo_lon, error, result, created_at, updated_at, started_at, completed_at
+         FROM tasks WHERE id = ?`,
+      )
+      .get(taskId) as TaskRow | null;
   });
 }
 
@@ -194,10 +192,14 @@ function crc32(...bufs: Buffer[]): number {
 
 // --- IPC handler -----------------------------------------------------------
 
-// Keep the process alive waiting for IPC messages.
-let keepAlive = setInterval(() => {}, 60_000);
+function sendToParent(msg: WorkerToParentMessage): void {
+  process.send?.(msg);
+}
 
-process.on("message", async (msg: any) => {
+// Keep the process alive waiting for IPC messages.
+const keepAlive = setInterval(() => {}, 60_000);
+
+process.on("message", async (msg: ParentToWorkerMessage) => {
   if (msg.type === "shutdown") {
     console.log(`[worker:${process.pid}] received shutdown signal`);
     clearInterval(keepAlive);
@@ -205,11 +207,11 @@ process.on("message", async (msg: any) => {
   }
 
   if (msg.type === "task") {
-    const taskId = msg.taskId as number;
+    const taskId = msg.taskId;
     const task = loadTask(taskId);
 
     if (!task) {
-      process.send?.({ type: "error", taskId, error: "task not found" });
+      sendToParent({ type: "error", taskId, error: "task not found" });
       return;
     }
 
@@ -228,22 +230,22 @@ process.on("message", async (msg: any) => {
         },
         onRetry: (attempt, delay) => {
           console.log(`[worker:${process.pid}] retry ${attempt} after ${delay}ms`);
-          process.send?.({ type: "progress", taskId, progress: -1, retrying: attempt });
+          sendToParent({ type: "progress", taskId, progress: -1, retrying: attempt });
         },
       });
 
       completeTask(taskId, result);
       recordSuccess(new URL(task.url).host);
-      process.send?.({ type: "result", taskId, result });
+      sendToParent({ type: "result", taskId, result });
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       failTask(taskId, errMsg);
       recordFailure(new URL(task.url).host);
-      process.send?.({ type: "error", taskId, error: errMsg });
+      sendToParent({ type: "error", taskId, error: errMsg });
     }
   }
 });
 
 // Notify parent that we're ready
-process.send?.({ type: "ready", pid: process.pid });
+sendToParent({ type: "ready", pid: process.pid });
 console.log(`[worker:${process.pid}] ready`);
