@@ -17,6 +17,10 @@
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+// Register custom bun:test matchers (expect.extend) so they're available in
+// every test file without per-file imports. See tests/matchers.ts.
+import "./matchers";
+
 // Isolate the SQLite DB per test process so runs never touch ./data/platform.db.
 // Override unconditionally: .env.development sets DB_PATH=./data/platform.db at
 // Bun startup (before preload runs), and ??= would leave that in place.

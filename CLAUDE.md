@@ -36,6 +36,21 @@ test("hello world", () => {
 });
 ```
 
+### Project test configuration
+
+- **`bunfig.toml [test]`** — preload, path ignore patterns, randomize+seed, retry, coverage (85% threshold on lines/functions)
+- **`.env.test`** — auto-loaded by `bun test`, sets `NODE_ENV=test`
+- **`tests/setup.ts`** — preload script: sets `DB_PATH` to a per-process temp file (so tests never touch `./data/platform.db`) and registers custom matchers
+- **`tests/matchers.ts`** — custom `expect.extend()` matchers (e.g. `toBeValidAuditEntry`), available in all test files via the preload
+
+### Bun test documentation
+
+- Test runner: https://bun.sh/docs/test
+- Writing tests (API, modifiers, parametrized): https://bun.sh/docs/test/writing-tests
+- Configuration (bunfig.toml `[test]`): https://bun.sh/docs/test/configuration
+- Matchers & `expect.extend`: https://bun.sh/docs/test/expect
+- Reporters (JUnit, dots, custom): https://bun.sh/docs/test/reporters
+
 ## Frontend
 
 Use HTML imports with `Bun.serve()`. Don't use `vite`. HTML imports fully support React, CSS, Tailwind.
