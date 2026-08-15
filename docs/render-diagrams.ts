@@ -933,9 +933,67 @@ const html = `<!DOCTYPE html>
     .brand-item code {
       font-size: 0.8em;
     }
+
+    /* Nav bar */
+    .nav-bar {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      padding: 0.5rem 1rem;
+      background: rgba(0, 0, 0, 0.4);
+      border-radius: 6px;
+      border: 1px solid rgba(${brandRgb.label}, 0.15);
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+    }
+    .nav-bar a {
+      color: var(--brand-label);
+      text-decoration: none;
+      padding: 0.3rem 0.8rem;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      border-bottom: none;
+    }
+    .nav-bar a:hover {
+      background: rgba(${brandRgb.label}, 0.12);
+    }
+    .nav-bar a.active {
+      background: rgba(${brandRgb.label}, 0.2);
+      font-weight: 600;
+    }
+    .nav-bar .nav-sep {
+      color: rgba(${brandRgb.label}, 0.3);
+      margin: 0 0.2rem;
+    }
+    .nav-bar button {
+      background: rgba(${brandRgb.ok}, 0.15);
+      color: var(--brand-ok);
+      border: 1px solid rgba(${brandRgb.ok}, 0.3);
+      padding: 0.3rem 0.8rem;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .nav-bar button:hover {
+      background: rgba(${brandRgb.ok}, 0.25);
+    }
   </style>
 </head>
 <body>
+  <nav class="nav-bar">
+    <a href="/dashboard">Dashboard</a>
+    <span class="nav-sep">/</span>
+    <a href="/diagrams" class="active">Diagrams</a>
+    <span class="nav-sep">/</span>
+    <a href="/features">Features JSON</a>
+    <span class="nav-sep">/</span>
+    <a href="/health">Health</a>
+    <span class="nav-sep">/</span>
+    <a href="/protocol">Protocol</a>
+    ${process.env.NODE_ENV === "development" ? '<button id="nav-features" onclick="fetchFeatures()">Features</button>' : ""}
+  </nav>
+
   <h1>Channel Architecture</h1>
   <p>Transport-agnostic typed message passing — IPC, WebSocket, and (future) MessagePort.</p>
 
@@ -950,6 +1008,34 @@ const html = `<!DOCTYPE html>
   </div>
 
   ${gfmHtml}
+
+  <div id="features-panel" style="display:none; margin-top:2rem; padding:1rem; background:rgba(0,0,0,0.3); border:1px solid rgba(${brandRgb.label},0.2); border-radius:6px;">
+    <h3 style="color:var(--brand-ok); cursor:pointer;" onclick="document.getElementById('features-panel').style.display='none'">Feature Flags ✕</h3>
+    <pre id="features-output" style="font-size:0.85rem; overflow-x:auto; color:var(--brand-value);"></pre>
+  </div>
+
+  <script>
+    async function fetchFeatures() {
+      const panel = document.getElementById('features-panel');
+      const output = document.getElementById('features-output');
+      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+      if (panel.style.display === 'none') return;
+      output.textContent = 'Loading...';
+      try {
+        const res = await fetch('/features');
+        const data = await res.json();
+        const rows = data.features.map(f =>
+          '  ' + f.key.padEnd(15) + ' ' +
+          (f.active ? '✅ active' : f.blocked ? '⚠️  blocked' : '❌ off') +
+          '  ' + f.status
+        ).join('\\n');
+        output.textContent = 'Feature              State          Status\\n' +
+                             '───────              ─────          ──────\\n' + rows;
+      } catch (e) {
+        output.textContent = 'Error: ' + e.message;
+      }
+    }
+  </script>
 </body>
 </html>
 `;

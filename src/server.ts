@@ -549,8 +549,37 @@ const dashboardHandler = withMiddleware((): Response => {
     .join("\n");
   const html = `<!DOCTYPE html>
 <html>
-<head><title>Bun Automation Platform — Dashboard</title></head>
-<body style="font-family: sans-serif; max-width: 800px; margin: 2rem auto;">
+<head>
+  <title>Bun Automation Platform — Dashboard</title>
+  <style>
+    body { font-family: sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
+    .nav-bar { display: flex; gap: 0.5rem; align-items: center; padding: 0.5rem 1rem;
+      background: #f5f5f5; border-radius: 6px; margin-bottom: 1.5rem; flex-wrap: wrap; }
+    .nav-bar a { color: #0066cc; text-decoration: none; padding: 0.3rem 0.8rem; border-radius: 4px; font-size: 0.9rem; }
+    .nav-bar a:hover { background: #e0e0e0; }
+    .nav-bar a.active { background: #0066cc; color: #fff; }
+    .nav-bar .nav-sep { color: #ccc; margin: 0 0.2rem; }
+    .nav-bar button { background: #50fa7b; color: #1a1a2e; border: 1px solid #3a9d5c;
+      padding: 0.3rem 0.8rem; border-radius: 4px; font-size: 0.9rem; cursor: pointer; }
+    .nav-bar button:hover { background: #6bff8e; }
+    #features-panel { display: none; margin-top: 1rem; padding: 1rem;
+      background: #f9f9f9; border: 1px solid #ddd; border-radius: 6px; }
+    #features-panel pre { font-size: 0.85rem; overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <nav class="nav-bar">
+    <a href="/dashboard" class="active">Dashboard</a>
+    <span class="nav-sep">/</span>
+    <a href="/diagrams">Diagrams</a>
+    <span class="nav-sep">/</span>
+    <a href="/features">Features JSON</a>
+    <span class="nav-sep">/</span>
+    <a href="/health">Health</a>
+    <span class="nav-sep">/</span>
+    <a href="/protocol">Protocol</a>
+    ${NODE_ENV === "development" ? '<button id="nav-features" onclick="fetchFeatures()">Features</button>' : ""}
+  </nav>
   <h1>Bun Automation Platform</h1>
   <p>Server running on Bun v${Bun.version}</p>
   <h2>Status</h2>
@@ -566,6 +595,10 @@ const dashboardHandler = withMiddleware((): Response => {
     <tr><th>Feature</th><th>Status</th><th>Enabled</th><th>Description</th></tr>
     ${features}
   </table>
+  <div id="features-panel">
+    <h3 style="cursor:pointer; color:#50fa7b;" onclick="document.getElementById('features-panel').style.display='none'">Live Feature Flags ✕</h3>
+    <pre id="features-output">Loading...</pre>
+  </div>
   <h2>Endpoints</h2>
   <ul>
     <li><a href="/health">/health</a> — health check</li>
@@ -574,6 +607,28 @@ const dashboardHandler = withMiddleware((): Response => {
     <li><a href="/features">/features</a> — feature flags</li>
     <li><a href="/dashboard">/dashboard</a> — this page</li>
   </ul>
+  <script>
+    async function fetchFeatures() {
+      const panel = document.getElementById('features-panel');
+      const output = document.getElementById('features-output');
+      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+      if (panel.style.display === 'none') return;
+      output.textContent = 'Loading...';
+      try {
+        const res = await fetch('/features');
+        const data = await res.json();
+        const rows = data.features.map(f =>
+          '  ' + f.key.padEnd(15) + ' ' +
+          (f.active ? '✅ active' : f.blocked ? '⚠️  blocked' : '❌ off') +
+          '  ' + f.status
+        ).join('\\n');
+        output.textContent = 'Feature              State          Status\\n' +
+                             '───────              ─────          ──────\\n' + rows;
+      } catch (e) {
+        output.textContent = 'Error: ' + e.message;
+      }
+    }
+  </script>
 </body>
 </html>`;
   return new Response(html, { headers: { "Content-Type": "text/html" } });
@@ -600,6 +655,16 @@ const routes: Record<string, unknown> = {
 // R3: Conditionally add dashboard route
 if (ENABLE_DEV_DASHBOARD) {
   routes["/dashboard"] = { GET: dashboardHandler };
+  // Serve the channel diagrams page at /diagrams (dev only)
+  routes["/diagrams"] = {
+    GET: withMiddleware((): Response => {
+      const file = Bun.file(`${import.meta.dir}/../docs/channel-diagrams.html`);
+      if (file.size === 0) {
+        return errorResponse("diagrams page not found — run: bun run docs/render-diagrams.ts", 404);
+      }
+      return new Response(file, { headers: { "Content-Type": "text/html" } });
+    }),
+  };
 }
 
 // C7: WebSocket handler config — behind ENABLE_WEBSOCKET flag
