@@ -221,6 +221,9 @@ describe("Bun Native APIs & Utilities", () => {
   });
 
   it("bun:sqlite executes prepared statements and transactions", () => {
+    // Note: `using db = new Database(...)` would auto-close via Symbol.dispose,
+    // but close(true) throws "database is locked" when prepared statements are
+    // still outstanding. Manual close() after statements are done is safer.
     const db = new Database(":memory:");
     db.exec("CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT);");
 

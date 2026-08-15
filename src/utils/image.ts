@@ -59,7 +59,10 @@ export async function processScreenshot(
   // Ensure screenshot directory exists
   mkdirSync(SCREENSHOT_DIR, { recursive: true });
 
-  const img = new Bun.Image(input);
+  // Guard against decompression bombs: screenshots are at most 16384x16384
+  // (Bun.WebView max viewport), but we cap at 4096x4096 (~16MP) which is
+  // more than enough for any realistic screenshot.
+  const img = new Bun.Image(input, { maxPixels: 4096 * 4096 });
 
   // Extract metadata (runs on main thread, very fast — 0.004ms)
   const meta = await img.metadata();
@@ -112,13 +115,22 @@ async function extractDominantColor(_img: import("bun").Image): Promise<string> 
 /**
  * Stream a screenshot as a response body.
  * Useful for serving screenshots via HTTP.
+ *
+ * Validates that the path resolves within the screenshot directory to
+ * prevent path traversal attacks (e.g. "../../etc/passwd").
  */
 export function serveScreenshot(
   path: string,
   width?: number,
   format: "webp" | "jpeg" | "png" = "webp",
 ): Response {
-  let img = new Bun.Image(path);
+  // Resolve and verify the path is within the screenshot directory
+  const resolved = resolve(path);
+  if (!resolved.startsWith(SCREENSHOT_DIR + "/") && resolved !== SCREENSHOT_DIR) {
+    return new Response("forbidden", { status: 403 });
+  }
+
+  let img = new Bun.Image(resolved, { maxPixels: 4096 * 4096 });
   if (width) img = img.resize(width, width, { fit: "inside" });
 
   switch (format) {
@@ -141,5 +153,5 @@ export async function screenshotToBase64(
   maxWidth = 1280,
   quality = 70,
 ): Promise<string> {
-  return new Bun.Image(input).resize(maxWidth, maxWidth, { fit: "inside" }).jpeg({ quality }).toBase64();
+  return new Bun.Image(input, { maxPixels: 4096 * 4096 }).resize(maxWidth, maxWidth, { fit: "inside" }).jpeg({ quality }).toBase64();
 }

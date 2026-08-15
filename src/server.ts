@@ -111,7 +111,7 @@ function withCsrf<T extends string>(
   handler: (req: BunRequest<T>, ctx: AuthContext) => Response | Promise<Response>,
 ): RouteHandler<T> {
   return withAuth(async (req, ctx) => {
-    if (!checkCsrf(req)) {
+    if (!checkCsrf(req, String(ctx.sessionId))) {
       return errorResponse("invalid csrf token", 403);
     }
     return handler(req, ctx);
@@ -181,15 +181,23 @@ const loginHandler = withMiddleware<"">(async (req) => {
 
     await audit({ agent_id: agent.id, action: "login_success", ip_address: ip });
 
-    // Create session: auth token (random UUID) + CSRF token (HMAC-signed)
+    // Create session: auth token (random UUID) + CSRF token (HMAC-signed, bound to session ID)
     const authToken = crypto.randomUUID();
-    const csrfToken = generateCsrfToken();
+
+    const sessionId = await write((db) => {
+      // Insert with a placeholder CSRF token first to get the session ID
+      const result = db.query(
+        `INSERT INTO auth_sessions (agent_id, token, csrf_token)
+         VALUES (?, ?, '')`,
+      ).run(agent.id, authToken);
+      return Number(result.lastInsertRowid);
+    });
+
+    // Generate CSRF token bound to the session ID for cross-user replay prevention
+    const csrfToken = generateCsrfToken(String(sessionId));
 
     await write((db) => {
-      db.query(
-        `INSERT INTO auth_sessions (agent_id, token, csrf_token)
-         VALUES (?, ?, ?)`,
-      ).run(agent.id, authToken, csrfToken);
+      db.query("UPDATE auth_sessions SET csrf_token = ? WHERE id = ?").run(csrfToken, sessionId);
     });
 
     return json({ token: authToken, csrf_token: csrfToken, agent_id: agent.id, username: agent.username });
@@ -337,6 +345,9 @@ const auditHandler = withAuth<"">((req) => {
 const server = Bun.serve({
   port: PORT,
   hostname: HOST,
+  // WebView tasks can take 30+ seconds; default 10s would kill long handlers.
+  // Max value is 255; 0 disables entirely (not recommended for production).
+  idleTimeout: 255,
 
   routes: {
     // Public routes (no auth)

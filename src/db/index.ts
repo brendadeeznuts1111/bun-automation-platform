@@ -202,6 +202,16 @@ export function migrate(): void {
 
 // --- Cleanup ---------------------------------------------------------------
 
+/**
+ * Close all database connections.
+ *
+ * The writer and reader connections are module-scoped (long-lived for the
+ * server's entire lifetime), so we use manual close() instead of `using`.
+ * Note: `using db = new Database(...)` calls close(true), which throws
+ * "database is locked" if prepared statements are still outstanding.
+ * Manual close() (without args) is safer — it lets statements finalize
+ * gracefully via GC.
+ */
 export function closeDB(): void {
   for (const r of readers) try { r.close(); } catch {}
   try { writer.close(); } catch {}
