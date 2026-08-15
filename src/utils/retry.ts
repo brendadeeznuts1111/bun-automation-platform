@@ -20,10 +20,6 @@ interface RetryOptions {
   onRetry?: (attempt: number, delay: number, err: unknown) => void;
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 function computeDelay(attempt: number, base: number, max: number, jitter: number): number {
   const exp = base * Math.pow(2, attempt - 1);
   const capped = Math.min(exp, max);
@@ -59,9 +55,12 @@ export async function withRetry<T>(fn: () => Promise<T>, opts: RetryOptions = {}
       }
       const delay = computeDelay(attempt, baseDelayMs, maxDelayMs, jitter);
       opts.onRetry?.(attempt, delay, err);
-      await sleep(delay);
+      // I4: Use Bun.sleep (native) instead of a setTimeout wrapper.
+      // Ref: node_modules/bun-types/bun.d.ts — Bun.sleep(ms: number | Date): Promise<void>
+      await Bun.sleep(delay);
     }
   }
 
-  throw lastErr;
+  // I5: Guard against maxAttempts=0 (loop body never runs, lastErr is undefined)
+  throw lastErr ?? new Error(`withRetry: maxAttempts=${maxAttempts} prevented any attempts`);
 }

@@ -456,6 +456,11 @@ const server = Bun.serve({
   // WebView tasks can take 30+ seconds; default 10s would kill long handlers.
   // Max value is 255; 0 disables entirely (not recommended for production).
   idleTimeout: 255,
+  // I3: Belt-and-suspenders with the Content-Length check in withMiddleware.
+  // Bun.serve's maxRequestBodySize catches chunked-encoding bodies that don't
+  // send Content-Length. Default is 128MB; we cap at 1MB (same as middleware).
+  // Ref: node_modules/bun-types/serve.d.ts
+  maxRequestBodySize: MAX_BODY_BYTES,
   // m5: Enable HMR + console relay in development (useful when dashboard is added)
   development: NODE_ENV === "development" ? { hmr: true, console: true } : undefined,
 

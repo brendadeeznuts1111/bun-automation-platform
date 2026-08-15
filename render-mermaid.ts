@@ -181,14 +181,25 @@ if (isUrl) {
   // doesn't support it, fall back to default. The fallback fetch will
   // auto-negotiate HTTP/2 via ALPN if BUN_FEATURE_FLAG_EXPERIMENTAL_HTTP2_CLIENT=1
   // is set (or --experimental-http2-fetch CLI flag), otherwise HTTP/1.1.
+  //
+  // Ref: https://bun.sh/blog/bun-v1.3.14#experimental-http-3-client-for-fetch
+  // Bun 1.3.14 added `protocol: "http3"` (also "h3") to fetch() as an
+  // experimental feature. The bun-types .d.ts in this install haven't been
+  // updated to include "http3" in the protocol union yet, so we cast.
   let content: string;
   try {
+    // JUSTIFIED: bun-types globals.d.ts only types protocol as "http2"|"http1.1"|"h2"|"h1"
+    // but Bun 1.3.14 added "http3"|"h3" per the v1.3.14 blog post. The cast
+    // bridges the gap until bun-types ships the updated union.
     const res = await fetch(inputArg, { protocol: "http3", ...tlsOpts } as any);
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
     content = await res.text();
     console.log(`  ${c.ok("h3")} ${content.length} bytes`);
-  } catch (e: any) {
-    console.log(`  ${c.warn("retry:")} HTTP/3 unavailable (${e.message}), using default`);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.log(`  ${c.warn("retry:")} HTTP/3 unavailable (${msg}), using default`);
+    // JUSTIFIED: tlsOpts shape is BunFetchRequestInit["tls"] which is valid for
+    // fetch() but not in the standard RequestInit type. Same gap as above.
     const res = await fetch(inputArg, tlsOpts as any);
     if (!res.ok) {
       console.error(`${c.err("error:")} fetch failed: ${res.status} ${res.statusText}`);
@@ -343,7 +354,7 @@ const watchdog = setTimeout(() => {
   killed = true;
   console.error(`${c.warn("watchdog:")} mmdc didn't exit after ${WATCHDOG_MS}ms — killing`);
   try {
-    process.kill(proc.pid!, "SIGKILL");
+    process.kill(proc.pid, "SIGKILL");
   } catch {
     // Already dead.
   }

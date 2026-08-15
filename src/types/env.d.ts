@@ -49,13 +49,13 @@ declare module "bun" {
     CIRCUIT_BREAKER_COOLDOWN_MS?: string;
 
     // --- CORS ---
-    /** Comma-separated allowed origins. Empty = allow all in dev. */
+    /** Comma-separated allowed origins for production. In dev, only localhost is allowed (G1). */
     CORS_ALLOWED_ORIGINS?: string;
 
     // --- Security ---
     /** HMAC secret for CSRF token signing. Required in production. */
     CSRF_SECRET?: string;
-    /** Trust X-Forwarded-For / CF-Connecting-IP headers. Default: "false" */
+    /** Trust X-Forwarded-For / CF-Connecting-IP headers. Default: "true" (set to "false" to disable) */
     TRUST_PROXY_HEADERS?: string;
 
     // --- WebView task execution ---
