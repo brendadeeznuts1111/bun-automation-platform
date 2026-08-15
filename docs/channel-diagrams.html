@@ -713,6 +713,277 @@ ol &gt; li::marker { content: counters(ol-item, &quot;.&quot;) &quot;. &quot;; }
 <blockquote>
 <p><strong>Warning:</strong> CSS <code>counters()</code> does NOT respect <code>start</code> on nested <code>&lt;ol&gt;</code> elements in all browsers. Safari and Firefox handle this differently. For reliable cross-browser <code>1.2.3</code> numbering with non-1 starts, use <code>Bun.markdown.render()</code> to generate explicit marker text.</p>
 </blockquote>
+<h2 id="tables-deep-edge-cases">Tables — Deep Edge Cases</h2>
+<p>Tested 17 table edge cases against <code>Bun.markdown.html()</code>.</p>
+<h3 id="table-structure-requirements">Table structure requirements</h3>
+<table>
+<thead>
+<tr><th>Pattern</th><th>Works?</th><th>Notes</th></tr>
+</thead>
+<tbody>
+<tr><td>Standard (header + separator + body)</td><td>Yes</td><td><code>| a |\n|---|\n| 1 |</code></td></tr>
+<tr><td>Header only (no body)</td><td>Yes</td><td><code>&lt;table&gt;&lt;thead&gt;...&lt;/thead&gt;&lt;/table&gt;</code> (empty tbody)</td></tr>
+<tr><td>No separator row</td><td>No</td><td>Treated as paragraph text</td></tr>
+<tr><td>No header row</td><td>No</td><td>Treated as paragraph text</td></tr>
+<tr><td>Single column</td><td>Yes</td><td><code>| a |\n|---|\n| 1 |</code></td></tr>
+<tr><td>Empty cells</td><td>Yes</td><td><code>| |</code> → <code>&lt;td&gt;&lt;/td&gt;</code></td></tr>
+</tbody>
+</table>
+<h3 id="table-alignment">Table alignment</h3>
+<table>
+<thead>
+<tr><th>Syntax</th><th>Align</th><th>Output attribute</th></tr>
+</thead>
+<tbody>
+<tr><td><code>|:---|</code></td><td>left</td><td><code>align=&quot;left&quot;</code></td></tr>
+<tr><td><code>|:--:|</code></td><td>center</td><td><code>align=&quot;center&quot;</code></td></tr>
+<tr><td><code>|---:|</code></td><td>right</td><td><code>align=&quot;right&quot;</code></td></tr>
+<tr><td><code>|---|</code></td><td>default</td><td>no align attribute</td></tr>
+</tbody>
+</table>
+<p>The <code>render()</code> API exposes alignment via <code>th(children, meta)</code> and <code>td(children, meta)</code> where <code>meta.align</code> is <code>&quot;left&quot;</code>, <code>&quot;center&quot;</code>, <code>&quot;right&quot;</code>, or absent.</p>
+<h3 id="table-content-support">Table content support</h3>
+<table>
+<thead>
+<tr><th>Content type</th><th>Works in cells?</th><th>Example</th></tr>
+</thead>
+<tbody>
+<tr><td>Links</td><td>Yes</td><td><code>| [text](url) |</code></td></tr>
+<tr><td>Inline code</td><td>Yes</td><td><code>| \</code>code` |`</td></tr>
+<tr><td>HTML</td><td>Yes</td><td><code>| &lt;strong&gt;bold&lt;/strong&gt; |</code></td></tr>
+<tr><td>Emoji</td><td>Yes</td><td><code>| 🔥 |</code></td></tr>
+<tr><td>Line breaks</td><td>Yes</td><td><code>| line1&lt;br&gt;line2 |</code></td></tr>
+<tr><td>Escaped pipes</td><td>Yes</td><td>`| a \</td></tr>
+</tbody>
+</table>
+<h3 id="table-bugs">Table bugs</h3>
+<blockquote>
+<p><strong>Warning: Variable column count breaks the table.</strong> If the header has 3 columns but a body row has 2, the entire table is NOT rendered — it becomes a paragraph. All rows must have the same number of columns.</p>
+</blockquote>
+<blockquote>
+<p><strong>Warning: Extra leading/trailing pipes break the table.</strong> <code>\|\| a \|\|</code> is NOT rendered as a table. Use exactly one pipe per column boundary.</p>
+</blockquote>
+<blockquote>
+<p><strong>Warning: Pipes inside inline code break table cells.</strong> <code>\| \</code>a|b` |<code>splits into two cells. The backtick does not protect the pipe. Escape with</code>\|<code>instead, but this produces literal</code>\|` in the output — there is no clean workaround for pipes in code within tables.</p>
+</blockquote>
+<h3 id="tables-inside-other-blocks">Tables inside other blocks</h3>
+<table>
+<thead>
+<tr><th>Container</th><th>Works?</th><th>Notes</th></tr>
+</thead>
+<tbody>
+<tr><td>Inside list item (loose)</td><td>Yes</td><td>Requires blank line before table</td></tr>
+<tr><td>Inside blockquote</td><td>Yes</td><td>Each row prefixed with <code>&gt;</code></td></tr>
+</tbody>
+</table>
+<h2 id="blockquotes-deep-edge-cases">Blockquotes — Deep Edge Cases</h2>
+<p>Tested 9 blockquote edge cases.</p>
+<table>
+<thead>
+<tr><th>Pattern</th><th>Works?</th><th>Output</th><th>Notes</th></tr>
+</thead>
+<tbody>
+<tr><td>Nested 2 levels</td><td>Yes</td><td><code>&lt;blockquote&gt;&lt;blockquote&gt;</code></td><td><code>&gt; outer\n&gt; &gt; inner</code></td></tr>
+<tr><td>Nested 3 levels</td><td>Yes</td><td><code>&lt;blockquote&gt;&lt;blockquote&gt;&lt;blockquote&gt;</code></td><td><code>&gt; L1\n&gt; &gt; L2\n&gt; &gt; &gt; L3</code></td></tr>
+<tr><td>With ordered list</td><td>Yes</td><td><code>&lt;blockquote&gt;&lt;ol&gt;</code></td><td><code>&gt; 1. First\n&gt; 2. Second</code></td></tr>
+<tr><td>With code block</td><td>Yes</td><td><code>&lt;blockquote&gt;&lt;pre&gt;&lt;code&gt;</code></td><td><code>&gt; \</code>``ts\n&gt; code\n&gt; ````</td></tr>
+<tr><td>With table</td><td>Yes</td><td><code>&lt;blockquote&gt;&lt;table&gt;</code></td><td><code>&gt; | a |\n&gt; |---|\n&gt; | 1 |</code></td></tr>
+<tr><td>With heading</td><td>Yes</td><td><code>&lt;blockquote&gt;&lt;h1&gt;</code></td><td><code>&gt; # Heading</code></td></tr>
+<tr><td>With task list</td><td>Yes</td><td><code>&lt;blockquote&gt;&lt;ul&gt;&lt;li class=task-list-item&gt;</code></td><td><code>&gt; - [x] Done</code></td></tr>
+<tr><td>Multiple paragraphs</td><td>Yes</td><td><code>&lt;blockquote&gt;&lt;p&gt;...&lt;/p&gt;&lt;p&gt;...&lt;/p&gt;</code></td><td><code>&gt; Para 1\n&gt;\n&gt; Para 2</code></td></tr>
+<tr><td>Lazy continuation</td><td>Yes</td><td>Included in blockquote</td><td><code>&gt; First\nSecond</code> (no <code>&gt;</code> on 2nd line)</td></tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Note:</strong> Blockquotes support all GFM features inside them — lists, tables, code blocks, task lists, headings, and nested blockquotes all work correctly.</p>
+</blockquote>
+<h2 id="strikethrough-deep-edge-cases">Strikethrough — Deep Edge Cases</h2>
+<p>Tested 8 strikethrough edge cases.</p>
+<table>
+<thead>
+<tr><th>Pattern</th><th>Works?</th><th>Output</th><th>Notes</th></tr>
+</thead>
+<tbody>
+<tr><td>Single word <code>~~word~~</code></td><td>Yes</td><td><code>&lt;del&gt;word&lt;/del&gt;</code></td><td></td></tr>
+<tr><td>Multiple words</td><td>Yes</td><td><code>&lt;del&gt;multiple words&lt;/del&gt;</code></td><td></td></tr>
+<tr><td>In heading <code>## ~~deprecated~~ API</code></td><td>Yes</td><td><code>&lt;h2&gt;&lt;del&gt;deprecated&lt;/del&gt; API&lt;/h2&gt;</code></td><td></td></tr>
+<tr><td>Nested with bold <code>**bold ~~struck~~**</code></td><td>Yes</td><td><code>&lt;strong&gt;bold &lt;del&gt;struck&lt;/del&gt;&lt;/strong&gt;</code></td><td></td></tr>
+<tr><td>With code <code>~~\</code>old`~~`</td><td>Yes</td><td><code>&lt;del&gt;&lt;code&gt;old&lt;/code&gt;&lt;/del&gt;</code></td><td></td></tr>
+<tr><td>Unclosed <code>~~unclosed</code></td><td>No</td><td>Literal <code>~~unclosed</code></td><td>No closing <code>~~</code></td></tr>
+<tr><td>Single tilde <code>~text~</code></td><td>Yes</td><td><code>&lt;del&gt;text&lt;/del&gt;</code></td><td><strong>Bug: should NOT strike</strong></td></tr>
+<tr><td>Triple tilde <code>~~~text~~~</code></td><td>No</td><td>Code block with lang <code>text~~~</code></td><td>Parsed as fenced code</td></tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Warning: Single tilde <code>~text~</code> incorrectly renders as strikethrough.</strong> The GFM spec requires double tilde <code>~~</code> for strikethrough. Single tilde should be literal text. This is a parser bug in md4c/Bun.markdown.</p>
+</blockquote>
+<blockquote>
+<p><strong>Warning: Triple tilde <code>~~~text~~~</code> is parsed as a fenced code block</strong> (tilde-fenced), not strikethrough. Use <code>~~</code> (exactly two) for strikethrough.</p>
+</blockquote>
+<h2 id="autolinks-deep-edge-cases">Autolinks — Deep Edge Cases</h2>
+<p>Tested 14 autolink edge cases with <code>autolinks: true</code>.</p>
+<table>
+<thead>
+<tr><th>Pattern</th><th>Autolinks?</th><th>Notes</th></tr>
+</thead>
+<tbody>
+<tr><td><code>http://example.com</code></td><td>Yes</td><td>Bare URL</td></tr>
+<tr><td><code>https://example.com</code></td><td>Yes</td><td>HTTPS scheme</td></tr>
+<tr><td>URL with path</td><td>Yes</td><td><code>https://example.com/path</code></td></tr>
+<tr><td>URL with query string</td><td>Yes</td><td><code>?q=1&amp;r=2</code> → <code>&amp;amp;</code> in href</td></tr>
+<tr><td>URL with fragment</td><td>Yes</td><td><code>#section</code></td></tr>
+<tr><td>Email</td><td>Yes</td><td><code>mailto:</code> prefix added</td></tr>
+<tr><td><code>www.example.com</code></td><td>Yes</td><td><code>http://</code> prefix added</td></tr>
+<tr><td>URL in inline code</td><td>No</td><td>Protected by backticks</td></tr>
+<tr><td>URL in explicit link</td><td>No</td><td>Already a link</td></tr>
+<tr><td>URL in parentheses</td><td>Yes</td><td><code>(https://...)</code> → parens preserved</td></tr>
+<tr><td>Trailing punctuation</td><td>Yes</td><td><code>https://example.com.</code> → period excluded</td></tr>
+<tr><td>Trailing close paren</td><td>Yes</td><td><code>https://example.com)</code> → paren excluded</td></tr>
+<tr><td>Multiple URLs</td><td>Yes</td><td>Both linked</td></tr>
+<tr><td>Unicode in URL path</td><td>No</td><td><code>https://example.com/üñîçødé</code> not linked</td></tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Warning: URLs with Unicode characters in the path are NOT autolinked.</strong> This is a parser limitation — use explicit <code>[text](url)</code> links for Unicode URLs.</p>
+</blockquote>
+<blockquote>
+<p><strong>Note:</strong> Autolinks correctly handle trailing punctuation (<code>.</code>, <code>,</code>, <code>!</code>, <code>?</code>) and closing parentheses — they are excluded from the URL.</p>
+</blockquote>
+<h2 id="code-blocks-deep-edge-cases">Code Blocks — Deep Edge Cases</h2>
+<p>Tested 11 code block edge cases.</p>
+<table>
+<thead>
+<tr><th>Pattern</th><th>Works?</th><th>Output</th><th>Notes</th></tr>
+</thead>
+<tbody>
+<tr><td>Fenced, no language</td><td>Yes</td><td><code>&lt;pre&gt;&lt;code&gt;</code> (no class)</td><td></td></tr>
+<tr><td>Fenced with language</td><td>Yes</td><td><code>class=&quot;language-ts&quot;</code></td><td></td></tr>
+<tr><td>Fenced with info string</td><td>Partial</td><td><code>class=&quot;language-ts&quot;</code> only</td><td>Info string after lang is ignored</td></tr>
+<tr><td>Tilde-fenced <code>~~~ts</code></td><td>Yes</td><td>Same as backtick-fenced</td><td></td></tr>
+<tr><td>4 backticks with ``` inside</td><td>Yes</td><td>Inner ``` preserved as text</td><td></td></tr>
+<tr><td>Nested fences (4 outer, 3 inner)</td><td>Yes</td><td>Inner fence is literal text</td><td></td></tr>
+<tr><td>Indented code (4 spaces)</td><td>Yes</td><td><code>&lt;pre&gt;&lt;code&gt;</code></td><td></td></tr>
+<tr><td>HTML in code block</td><td>Yes</td><td>HTML-escaped <code>&amp;lt;div&amp;gt;</code></td><td></td></tr>
+<tr><td>Empty code block</td><td>Yes</td><td><code>&lt;pre&gt;&lt;code&gt;&lt;/code&gt;&lt;/pre&gt;</code></td><td></td></tr>
+<tr><td>Trailing newline in code</td><td>Yes</td><td>Preserved</td><td></td></tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Note:</strong> The info string after the language (e.g. <code>```ts title=&quot;test&quot;</code>) is parsed but only the language is used for the class attribute. The rest (<code>title=&quot;test&quot;</code>) is silently dropped.</p>
+</blockquote>
+<blockquote>
+<p><strong>Note:</strong> To include literal <code>inside a code block, use 4+ backticks for the outer fence: ` ```` \n</code>ts \n inner \n ``` \n ```` `.</p>
+</blockquote>
+<h2 id="links-images-deep-edge-cases">Links &amp; Images — Deep Edge Cases</h2>
+<p>Tested 7 link/image edge cases.</p>
+<table>
+<thead>
+<tr><th>Pattern</th><th>Works?</th><th>Notes</th></tr>
+</thead>
+<tbody>
+<tr><td>Inline link with title <code>[text](url &quot;Title&quot;)</code></td><td>Yes</td><td><code>title</code> attribute added</td></tr>
+<tr><td>Reference link <code>[text][ref]</code></td><td>Yes</td><td>Case-insensitive ref matching</td></tr>
+<tr><td>Shortcut link <code>[url]</code></td><td>Partial</td><td>Autolinks the URL but keeps brackets</td></tr>
+<tr><td>Collapsed link <code>[text][]</code></td><td>No</td><td>Not recognized — renders as literal</td></tr>
+<tr><td>Link with ampersand</td><td>Yes</td><td><code>&amp;</code> → <code>&amp;amp;</code> in href</td></tr>
+<tr><td>Image with title</td><td>Yes</td><td><code>title</code> attribute on <code>&lt;img&gt;</code></td></tr>
+<tr><td>Image reference</td><td>Yes</td><td><code>![alt][ref]</code> with <code>[ref]: url</code></td></tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Warning: Collapsed reference links <code>[text][]</code> are NOT supported.</strong> The parser does not recognize the empty <code>[]</code> as a reference to a link definition with the same name as the link text. Use <code>[text][text]</code> or <code>[text]</code> (shortcut) instead.</p>
+</blockquote>
+<h2 id="raw-html-in-markdown">Raw HTML in Markdown</h2>
+<p><code>Bun.markdown.html()</code> passes raw HTML through by default (unless <code>noHtmlBlocks</code>/<code>noHtmlSpans</code> is set).</p>
+<table>
+<thead>
+<tr><th>HTML</th><th>Passed through?</th><th>Notes</th></tr>
+</thead>
+<tbody>
+<tr><td><code>&lt;div&gt;...&lt;/div&gt;</code></td><td>Yes</td><td>Block-level HTML preserved</td></tr>
+<tr><td>Multiline <code>&lt;div&gt;</code></td><td>Yes</td><td>Inner content is parsed as markdown</td></tr>
+<tr><td><code>&lt;script&gt;alert(1)&lt;/script&gt;</code></td><td>Yes</td><td><strong>Security: XSS risk</strong></td></tr>
+<tr><td><code>&lt;details&gt;&lt;summary&gt;</code></td><td>Yes</td><td>Interactive elements work</td></tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Warning: Raw HTML including <code>&lt;script&gt;</code> tags is passed through unchanged.</strong> This is a potential XSS vector if rendering untrusted user input. Use <code>tagFilter: true</code> or <code>noHtmlBlocks: true</code> / <code>noHtmlSpans: true</code> to disable raw HTML when processing untrusted content.</p>
+</blockquote>
+<h2 id="headings-deep-edge-cases">Headings — Deep Edge Cases</h2>
+<p>Tested 9 heading edge cases with <code>headings: { ids: true }</code>.</p>
+<table>
+<thead>
+<tr><th>Pattern</th><th>Works?</th><th>ID generated</th><th>Notes</th></tr>
+</thead>
+<tbody>
+<tr><td><code># H1</code> through <code>###### H6</code></td><td>Yes</td><td>Slug from text</td><td>6 levels supported</td></tr>
+<tr><td><code>####### H7</code></td><td>No</td><td>N/A</td><td>7 <code>#</code> is not a heading — renders as paragraph</td></tr>
+<tr><td>Heading with code <code>## \</code>code` heading`</td><td>Yes</td><td><code>code-heading</code></td><td>Code stripped from ID</td></tr>
+<tr><td>Heading with link <code>## [Link](url) heading</code></td><td>Yes</td><td><code>link-heading</code></td><td>Link text used for ID</td></tr>
+<tr><td>Heading with emoji <code>## 🔥 Heading</code></td><td>Yes</td><td><code>heading</code></td><td>Emoji stripped from ID</td></tr>
+<tr><td>Closed heading <code>## Heading ##</code></td><td>Yes</td><td><code>heading</code></td><td>Trailing <code>##</code> stripped</td></tr>
+<tr><td>No space <code>##NoSpace</code></td><td>No</td><td>N/A</td><td>Requires space after <code>#</code></td></tr>
+<tr><td>Setext h2 <code>Heading\n--------</code></td><td>Yes</td><td><code>heading</code></td><td>Underline style</td></tr>
+<tr><td>Setext h1 <code>Heading\n========</code></td><td>Yes</td><td><code>heading</code></td><td>Underline style</td></tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Note:</strong> Heading ID slugs are generated by lowercasing the text, removing non-alphanumeric characters, and replacing spaces with hyphens. Emoji and code formatting are stripped before slug generation.</p>
+</blockquote>
+<h2 id="bunmarkdownansi-terminal-output">Bun.markdown.ansi() — Terminal Output</h2>
+<p><code>Bun.markdown.ansi()</code> renders markdown into ANSI-colored terminal output with Unicode box-drawing for tables, colored headings, and syntax-highlighted code blocks.</p>
+<pre><code class="language-ts">import { write } from &quot;bun&quot;;
+
+const md = &quot;# Title\n\n| Col A | Col B |\n|-------|-------|\n| 1 | 2 |\n\n- [x] Done\n- [ ] Todo&quot;;
+const ansi = Bun.markdown.ansi(md);
+await write(Bun.stdout, ansi);
+</code></pre>
+<p>Features rendered by <code>ansi()</code>:</p>
+<ul>
+<li>Headings: bold + colored (magenta for h1, cyan for h2)</li>
+<li>Tables: Unicode box-drawing characters (<code>┌─┬─┐│├─┼─┤└─┴─┘</code>)</li>
+<li>Task lists: <code>☒</code> (checked) and <code>☐</code> (unchecked) with green/gray colors</li>
+<li>Ordered lists: numbered with cyan markers</li>
+<li>Blockquotes: <code>│</code> prefix with gray/dim styling</li>
+<li>Strikethrough: ANSI dim/strikethrough escape sequence</li>
+<li>Bold and italic: ANSI escape sequences</li>
+<li>Links: blue + underlined with URL in dim parens</li>
+<li>Code blocks: bordered with <code>┌─</code> / <code>│</code> / <code>└─</code> and syntax-highlighted</li>
+<li>Inline code: highlighted background + foreground color</li>
+</ul>
+<blockquote>
+<p><strong>Note:</strong> <code>Bun.markdown.ansi()</code> enables all GFM features by default (tables, strikethrough, tasklists) plus wikilinks, underline, and LaTeX math. It is the most feature-complete renderer.</p>
+</blockquote>
+<h2 id="render-callback-execution-order-1">render() Callback Execution Order</h2>
+<p>All callbacks fire inside-out (deepest children first). For a table:</p>
+<pre><code>th(depth=cell) → tr → thead → td(depth=cell) → tr → tbody → table
+</code></pre>
+<p>For nested lists:</p>
+<pre><code>listItem(depth=N) → list(depth=N) → ... → listItem(depth=0) → list(depth=0)
+</code></pre>
+<p>This guarantees <code>children</code> is always a complete HTML string when the parent callback fires.</p>
+<h3 id="full-render-callback-reference">Full render() callback reference</h3>
+<table>
+<thead>
+<tr><th>Callback</th><th>Meta</th><th>Fires for</th></tr>
+</thead>
+<tbody>
+<tr><td><code>heading(children, { level, id? })</code></td><td>level 1-6, id when enabled</td><td><code># H1</code> through <code>###### H6</code></td></tr>
+<tr><td><code>paragraph(children)</code></td><td>—</td><td>Paragraphs</td></tr>
+<tr><td><code>blockquote(children)</code></td><td>—</td><td><code>&gt; quote</code></td></tr>
+<tr><td><code>code(children, { language? })</code></td><td>info string lang</td><td>Fenced and indented code</td></tr>
+<tr><td><code>list(children, { ordered, start?, depth })</code></td><td>nesting level</td><td><code>&lt;ol&gt;</code> / <code>&lt;ul&gt;</code></td></tr>
+<tr><td><code>listItem(children, { index, depth, ordered, start?, checked? })</code></td><td>full list meta</td><td><code>&lt;li&gt;</code></td></tr>
+<tr><td><code>hr(children)</code></td><td>—</td><td><code>---</code></td></tr>
+<tr><td><code>table(children)</code></td><td>—</td><td>GFM table</td></tr>
+<tr><td><code>thead(children)</code></td><td>—</td><td>Table header</td></tr>
+<tr><td><code>tbody(children)</code></td><td>—</td><td>Table body</td></tr>
+<tr><td><code>tr(children)</code></td><td>—</td><td>Table row</td></tr>
+<tr><td><code>th(children, { align? })</code></td><td>left/center/right</td><td>Table header cell</td></tr>
+<tr><td><code>td(children, { align? })</code></td><td>left/center/right</td><td>Table data cell</td></tr>
+<tr><td><code>html(children)</code></td><td>—</td><td>Raw HTML block</td></tr>
+</tbody>
+</table>
 <h2 id="related">Related</h2>
 <ul>
 <li><a href="https://bun.com/docs/runtime/markdown">Bun.markdown docs</a> — GFM parser used for this page</li>
