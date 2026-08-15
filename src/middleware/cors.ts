@@ -14,7 +14,7 @@ const ALLOWED_ORIGINS = (process.env.CORS_ALLOWED_ORIGINS ?? "")
 /** Check if an origin is allowed. */
 function isAllowedOrigin(origin: string | null): boolean {
   if (!origin) return false;
-  if (NODE_ENV === "development") return true;
+  if (NODE_ENV !== "production") return true;
   if (ALLOWED_ORIGINS.length === 0) return false;
   return ALLOWED_ORIGINS.includes(origin);
 }

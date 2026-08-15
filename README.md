@@ -2,7 +2,7 @@
 
 [![Bun](https://img.shields.io/badge/Bun-v1.3.14-black?logo=bun)](https://bun.com)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue?logo=typescript)](https://www.typescriptlang.org)
-[![Tests](https://img.shields.io/badge/Tests-33%20passed-success)](https://bun.com/docs/cli/test)
+[![Tests](https://img.shields.io/badge/Tests-56%20passed-success)](https://bun.com/docs/cli/test)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 A production-grade browser automation platform built natively on **Bun v1.3.14+**. Orchestrates headless browser sessions, processes screenshots via `Bun.Image`, provides atomic SQLite persistence with WAL mode, and exposes a high-performance REST API. Includes an automated Mermaid diagram rendering pipeline and architecture blueprints.
@@ -115,10 +115,13 @@ bun run check
 | Test Suite | File | Description |
 |:---|:---|:---|
 | **Server Integration** | [`tests/server.test.ts`](tests/server.test.ts) | End-to-end HTTP endpoint verification (`/health`, `/metrics`, `/tasks`, `/audit`) |
-| **Native APIs & CLI** | [`tests/bun-apis.test.ts`](tests/bun-apis.test.ts) | Password hashing, CSRF, color formatting, compression, hashing, and markdown |
+| **Shell & Processes** | [`tests/shell-process.test.ts`](tests/shell-process.test.ts) | `Bun.$` shell execution, pipes, `Bun.spawn` / `Bun.spawnSync`, `mock()`, `spyOn()`, `setSystemTime()` |
+| **Native APIs & CLI** | [`tests/bun-apis.test.ts`](tests/bun-apis.test.ts) | Password hashing, CSRF, color formatting, compression, hashing, markdown, and heap profiling |
 | **Rate Limiter** | [`tests/rate-limit.test.ts`](tests/rate-limit.test.ts) | Atomic SQLite sliding-window concurrency and threshold enforcement |
 | **Circuit Breaker** | [`tests/circuit-breaker.test.ts`](tests/circuit-breaker.test.ts) | Per-host failure threshold tracking, tripping, and reset transitions |
 | **Image Pipeline** | [`tests/image.test.ts`](tests/image.test.ts) | `Bun.Image` resizing, WebP compression, and metadata generation |
+| **CORS Middleware** | [`tests/cors.test.ts`](tests/cors.test.ts) | Origin validation, preflight options handling, and header injection |
+| **Database & Audit** | [`tests/db.test.ts`](tests/db.test.ts) | WAL mode concurrency, read pool load, write mutex serialization, and audit queries |
 | **Retry Helper** | [`tests/retry.test.ts`](tests/retry.test.ts) | Exponential backoff, jitter calculation, and error filtering |
 
 ---
