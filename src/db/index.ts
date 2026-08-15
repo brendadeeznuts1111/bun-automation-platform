@@ -159,6 +159,22 @@ const MIGRATIONS: { version: number; sql: string }[] = [
       );
     `,
   },
+  {
+    version: 2,
+    sql: `
+      CREATE TABLE IF NOT EXISTS auth_sessions (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        agent_id    INTEGER NOT NULL REFERENCES agents(id),
+        token       TEXT NOT NULL UNIQUE,
+        csrf_token  TEXT NOT NULL,
+        created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+        expires_at  TEXT NOT NULL DEFAULT (datetime('now', '+24 hours'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_auth_sessions_agent ON auth_sessions(agent_id);
+      CREATE INDEX IF NOT EXISTS idx_auth_sessions_token ON auth_sessions(token);
+    `,
+  },
 ];
 
 export function migrate(): void {

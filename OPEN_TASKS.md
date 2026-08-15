@@ -33,21 +33,15 @@ Each task cites the specific Bun API/doc that grounds it.
 
 ## B. Security (Critical)
 
-### B1. Auth middleware — token verification on all endpoints
+### B1. Auth middleware — token verification on all endpoints — [RESOLVED ✅]
 
-**Current:** `/login` returns a base64 token (`btoa(agent_id:timestamp:uuid)`), but no endpoint checks it. Anyone can create tasks, list sessions, view audit logs.
+**Current:** `src/middleware/auth.ts` implements Bearer token verification. Login creates a session in the `auth_sessions` table with a UUID token. All routes except `/health`, `/metrics`, and `/login` require `Authorization: Bearer <token>`. The `withAuth` and `withCsrf` middleware wrappers enforce this at the route level.
 
-**Doc pattern:** `Bun.serve` routes receive a `BunRequest` with `req.headers`. Add a middleware that extracts `Authorization: Bearer <token>`, decodes it, validates the agent_id exists, and rejects with 401.
+### B2. CSRF protection via `Bun.CSRF` — [RESOLVED ✅]
 
-**Action:** Create `src/middleware/auth.ts`. Apply to all routes except `/login` and `/health`. Store tokens in a `sessions` table (or use signed JWT via `Bun.CSRF` — see B3).
+**Current:** `src/middleware/csrf.ts` uses `Bun.CSRF.generate()` and `Bun.CSRF.verify()` with HMAC-signed tokens. Login returns a `csrf_token` alongside the auth token. All state-changing routes (POST) require `X-CSRF-Token` header via the `withCsrf` middleware wrapper.
 
-### B2. CSRF protection via `Bun.CSRF`
-
-**Doc pattern:** `Bun.CSRF.generate(secret, { sessionId })` → token. `Bun.CSRF.verify(token, { secret, sessionId })` → boolean. HMAC-signed with expiration. Bind to session ID to prevent cross-user replay.
-
-**Action:** Generate CSRF token on login, return it alongside the auth token. Require it on all state-changing requests (POST/PUT/DELETE) via `X-CSRF-Token` header.
-
-**Ref:** https://bun.com/docs/runtime/csrf
+**Note:** Bun v1.3.14 accepts but does not enforce `sessionId` binding in CSRF tokens. When Bun enforces this, update `generateCsrfToken`/`verifyCsrfToken` to pass the session ID.
 
 ### B3. Credential encryption via `Bun.secrets`
 

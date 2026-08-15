@@ -12,6 +12,7 @@
  * - Circuit breaker (in workers)
  *
  * Plus the worker pool for Week 3 scalability.
+ * Auth (B1) + CSRF (B2) middleware on all protected routes.
  */
 
 import type { BunRequest } from "bun";
@@ -19,6 +20,8 @@ import { migrate, read, write } from "./db";
 import { audit, getAuditLog } from "./db/audit";
 import { checkRateLimit, cleanupRateLimits } from "./middleware/rate-limit";
 import { handlePreflight, withCors } from "./middleware/cors";
+import { verifyAuth, type AuthContext } from "./middleware/auth";
+import { generateCsrfToken, checkCsrf } from "./middleware/csrf";
 import { installShutdownHandlers, isShuttingDown } from "./utils/shutdown";
 import { initWorkerPool, submitTask, getPoolStatus } from "./workers/pool";
 import { serveScreenshot } from "./utils/image";
@@ -61,13 +64,15 @@ function errorResponse(msg: string, status: number): Response {
   return Response.json({ error: msg }, { status });
 }
 
+type RouteHandler<T extends string> = (req: BunRequest<T>) => Response | Promise<Response>;
+
 /**
- * Wrap a route handler with rate limiting and CORS.
- * CORS preflight (OPTIONS) is handled in the fetch fallback for unmatched routes.
+ * Base middleware: rate limiting + CORS.
+ * Applied to all routes.
  */
 function withMiddleware<T extends string>(
-  handler: (req: BunRequest<T>) => Response | Promise<Response>,
-): (req: BunRequest<T>) => Promise<Response> {
+  handler: RouteHandler<T>,
+): RouteHandler<T> {
   return async (req) => {
     const ip = getClientIP(req);
     const path = new URL(req.url).pathname;
@@ -80,6 +85,37 @@ function withMiddleware<T extends string>(
     const res = await handler(req);
     return withCors(req, res);
   };
+}
+
+/**
+ * Auth-required middleware: rejects 401 if no valid session.
+ * Passes the AuthContext to the handler via a closure.
+ */
+function withAuth<T extends string>(
+  handler: (req: BunRequest<T>, ctx: AuthContext) => Response | Promise<Response>,
+): RouteHandler<T> {
+  return withMiddleware(async (req) => {
+    const ctx = verifyAuth(req);
+    if (!ctx) {
+      return errorResponse("unauthorized", 401);
+    }
+    return handler(req, ctx);
+  });
+}
+
+/**
+ * CSRF-protected middleware: requires auth + valid CSRF token.
+ * Use on state-changing routes (POST/PUT/DELETE).
+ */
+function withCsrf<T extends string>(
+  handler: (req: BunRequest<T>, ctx: AuthContext) => Response | Promise<Response>,
+): RouteHandler<T> {
+  return withAuth(async (req, ctx) => {
+    if (!checkCsrf(req)) {
+      return errorResponse("invalid csrf token", 403);
+    }
+    return handler(req, ctx);
+  });
 }
 
 // --- Route Handlers --------------------------------------------------------
@@ -145,15 +181,24 @@ const loginHandler = withMiddleware<"">(async (req) => {
 
     await audit({ agent_id: agent.id, action: "login_success", ip_address: ip });
 
-    // Simple session token (in production, use signed JWT or similar)
-    const token = btoa(`${agent.id}:${Date.now()}:${crypto.randomUUID()}`);
-    return json({ token, agent_id: agent.id, username: agent.username });
+    // Create session: auth token (random UUID) + CSRF token (HMAC-signed)
+    const authToken = crypto.randomUUID();
+    const csrfToken = generateCsrfToken();
+
+    await write((db) => {
+      db.query(
+        `INSERT INTO auth_sessions (agent_id, token, csrf_token)
+         VALUES (?, ?, ?)`,
+      ).run(agent.id, authToken, csrfToken);
+    });
+
+    return json({ token: authToken, csrf_token: csrfToken, agent_id: agent.id, username: agent.username });
   } catch {
     return errorResponse("invalid request body", 400);
   }
 });
 
-const listTasksHandler = withMiddleware<"">((req) => {
+const listTasksHandler = withAuth<"">((req) => {
   const url = new URL(req.url);
   const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "50", 10), 200);
   const offset = parseInt(url.searchParams.get("offset") ?? "0", 10);
@@ -180,7 +225,7 @@ const listTasksHandler = withMiddleware<"">((req) => {
   return json({ tasks, total, limit, offset });
 });
 
-const createTaskHandler = withMiddleware<"">(async (req) => {
+const createTaskHandler = withCsrf<"">(async (req, _ctx) => {
   try {
     const body = await req.json() as {
       agent_id: number;
@@ -229,7 +274,7 @@ const createTaskHandler = withMiddleware<"">(async (req) => {
   }
 });
 
-const getTaskHandler = withMiddleware<"/task/:id">((req) => {
+const getTaskHandler = withAuth<"/task/:id">((req) => {
   const taskId = parseInt(req.params.id, 10);
   const task = read((db) => {
     return db.query("SELECT * FROM tasks WHERE id = ?").get(taskId);
@@ -239,7 +284,7 @@ const getTaskHandler = withMiddleware<"/task/:id">((req) => {
   return json(task);
 });
 
-const listSessionsHandler = withMiddleware<"">((req) => {
+const listSessionsHandler = withAuth<"">((req) => {
   const url = new URL(req.url);
   const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "50", 10), 200);
   const offset = parseInt(url.searchParams.get("offset") ?? "0", 10);
@@ -254,7 +299,7 @@ const listSessionsHandler = withMiddleware<"">((req) => {
   return json({ sessions, limit, offset });
 });
 
-const getScreenshotHandler = withMiddleware<"/screenshot/:id">((req) => {
+const getScreenshotHandler = withAuth<"/screenshot/:id">((req) => {
   const sessionId = parseInt(req.params.id, 10);
   const session = read((db) => {
     return db.query("SELECT screenshot_path FROM sessions WHERE id = ?").get(sessionId) as
@@ -277,7 +322,7 @@ const getScreenshotHandler = withMiddleware<"/screenshot/:id">((req) => {
   }
 });
 
-const auditHandler = withMiddleware<"">((req) => {
+const auditHandler = withAuth<"">((req) => {
   const url = new URL(req.url);
   const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "50", 10), 200);
   const offset = parseInt(url.searchParams.get("offset") ?? "0", 10);
@@ -294,11 +339,14 @@ const server = Bun.serve({
   hostname: HOST,
 
   routes: {
+    // Public routes (no auth)
     "/health": { GET: healthHandler },
     "/metrics": { GET: metricsHandler },
     "/login": { POST: loginHandler },
+
+    // Auth-required routes
     "/tasks": { GET: listTasksHandler },
-    "/task": { POST: createTaskHandler },
+    "/task": { POST: createTaskHandler },       // also requires CSRF
     "/task/:id": { GET: getTaskHandler },
     "/sessions": { GET: listSessionsHandler },
     "/screenshot/:id": { GET: getScreenshotHandler },
@@ -321,12 +369,12 @@ installShutdownHandlers(server);
 
 console.log(`[server] listening on http://${HOST}:${PORT}`);
 console.log(`[server] endpoints:`);
-console.log(`  GET  /health         — health check + worker pool status`);
-console.log(`  GET  /metrics        — Prometheus-format metrics`);
-console.log(`  POST /login          — agent authentication`);
-console.log(`  GET  /tasks          — list tasks (pagination + status filter)`);
-console.log(`  POST /task           — create task (dispatches to worker pool)`);
-console.log(`  GET  /task/:id       — get task by ID`);
-console.log(`  GET  /sessions       — list sessions`);
-console.log(`  GET  /screenshot/:id — serve screenshot (optional ?w=400&format=jpeg)`);
-console.log(`  GET  /audit          — audit log (pagination + agent filter)`);
+console.log(`  GET  /health         — health check + worker pool status (public)`);
+console.log(`  GET  /metrics        — Prometheus-format metrics (public)`);
+console.log(`  POST /login          — agent authentication → returns token + csrf_token`);
+console.log(`  GET  /tasks          — list tasks (auth required)`);
+console.log(`  POST /task           — create task (auth + CSRF required)`);
+console.log(`  GET  /task/:id       — get task by ID (auth required)`);
+console.log(`  GET  /sessions       — list sessions (auth required)`);
+console.log(`  GET  /screenshot/:id — serve screenshot (auth required)`);
+console.log(`  GET  /audit          — audit log (auth required)`);
