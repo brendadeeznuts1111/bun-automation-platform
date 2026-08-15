@@ -21,6 +21,8 @@ import { recordSuccess, recordFailure } from "../utils/circuit-breaker";
 import { processScreenshot, type ScreenshotResult } from "../utils/image";
 import type { ParentToWorkerMessage, WorkerToParentMessage } from "../types/ipc";
 import type { TaskRow } from "../types/models";
+import { IPCChannel } from "../channels/ipc-channel";
+import type { Channel } from "../types/channel";
 
 // --- Config ----------------------------------------------------------------
 
@@ -287,102 +289,93 @@ async function executeTask(task: TaskRow): Promise<string> {
   return JSON.stringify({ url: task.url, title: pageTitle, steps, timestamp: new Date().toISOString() });
 }
 
-// --- IPC handler -----------------------------------------------------------
+// --- IPC channel (C5: typed Channel interface) -----------------------------
 
-/** D7: Send a message to the parent, detecting if the IPC channel is closed. */
-function sendToParent(msg: WorkerToParentMessage): boolean {
-  if (typeof process.send !== "function") {
-    console.error(`[worker:${process.pid}] IPC channel closed — cannot send ${msg.type}`);
-    return false;
-  }
-  try {
-    process.send(msg);
-    return true;
-  } catch {
-    console.error(`[worker:${process.pid}] IPC send failed — channel may be closed`);
-    return false;
-  }
-}
+// C5: Create a typed IPC channel wrapping the process object.
+// Worker side: TSend = WorkerToParentMessage, TRecv = ParentToWorkerMessage
+const channel: Channel<WorkerToParentMessage, ParentToWorkerMessage> = new IPCChannel(
+  `worker-${process.pid}`,
+  process,
+);
 
 // Keep the process alive waiting for IPC messages.
 const keepAlive = setInterval(() => {}, 60_000);
 
-process.on("message", async (msg: ParentToWorkerMessage) => {
-  if (msg.type === "shutdown") {
-    console.log(`[worker:${process.pid}] received shutdown signal`);
-    clearInterval(keepAlive);
-    // C3: Don't call Bun.WebView.closeAll() — `await using view` handles per-view
-    // cleanup, and Bun automatically calls closeAll() at process exit.
-    // Manual closeAll() does SIGKILL which could race with await using's close().
-    process.exit(0);
-  }
+// C5: Register typed message handlers via channel.on() instead of process.on()
+channel.on("shutdown", (msg) => {
+  console.log(`[worker:${process.pid}] received shutdown signal${msg.reason ? `: ${msg.reason}` : ""}`);
+  clearInterval(keepAlive);
+  // C3: Don't call Bun.WebView.closeAll() — `await using view` handles per-view
+  // cleanup, and Bun automatically calls closeAll() at process exit.
+  // Manual closeAll() does SIGKILL which could race with await using's close().
+  process.exit(0);
+});
 
-  if (msg.type === "task") {
-    const taskId = msg.taskId;
+channel.on("task", async (msg) => {
+  const taskId = msg.taskId;
 
-    // D10: Wrap the entire task processing in a try/catch to prevent unhandled
-    // errors from leaving the keepAlive interval running forever.
+  // D10: Wrap the entire task processing in a try/catch to prevent unhandled
+  // errors from leaving the keepAlive interval running forever.
+  try {
+    const task = loadTask(taskId);
+
+    if (!task) {
+      channel.send({ type: "error", taskId, error: "task not found" });
+      return;
+    }
+
+    // D4: Guard against duplicate processing — if the task is already running
+    // (e.g. due to a dispatch race), skip it instead of processing twice.
+    if (task.status === "running") {
+      console.warn(`[worker:${process.pid}] task ${taskId} is already running — skipping duplicate`);
+      channel.send({ type: "error", taskId, error: "task already running" });
+      return;
+    }
+
+    // Mark task as running
+    await write((db) => {
+      db.query("UPDATE tasks SET status = 'running', started_at = datetime('now') WHERE id = ?").run(taskId);
+    });
+
+    const result = await withRetry(() => executeTask(task), {
+      maxAttempts: 3,
+      baseDelayMs: 2000,
+      retryable: (e) => {
+        const errMsg = e instanceof Error ? e.message : String(e);
+        // Don't retry on "not found", "auth", or navigation errors that won't resolve
+        return !errMsg.includes("not found") && !errMsg.includes("auth");
+      },
+      onRetry: (attempt, delay) => {
+        console.log(`[worker:${process.pid}] retry ${attempt} after ${delay}ms`);
+        channel.send({ type: "progress", taskId, progress: -1, retrying: attempt });
+      },
+    });
+
+    completeTask(taskId, result);
+    // E6: Catch circuit breaker write rejections — don't let them become
+    // unhandled rejections that could crash the worker.
+    recordSuccess(getSiteKey(task.url)).catch((e) =>
+      console.error(`[worker:${process.pid}] recordSuccess failed:`, e),
+    );
+    // D7: If IPC is closed, the task is still completed in the DB — just can't notify
+    channel.send({ type: "result", taskId, result });
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    failTask(taskId, errMsg);
+    // D9: Use getSiteKey to handle data:/file: URLs gracefully
+    // E6: Catch circuit breaker write rejections
     try {
       const task = loadTask(taskId);
-
-      if (!task) {
-        sendToParent({ type: "error", taskId, error: "task not found" });
-        return;
+      if (task) {
+        recordFailure(getSiteKey(task.url)).catch((e) =>
+          console.error(`[worker:${process.pid}] recordFailure failed:`, e),
+        );
       }
-
-      // D4: Guard against duplicate processing — if the task is already running
-      // (e.g. due to a dispatch race), skip it instead of processing twice.
-      if (task.status === "running") {
-        console.warn(`[worker:${process.pid}] task ${taskId} is already running — skipping duplicate`);
-        sendToParent({ type: "error", taskId, error: "task already running" });
-        return;
-      }
-
-      // Mark task as running
-      await write((db) => {
-        db.query("UPDATE tasks SET status = 'running', started_at = datetime('now') WHERE id = ?").run(taskId);
-      });
-
-      const result = await withRetry(() => executeTask(task), {
-        maxAttempts: 3,
-        baseDelayMs: 2000,
-        retryable: (e) => {
-          const errMsg = e instanceof Error ? e.message : String(e);
-          // Don't retry on "not found", "auth", or navigation errors that won't resolve
-          return !errMsg.includes("not found") && !errMsg.includes("auth");
-        },
-        onRetry: (attempt, delay) => {
-          console.log(`[worker:${process.pid}] retry ${attempt} after ${delay}ms`);
-          sendToParent({ type: "progress", taskId, progress: -1, retrying: attempt });
-        },
-      });
-
-      completeTask(taskId, result);
-      // E6: Catch circuit breaker write rejections — don't let them become
-      // unhandled rejections that could crash the worker.
-      recordSuccess(getSiteKey(task.url)).catch((e) =>
-        console.error(`[worker:${process.pid}] recordSuccess failed:`, e),
-      );
-      // D7: If IPC is closed, the task is still completed in the DB — just can't notify
-      sendToParent({ type: "result", taskId, result });
-    } catch (err) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      failTask(taskId, errMsg);
-      // D9: Use getSiteKey to handle data:/file: URLs gracefully
-      // E6: Catch circuit breaker write rejections
-      try {
-        const task = loadTask(taskId);
-        if (task) {
-          recordFailure(getSiteKey(task.url)).catch((e) =>
-            console.error(`[worker:${process.pid}] recordFailure failed:`, e),
-          );
-        }
-      } catch {} // best-effort — don't mask the original error
-      sendToParent({ type: "error", taskId, error: errMsg });
-    }
+    } catch {} // best-effort — don't mask the original error
+    channel.send({ type: "error", taskId, error: errMsg });
   }
 });
 
 // Notify parent that we're ready
-sendToParent({ type: "ready", pid: process.pid });
+channel.send({ type: "ready", pid: process.pid });
 console.log(`[worker:${process.pid}] ready`);

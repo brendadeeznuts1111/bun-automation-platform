@@ -5,13 +5,21 @@
  * The child uses process.send() and process.on("message") — same as
  * Node.js child_process.fork().
  *
+ * C4: Now uses the typed Channel interface (src/channels/ipc-channel.ts)
+ * instead of raw proc.send(). This provides:
+ *   - Type-safe message dispatch via channel.on("type", handler)
+ *   - Unified interface across IPC, WebSocket, and MessagePort transports
+ *   - Automatic cleanup on channel close
+ *
  * The v1.3.14 GC leak fix for ipc subprocesses makes this safe.
  * Messages are serialized with the JSC serialize API (structuredClone-compatible).
  */
 
 import { resolve } from "node:path";
 import { trackWorker, isShuttingDown } from "../utils/shutdown";
-import type { WorkerToParentMessage } from "../types/ipc";
+import type { WorkerToParentMessage, ParentToWorkerMessage } from "../types/ipc";
+import { IPCChannel } from "../channels/ipc-channel";
+import type { Channel } from "../types/channel";
 
 const POOL_SIZE = parseInt(process.env.WORKER_POOL_SIZE ?? "4", 10);
 const WORKER_SCRIPT = resolve(import.meta.dir, "../workers/task-worker.ts");
@@ -29,6 +37,8 @@ interface WorkerSlot {
   // need to handle undefined. Since spawnWorker() always assigns proc before
   // returning, we keep it non-optional and cast at the assignment site.
   proc: import("bun").Subprocess<"ignore", "inherit", "inherit">;
+  // C4: Typed channel for sending/receiving IPC messages
+  channel: Channel<ParentToWorkerMessage, WorkerToParentMessage>;
   busy: boolean;
   currentTask: PendingTask | null;
   untrack: () => void;
@@ -37,6 +47,34 @@ interface WorkerSlot {
 
 const pool: WorkerSlot[] = [];
 const taskQueue: PendingTask[] = [];
+
+// C7: WebSocket publish hook — set by server.ts when WebSocket is enabled.
+// When set, worker messages are published to WebSocket subscribers.
+type WSPublisher = (topic: string, msg: unknown) => void;
+let wsPublisher: WSPublisher | null = null;
+
+/**
+ * Set the WebSocket publisher function.
+ * Called by server.ts when ENABLE_WEBSOCKET=1 to relay worker messages
+ * to connected WebSocket clients via pub/sub.
+ */
+export function setWSPublisher(publisher: WSPublisher | null): void {
+  wsPublisher = publisher;
+}
+
+/**
+ * Publish a message to WebSocket subscribers (if enabled).
+ * Called from registerHandlers when worker messages arrive.
+ */
+function publishToWebSocket(topic: string, msg: unknown): void {
+  if (wsPublisher) {
+    try {
+      wsPublisher(topic, msg);
+    } catch (err) {
+      console.error(`[workers] WebSocket publish failed for ${topic}:`, err);
+    }
+  }
+}
 
 /** Initialize the worker pool. */
 export async function initWorkerPool(): Promise<void> {
@@ -49,23 +87,34 @@ export async function initWorkerPool(): Promise<void> {
 
 function spawnWorker(): WorkerSlot {
   // N2: proc is assigned after Bun.spawn() returns. We use a partial slot
-  // and cast to WorkerSlot — proc is set on line 82 before the slot is used.
+  // and cast to WorkerSlot — proc and channel are set before the slot is used.
   const slot = {
     busy: false,
     // JUSTIFIED: null is valid for PendingTask | null; TS infers null type
     currentTask: null as PendingTask | null,
     untrack: () => {},
     exited: false,
-    // JUSTIFIED: proc is assigned below before slot is returned/used
+    // JUSTIFIED: proc and channel are assigned below before slot is returned/used
   } as WorkerSlot;
+
+  // C4: Create the IPC channel — messages are dispatched via handleMessage
+  const channel = new IPCChannel<ParentToWorkerMessage, WorkerToParentMessage>(
+    `worker-pending`,
+    // JUSTIFIED: proc doesn't exist yet, but IPCChannel only uses it in send()
+    // and handleMessage() which are called after proc is assigned below.
+    {} as import("bun").Subprocess<"ignore", "inherit", "inherit">,
+  );
+  slot.channel = channel;
 
   const proc = Bun.spawn({
     cmd: [process.execPath, WORKER_SCRIPT],
     ipc: (message: WorkerToParentMessage) => {
-      handleWorkerMessage(slot, message);
+      // C4: Dispatch through the typed channel
+      channel.handleMessage(message);
     },
     onDisconnect: () => {
       // IPC channel closed — child exited or called disconnect
+      channel.handleClose?.();
     },
     // M2: onExit gives us signalCode + error for better diagnostics
     // (proc.exited.then only provides exitCode)
@@ -96,6 +145,13 @@ function spawnWorker(): WorkerSlot {
   });
 
   slot.proc = proc;
+  // C4: Now that proc exists, update the channel's sender to the real proc
+  // and set the proper id.
+  channel.setSender?.(proc);
+  channel.setId?.(`worker-${proc.pid}`);
+
+  // C4: Register typed message handlers on the channel
+  registerHandlers(slot);
 
   // Track for graceful shutdown
   slot.untrack = trackWorker({
@@ -145,29 +201,51 @@ function spawnWorker(): WorkerSlot {
   return slot;
 }
 
-function handleWorkerMessage(slot: WorkerSlot, msg: WorkerToParentMessage): void {
-  if (!slot.currentTask && msg.type !== "ready") return;
+// C4: Register typed message handlers on the channel instead of a switch.
+// This is called once per worker slot after the channel is created.
+function registerHandlers(slot: WorkerSlot): void {
+  const { channel } = slot;
 
-  switch (msg.type) {
-    case "ready":
-      // Worker is ready — nothing to do, it's already in the pool
-      break;
-    case "progress":
-      console.log(`[worker:${slot.proc.pid}] task ${msg.taskId} progress: ${msg.progress}%`);
-      break;
-    case "result":
-      slot.currentTask?.resolve(msg.result);
-      slot.currentTask = null;
-      slot.busy = false;
-      dispatchNext();
-      break;
-    case "error":
-      slot.currentTask?.reject(new Error(msg.error));
-      slot.currentTask = null;
-      slot.busy = false;
-      dispatchNext();
-      break;
-  }
+  channel.on("ready", () => {
+    // Worker is ready — nothing to do, it's already in the pool
+  });
+
+  channel.on("progress", (msg) => {
+    console.log(`[worker:${slot.proc.pid}] task ${msg.taskId} progress: ${msg.progress}%`);
+    // C7: Publish to WebSocket subscribers if enabled
+    publishToWebSocket(`task:${msg.taskId}`, {
+      type: "progress",
+      taskId: msg.taskId,
+      progress: msg.progress,
+      retrying: msg.retrying,
+    });
+  });
+
+  channel.on("result", (msg) => {
+    slot.currentTask?.resolve(msg.result);
+    slot.currentTask = null;
+    slot.busy = false;
+    // C7: Publish to WebSocket subscribers
+    publishToWebSocket(`task:${msg.taskId}`, {
+      type: "result",
+      taskId: msg.taskId,
+      result: msg.result,
+    });
+    dispatchNext();
+  });
+
+  channel.on("error", (msg) => {
+    slot.currentTask?.reject(new Error(msg.error));
+    slot.currentTask = null;
+    slot.busy = false;
+    // C7: Publish to WebSocket subscribers
+    publishToWebSocket(`task:${msg.taskId}`, {
+      type: "error",
+      taskId: msg.taskId,
+      error: msg.error,
+    });
+    dispatchNext();
+  });
 }
 
 function dispatchNext(): void {
@@ -180,12 +258,11 @@ function dispatchNext(): void {
   idle.busy = true;
   idle.currentTask = task;
 
-  // E7: Catch proc.send() errors — if the IPC channel is closed, reject the
-  // task immediately instead of leaving it stuck in currentTask forever.
-  try {
-    idle.proc.send({ type: "task", taskId: task.taskId });
-  } catch (err) {
-    console.error(`[workers] failed to send task to worker (IPC closed):`, err);
+  // C4: Use the typed channel instead of raw proc.send()
+  // E7: channel.send() returns false if IPC is closed — reject the task
+  const sent = idle.channel.send({ type: "task", taskId: task.taskId });
+  if (!sent) {
+    console.error(`[workers] failed to send task to worker (IPC closed)`);
     idle.busy = false;
     idle.currentTask = null;
     task.reject(new Error("worker IPC channel closed"));

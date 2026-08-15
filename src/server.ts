@@ -26,6 +26,7 @@ import { installShutdownHandlers, isShuttingDown } from "./utils/shutdown";
 import { initWorkerPool, submitTask, getPoolStatus } from "./workers/pool";
 import { serveScreenshot } from "./utils/image";
 import { isFeatureEnabled, shouldActivate, markActive, markBlocked, listFeatures, getFeatureSummary } from "./features/registry";
+import { setWSPublisher } from "./workers/pool";
 
 // --- Config ----------------------------------------------------------------
 
@@ -51,6 +52,8 @@ const ENABLE_HTTP3 = shouldActivate("http3");
 // Dev dashboard auto-enables in development mode unless explicitly disabled
 const ENABLE_DEV_DASHBOARD = isFeatureEnabled("devDashboard") ||
   (NODE_ENV === "development" && process.env.ENABLE_DEV_DASHBOARD !== "0");
+// C6: WebSocket support — behind ENABLE_WEBSOCKET flag
+const ENABLE_WEBSOCKET = shouldActivate("websocket");
 
 // TLS cert/key — only loaded if ENABLE_TLS is true
 let tlsConfig: { cert: string; key: string } | undefined;
@@ -87,6 +90,11 @@ if (ENABLE_HTTP3) {
 if (ENABLE_DEV_DASHBOARD) {
   markActive("devDashboard");
   console.log("[server] Dev dashboard enabled at /dashboard");
+}
+
+if (ENABLE_WEBSOCKET) {
+  markActive("websocket");
+  console.log("[server] WebSocket enabled — /ws/task/:id for live progress");
 }
 
 console.log(`[server] feature flags: ${getFeatureSummary()}`);
@@ -594,6 +602,37 @@ if (ENABLE_DEV_DASHBOARD) {
   routes["/dashboard"] = { GET: dashboardHandler };
 }
 
+// C7: WebSocket handler config — behind ENABLE_WEBSOCKET flag
+// When enabled, /ws/task/:id upgrades to a WebSocket that subscribes to
+// task progress updates published by the worker pool.
+const wsChannels = new Map<number, Set<import("bun").ServerWebSocket<unknown>>>();
+
+// JUSTIFIED: Bun.serve websocket config types are complex; we build as Record
+const websocketConfig: Record<string, unknown> = {
+  // JUSTIFIED: empty object cast to WebSocketData type for Bun's ws.data inference
+  data: {} as { taskId: number },
+  open(ws: import("bun").ServerWebSocket<{ taskId: number }>) {
+    ws.subscribe(`task:${ws.data.taskId}`);
+    if (!wsChannels.has(ws.data.taskId)) {
+      wsChannels.set(ws.data.taskId, new Set());
+    }
+    wsChannels.get(ws.data.taskId)!.add(ws);
+    console.log(`[ws] client subscribed to task:${ws.data.taskId}`);
+  },
+  message(ws: import("bun").ServerWebSocket<{ taskId: number }>, msg: string | ArrayBuffer) {
+    // Client can send "ping" to keep connection alive
+    if (typeof msg === "string" && msg === "ping") {
+      ws.send("pong");
+    }
+  },
+  close(ws: import("bun").ServerWebSocket<{ taskId: number }>) {
+    wsChannels.get(ws.data.taskId)?.delete(ws);
+    console.log(`[ws] client unsubscribed from task:${ws.data.taskId}`);
+  },
+};
+
+// C7: WS publisher setup is deferred to after server creation (see below)
+
 // Build the serve config — conditionally add TLS + HTTP/3.
 // We use a plain object and cast at the end because Bun.serve's Options
 // type is a complex union that doesn't cleanly accept conditional props
@@ -614,11 +653,24 @@ const serveConfig: Record<string, unknown> = {
 
   routes,
 
-  // Fallback for unmatched routes + CORS preflight (OPTIONS)
-  async fetch(req: Request) {
+  // Fallback for unmatched routes + CORS preflight (OPTIONS) + WS upgrade
+  async fetch(req: Request, server: import("bun").Server<unknown>) {
     // CORS preflight for any route
     const preflight = handlePreflight(req);
     if (preflight) return preflight;
+
+    // C7: WebSocket upgrade for /ws/task/:id
+    if (ENABLE_WEBSOCKET) {
+      const url = new URL(req.url);
+      const wsMatch = url.pathname.match(/^\/ws\/task\/(\d+)$/);
+      if (wsMatch && wsMatch[1]) {
+        const taskId = parseInt(wsMatch[1], 10);
+        const upgraded = server.upgrade(req, { data: { taskId } });
+        return upgraded
+          ? undefined
+          : new Response("WebSocket upgrade failed", { status: 400 });
+      }
+    }
 
     return withCors(req, errorResponse("not found", 404));
   },
@@ -630,6 +682,11 @@ const serveConfig: Record<string, unknown> = {
     return Response.json({ error: "internal server error" }, { status: 500 });
   },
 };
+
+// C6: Conditionally add websocket config
+if (ENABLE_WEBSOCKET) {
+  serveConfig.websocket = websocketConfig;
+}
 
 // R3: Conditionally add TLS config
 if (ENABLE_TLS && tlsConfig) {
@@ -646,6 +703,14 @@ if (ENABLE_HTTP3 && tlsConfig) {
 // (tls, http3) that aren't in all bun-types versions. Cast through unknown
 // to the Options type Bun.serve expects. The object shape is correct at runtime.
 const server = Bun.serve(serveConfig as unknown as Parameters<typeof Bun.serve>[0]); // JUSTIFIED: double cast via unknown — Options is a complex union that rejects Record
+
+// C7: Set up the WS publisher — relays worker IPC messages to WebSocket clients
+if (ENABLE_WEBSOCKET) {
+  setWSPublisher((topic: string, msg: unknown) => {
+    const json = JSON.stringify(msg);
+    server.publish(topic, json);
+  });
+}
 
 // --- Shutdown --------------------------------------------------------------
 
@@ -672,4 +737,7 @@ console.log(`  GET  /protocol       — protocol info (public)`);
 console.log(`  GET  /features       — feature flags + promotion status (public)`);
 if (ENABLE_DEV_DASHBOARD) {
   console.log(`  GET  /dashboard      — dev dashboard (public)`);
+}
+if (ENABLE_WEBSOCKET) {
+  console.log(`  WS   /ws/task/:id    — live task progress (WebSocket)`);
 }
