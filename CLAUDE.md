@@ -43,6 +43,34 @@ test("hello world", () => {
 - **`tests/setup.ts`** — preload script: sets `DB_PATH` to a per-process temp file (so tests never touch `./data/platform.db`) and registers custom matchers
 - **`tests/matchers.ts`** — custom `expect.extend()` matchers (e.g. `toBeValidAuditEntry`), available in all test files via the preload
 
+### Pre-push hook (local CI gate)
+
+Git hooks are per-clone (not shared via git), so each developer sets this up once:
+
+```sh
+cat > .git/hooks/pre-push << 'HOOK'
+#!/bin/sh
+echo "▶ pre-push: running bun test..."
+cd "$(git rev-parse --show-toplevel)"
+output=$(bun test 2>&1)
+exit_code=$?
+echo "$output" | tail -15
+fail_line=$(echo "$output" | grep -E "^[[:space:]]*[0-9]+ fail" | head -1)
+fail_count=$(echo "$fail_line" | grep -oE '[0-9]+' | head -1)
+fail_count=${fail_count:-1}
+pass_line=$(echo "$output" | grep -E "^[[:space:]]*[0-9]+ pass" | head -1)
+if [ -z "$pass_line" ] || [ "$fail_count" -ne 0 ]; then
+  echo "✗ bun test failed. Push blocked. Bypass: git push --no-verify"
+  exit 1
+fi
+echo "✓ bun test passed ($pass_line). Proceeding with push."
+exit 0
+HOOK
+chmod +x .git/hooks/pre-push
+```
+
+The hook parses `N fail` from the output instead of relying on `bun test`'s exit code, because the lcov/JUnit reporters return exit 1 when no TTY is present (git hooks run without a terminal). Bypass with `git push --no-verify`.
+
 ### Bun test documentation
 
 - Test runner: https://bun.sh/docs/test
