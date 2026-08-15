@@ -66,7 +66,9 @@ export async function checkRateLimit(
 }
 
 /** Clean up old rate limit entries (call periodically). */
-export function cleanupRateLimits(): void {
+export function cleanupRateLimits(): Promise<void> {
   const cutoff = Math.floor(Date.now() / 1000) - 3600; // 1 hour ago
-  write((db) => db.query("DELETE FROM rate_limits WHERE window_start < ?").run(cutoff));
+  return write((db) => {
+    db.query("DELETE FROM rate_limits WHERE window_start < ?").run(cutoff);
+  });
 }

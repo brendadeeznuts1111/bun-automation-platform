@@ -44,7 +44,11 @@ console.log("[server] database migrated");
 await initWorkerPool();
 
 // Periodic cleanup of old rate limit entries
-setInterval(() => cleanupRateLimits(), 300_000); // every 5 min
+// D11: Catch the promise rejection from write() — don't let it become an
+// unhandled rejection that crashes the process.
+setInterval(() => {
+  cleanupRateLimits().catch((e) => console.error("[server] rate limit cleanup failed:", e));
+}, 300_000); // every 5 min
 
 // --- Helpers ---------------------------------------------------------------
 
@@ -290,8 +294,19 @@ const createTaskHandler = withCsrf<"">(async (req, _ctx) => {
     await audit({ agent_id: body.agent_id, action: "task_created", resource: `task:${taskId}`, ip_address: ip });
 
     // Submit to worker pool (async — don't await)
-    submitTask(taskId).catch((err) => {
+    // D1: If the worker crashes, the task promise rejects. Mark the task as
+    // failed in the DB so it doesn't stay "running" forever.
+    submitTask(taskId).catch(async (err) => {
       console.error(`[server] task ${taskId} failed:`, err);
+      try {
+        await write((db) => {
+          db.query(
+            `UPDATE tasks SET status = 'failed', error = ?, updated_at = datetime('now') WHERE id = ? AND status = 'running'`,
+          ).run(err instanceof Error ? err.message : String(err), taskId);
+        });
+      } catch (dbErr) {
+        console.error(`[server] failed to mark task ${taskId} as failed:`, dbErr);
+      }
     });
 
     return json({ id: taskId, status: "pending" }, 201);

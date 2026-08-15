@@ -30,11 +30,16 @@ const NAV_TIMEOUT = parseInt(process.env.NAV_TIMEOUT ?? "30000", 10);
 
 /** Race a promise against a timeout, rejecting with a clear error. */
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  // D2: Clear the timer when the promise settles first to prevent a leaked
+  // timer and an unhandled rejection from the timeout promise.
+  let timer: ReturnType<typeof setTimeout> | undefined;
   return Promise.race([
-    promise,
-    new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error(`${label} timeout after ${ms}ms`)), ms),
-    ),
+    promise.finally(() => {
+      if (timer) clearTimeout(timer);
+    }),
+    new Promise<T>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`${label} timeout after ${ms}ms`)), ms);
+    }),
   ]);
 }
 
@@ -86,6 +91,17 @@ function failTask(taskId: number, error: string): void {
   }).catch((e) => console.error(`[worker] failTask failed:`, e));
 }
 
+/** D9: Extract a meaningful site key from a URL for the circuit breaker. */
+function getSiteKey(url: string): string {
+  try {
+    const parsed = new URL(url);
+    // data: and file: URLs have empty host — use the protocol as the key
+    return parsed.host || parsed.protocol || "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
 // --- Browser automation ----------------------------------------------------
 
 /**
@@ -107,13 +123,12 @@ async function executeTask(task: TaskRow): Promise<string> {
 
   // Per-agent profile directory for persistent cookies/localStorage (D2)
   const agentProfileDir = resolve(PROFILE_DIR, `agent-${task.agent_id}`);
-  mkdirSync(agentProfileDir, { recursive: true });
 
   // Build WebView options
   // m8: On macOS < 15.2, WebKit persistent storage is unsupported — fall back to ephemeral.
   const usePersistent = supportsPersistentStorage();
   if (usePersistent) {
-    mkdirSync(agentProfileDir, { recursive: true });
+    mkdirSync(agentProfileDir, { recursive: true }); // D8: only call once
   }
   const viewOptions: ConstructorParameters<typeof Bun.WebView>[0] = {
     width: VIEWPORT_WIDTH,
@@ -240,8 +255,19 @@ async function executeTask(task: TaskRow): Promise<string> {
 
 // --- IPC handler -----------------------------------------------------------
 
-function sendToParent(msg: WorkerToParentMessage): void {
-  process.send?.(msg);
+/** D7: Send a message to the parent, detecting if the IPC channel is closed. */
+function sendToParent(msg: WorkerToParentMessage): boolean {
+  if (typeof process.send !== "function") {
+    console.error(`[worker:${process.pid}] IPC channel closed — cannot send ${msg.type}`);
+    return false;
+  }
+  try {
+    process.send(msg);
+    return true;
+  } catch {
+    console.error(`[worker:${process.pid}] IPC send failed — channel may be closed`);
+    return false;
+  }
 }
 
 // Keep the process alive waiting for IPC messages.
@@ -259,19 +285,30 @@ process.on("message", async (msg: ParentToWorkerMessage) => {
 
   if (msg.type === "task") {
     const taskId = msg.taskId;
-    const task = loadTask(taskId);
 
-    if (!task) {
-      sendToParent({ type: "error", taskId, error: "task not found" });
-      return;
-    }
-
-    // Mark task as running
-    await write((db) => {
-      db.query("UPDATE tasks SET status = 'running', started_at = datetime('now') WHERE id = ?").run(taskId);
-    });
-
+    // D10: Wrap the entire task processing in a try/catch to prevent unhandled
+    // errors from leaving the keepAlive interval running forever.
     try {
+      const task = loadTask(taskId);
+
+      if (!task) {
+        sendToParent({ type: "error", taskId, error: "task not found" });
+        return;
+      }
+
+      // D4: Guard against duplicate processing — if the task is already running
+      // (e.g. due to a dispatch race), skip it instead of processing twice.
+      if (task.status === "running") {
+        console.warn(`[worker:${process.pid}] task ${taskId} is already running — skipping duplicate`);
+        sendToParent({ type: "error", taskId, error: "task already running" });
+        return;
+      }
+
+      // Mark task as running
+      await write((db) => {
+        db.query("UPDATE tasks SET status = 'running', started_at = datetime('now') WHERE id = ?").run(taskId);
+      });
+
       const result = await withRetry(() => executeTask(task), {
         maxAttempts: 3,
         baseDelayMs: 2000,
@@ -287,12 +324,17 @@ process.on("message", async (msg: ParentToWorkerMessage) => {
       });
 
       completeTask(taskId, result);
-      recordSuccess(new URL(task.url).host);
+      recordSuccess(getSiteKey(task.url));
+      // D7: If IPC is closed, the task is still completed in the DB — just can't notify
       sendToParent({ type: "result", taskId, result });
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       failTask(taskId, errMsg);
-      recordFailure(new URL(task.url).host);
+      // D9: Use getSiteKey to handle data:/file: URLs gracefully
+      try {
+        const task = loadTask(taskId);
+        if (task) recordFailure(getSiteKey(task.url));
+      } catch {} // best-effort — don't mask the original error
       sendToParent({ type: "error", taskId, error: errMsg });
     }
   }

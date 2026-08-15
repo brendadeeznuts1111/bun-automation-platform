@@ -37,20 +37,15 @@ export function getAuditLog(
   offset = 0,
   agentId?: number,
 ): AuditLogRow[] {
+  // D6: Single parameterized query instead of two variants — avoids filling
+  // the db.query() statement cache (default size: 20).
   return read((db) => {
-    if (agentId !== undefined) {
-      return db
-        .query(
-          `SELECT id, agent_id, action, resource, details, ip_address, created_at
-           FROM audit_log WHERE agent_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-        )
-        .all(agentId, limit, offset) as AuditLogRow[];
-    }
     return db
       .query(
         `SELECT id, agent_id, action, resource, details, ip_address, created_at
-         FROM audit_log ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+         FROM audit_log WHERE (? IS NULL OR agent_id = ?)
+         ORDER BY created_at DESC LIMIT ? OFFSET ?`,
       )
-      .all(limit, offset) as AuditLogRow[];
+      .all(agentId ?? null, agentId ?? null, limit, offset) as AuditLogRow[];
   });
 }

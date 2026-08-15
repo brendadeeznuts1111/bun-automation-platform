@@ -99,6 +99,10 @@ function spawnWorker(): WorkerSlot {
     slot.exited = true;
     slot.untrack();
 
+    // D1: If a new task was dispatched to this slot between the "result" message
+    // and the exit, that task was sent to a now-dead worker. Reject it so the
+    // caller (server.ts submitTask.catch) can log the failure. The task stays
+    // "running" in the DB — the server should mark it as failed.
     if (slot.currentTask) {
       if (code === 0) {
         slot.currentTask.resolve({ status: "completed" });
@@ -116,6 +120,8 @@ function spawnWorker(): WorkerSlot {
       if (idx >= 0) {
         pool[idx] = spawnWorker();
         console.log(`[workers] respawned worker at index ${idx} (code=${code})`);
+        // D1: Dispatch queued tasks to the freshly respawned worker
+        dispatchNext();
       }
     }
   });

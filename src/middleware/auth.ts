@@ -20,7 +20,18 @@ export interface AuthContext {
 // --- Session cache (M4) -----------------------------------------------------
 
 const SESSION_CACHE_TTL_MS = 60_000; // 1 minute
+const SESSION_CACHE_MAX = 10_000; // max entries to prevent unbounded growth
 const sessionCache = new Map<string, { ctx: AuthContext; expires: number }>();
+
+/** D3: Periodically evict expired entries to prevent unbounded growth. */
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of sessionCache) {
+    if (entry.expires <= now) {
+      sessionCache.delete(key);
+    }
+  }
+}, 60_000).unref?.(); // unref so it doesn't block process exit
 
 /** Invalidate a cached session (call on logout). */
 export function invalidateSession(token: string): void {
@@ -64,6 +75,13 @@ export function verifyAuth(req: Request): AuthContext | null {
   }
 
   const ctx = { agentId: session.agent_id, sessionId: session.id };
+  // D3: Evict oldest expired entry if cache is at capacity
+  if (sessionCache.size >= SESSION_CACHE_MAX) {
+    const now = Date.now();
+    for (const [k, v] of sessionCache) {
+      if (v.expires <= now) { sessionCache.delete(k); break; }
+    }
+  }
   // Cache for 1 minute — DB expiry is checked on cache miss
   sessionCache.set(token, { ctx, expires: Date.now() + SESSION_CACHE_TTL_MS });
   return ctx;

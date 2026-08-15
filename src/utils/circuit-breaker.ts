@@ -54,6 +54,7 @@ export function getCircuitStatus(site: string): CircuitStatus {
 /** Record a failure for a site. Trips the circuit if threshold reached. */
 export function recordFailure(site: string): Promise<void> {
   return write((db) => {
+    // D5: Use parameter binding instead of string interpolation for FAILURE_THRESHOLD
     db.query(
       `INSERT INTO circuit_breakers (site, failures, tripped_at, last_failure)
        VALUES (?, 1, NULL, datetime('now'))
@@ -61,11 +62,11 @@ export function recordFailure(site: string): Promise<void> {
          failures = failures + 1,
          last_failure = datetime('now'),
          tripped_at = CASE
-           WHEN circuit_breakers.failures + 1 >= ${FAILURE_THRESHOLD} AND tripped_at IS NULL
+           WHEN circuit_breakers.failures + 1 >= ? AND tripped_at IS NULL
            THEN datetime('now')
            ELSE tripped_at
          END`,
-    ).run(site);
+    ).run(site, FAILURE_THRESHOLD);
   });
 }
 
