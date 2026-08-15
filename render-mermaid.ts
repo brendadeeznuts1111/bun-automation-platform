@@ -25,7 +25,7 @@
  *   bun run render-mermaid.ts deepseek_mermaid_20260814_ef065a.mmd
  */
 
-import { existsSync, mkdirSync, rmSync, statSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, extname, join, resolve } from "node:path";
 import { color, write } from "bun";
