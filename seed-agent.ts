@@ -3,7 +3,14 @@ import { migrate, write } from "./src/db";
 migrate();
 const hash = await Bun.password.hash("test123");
 const id = await write((db) => {
-  const r = db.query("INSERT INTO agents (username, password) VALUES (?, ?)").run("testagent", hash);
-  return Number(r.lastInsertRowid);
+  const row = db
+    .query(
+      `INSERT INTO agents (username, password) VALUES (?, ?)
+       ON CONFLICT(username) DO UPDATE SET password = excluded.password, updated_at = datetime('now')
+       RETURNING id;`,
+    )
+    .get("testagent", hash) as { id: number } | null;
+  return row?.id ?? 0;
 });
 console.log("agent id:", id);
+

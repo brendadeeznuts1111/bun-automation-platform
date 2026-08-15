@@ -8,7 +8,7 @@
  * For distributed deployments, replace this with Redis SETNX + expiry.
  */
 
-import { write, read } from "../db";
+import { write } from "../db";
 
 interface RateLimitConfig {
   /** Max requests per window. */
@@ -35,38 +35,34 @@ function getConfig(path: string): RateLimitConfig {
 /**
  * Check and increment the rate limit for a key (usually IP + path prefix).
  * Returns true if the request is allowed, false if rate-limited.
+ * Atomic upsert with RETURNING count prevents TOCTOU race condition.
  */
-export function checkRateLimit(
+export async function checkRateLimit(
   ip: string,
   path: string,
-): { allowed: boolean; remaining: number; resetAt: number } {
+): Promise<{ allowed: boolean; remaining: number; resetAt: number }> {
   const cfg = getConfig(path);
   const now = Math.floor(Date.now() / 1000);
   const windowStart = now - (now % cfg.windowSeconds);
   const key = `${ip}:${path.split("/").slice(0, 2).join("/")}`;
   const resetAt = (windowStart + cfg.windowSeconds) * 1000;
 
-  // Check current count (read)
-  const current = read((db) => {
+  const count = await write((db) => {
     const row = db
-      .query("SELECT count FROM rate_limits WHERE key = ? AND window_start = ?")
+      .query(
+        `INSERT INTO rate_limits (key, window_start, count) VALUES (?, ?, 1)
+         ON CONFLICT (key, window_start) DO UPDATE SET count = count + 1
+         RETURNING count;`,
+      )
       .get(key, windowStart) as { count: number } | null;
-    return row?.count ?? 0;
+    return row?.count ?? 1;
   });
 
-  if (current >= cfg.maxRequests) {
+  if (count > cfg.maxRequests) {
     return { allowed: false, remaining: 0, resetAt };
   }
 
-  // Increment (write — serialized)
-  write((db) => {
-    db.query(
-      `INSERT INTO rate_limits (key, window_start, count) VALUES (?, ?, 1)
-       ON CONFLICT (key, window_start) DO UPDATE SET count = count + 1`,
-    ).run(key, windowStart);
-  });
-
-  return { allowed: true, remaining: cfg.maxRequests - current - 1, resetAt };
+  return { allowed: true, remaining: cfg.maxRequests - count, resetAt };
 }
 
 /** Clean up old rate limit entries (call periodically). */

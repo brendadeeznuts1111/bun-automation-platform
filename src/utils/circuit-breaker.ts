@@ -47,8 +47,8 @@ export function getCircuitStatus(site: string): CircuitStatus {
 }
 
 /** Record a failure for a site. Trips the circuit if threshold reached. */
-export function recordFailure(site: string): void {
-  write((db) => {
+export function recordFailure(site: string): Promise<void> {
+  return write((db) => {
     db.query(
       `INSERT INTO circuit_breakers (site, failures, tripped_at, last_failure)
        VALUES (?, 1, NULL, datetime('now'))
@@ -65,8 +65,8 @@ export function recordFailure(site: string): void {
 }
 
 /** Record a success — resets the circuit for the site. */
-export function recordSuccess(site: string): void {
-  write((db) => {
+export function recordSuccess(site: string): Promise<void> {
+  return write((db) => {
     db.query(
       `INSERT INTO circuit_breakers (site, failures, tripped_at, last_failure)
        VALUES (?, 0, NULL, NULL)

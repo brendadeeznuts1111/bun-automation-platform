@@ -119,7 +119,7 @@ export function serveScreenshot(
   format: "webp" | "jpeg" | "png" = "webp",
 ): Response {
   let img = new Bun.Image(path);
-  if (width) img = img.resize(width, width, { fit: "inside" }) as any;
+  if (width) img = img.resize(width, width, { fit: "inside" });
 
   switch (format) {
     case "jpeg":

@@ -154,11 +154,8 @@ function hashString(s: string): number {
   return h >>> 0;
 }
 
-/** Minimal PNG encoder (RGBA, 8-bit, no compression library needed — uses Bun's zlib). */
+/** Minimal PNG encoder (RGBA, 8-bit, zero-dependency — uses Bun native deflate, adler32, and crc32). */
 function encodePng(raw: Uint8Array, width: number, height: number): Buffer {
-  // Use Bun's built-in zlib via node:zlib
-  const { deflateSync } = require("node:zlib");
-
   const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
   // IHDR chunk
@@ -171,10 +168,13 @@ function encodePng(raw: Uint8Array, width: number, height: number): Buffer {
   ihdrData[11] = 0;  // filter
   ihdrData[12] = 0;  // interlace
 
-  // IDAT chunk — deflate the raw data
-  const idatData = deflateSync(Buffer.from(raw));
+  // IDAT chunk — zlib stream: RFC 1950 header (0x78, 0x9c) + Bun.deflateSync + Adler-32
+  const deflated = Buffer.from(Bun.deflateSync(raw.buffer as ArrayBuffer));
+  const adler = Buffer.alloc(4);
+  adler.writeUInt32BE(Bun.hash.adler32(raw.buffer as ArrayBuffer), 0);
+  const zlibStream = Buffer.concat([Buffer.from([0x78, 0x9c]), deflated, adler]);
 
-  const chunks = [signature, makeChunk("IHDR", ihdrData), makeChunk("IDAT", idatData), makeChunk("IEND", Buffer.alloc(0))];
+  const chunks = [signature, makeChunk("IHDR", ihdrData), makeChunk("IDAT", zlibStream), makeChunk("IEND", Buffer.alloc(0))];
 
   return Buffer.concat(chunks);
 }
@@ -189,8 +189,7 @@ function makeChunk(type: string, data: Buffer): Buffer {
 }
 
 function crc32(...bufs: Buffer[]): number {
-  const { crc32 } = require("node:zlib");
-  return crc32(Buffer.concat(bufs)) >>> 0;
+  return Bun.hash.crc32(Buffer.concat(bufs));
 }
 
 // --- IPC handler -----------------------------------------------------------

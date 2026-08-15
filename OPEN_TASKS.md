@@ -23,25 +23,17 @@ Each task cites the specific Bun API/doc that grounds it.
 
 **Ref:** https://bun.com/docs/runtime/http/routing
 
-### A2. Fix `require()` calls in ESM context (task-worker.ts:160,192)
+### A2. Fix `require()` calls in ESM context (task-worker.ts:160,192) — [RESOLVED ✅]
 
-**Current:** `require("node:zlib")` inside `encodePng()` and `crc32()` functions.
+**Current:** Replaced `require("node:zlib")` with Bun native APIs: `Bun.deflateSync`, `Bun.hash.adler32`, and `Bun.hash.crc32`. Zero Node.js dependencies.
 
-**Doc pattern:** Bun supports `require()` at runtime, but with `verbatimModuleSyntax: true` and ESM, top-level `import` is idiomatic.
+### A3. Fix rate limit TOCTOU race (rate-limit.ts:50-67) — [RESOLVED ✅]
 
-**Action:** Move `import { deflateSync, crc32 } from "node:zlib"` to top of file.
+**Current:** Merged check and increment into a single atomic SQLite query: `INSERT ... ON CONFLICT DO UPDATE SET count = count + 1 RETURNING count;`.
 
-### A3. Fix rate limit TOCTOU race (rate-limit.ts:50-67)
+### A4. Remove `as any` cast in image.ts:122 — [RESOLVED ✅]
 
-**Current:** `read()` checks count, then `write()` increments — not atomic. Under concurrent load, multiple requests can pass the check before any increment.
-
-**Action:** Move both check and increment into a single `write()` call (serialized by the mutex). Use `INSERT ... ON CONFLICT DO UPDATE SET count = count + 1 RETURNING count` and check the returned count.
-
-### A4. Remove `as any` cast in image.ts:122
-
-**Current:** `img.resize(width, width, { fit: "inside" }) as any` — needed because `resize()` return type doesn't match.
-
-**Action:** Check `@types/bun` for the correct return type. `Bun.Image.resize()` returns `Bun.Image` (chainable). The cast may be unnecessary with `@types/bun@1.3.14`.
+**Current:** `img.resize(width, width, { fit: "inside" })` is now properly typed without `as any`.
 
 ---
 

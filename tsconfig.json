@@ -42,6 +42,6 @@
     "noImplicitReturns": true,
     "noPropertyAccessFromIndexSignature": false
   },
-  "include": ["src/**/*.ts", "*.d.ts", "seed-agent.ts"],
+  "include": ["src/**/*.ts", "tests/**/*.ts", "*.d.ts", "seed-agent.ts"],
   "exclude": ["node_modules", "data", "dist", "build"]
 }

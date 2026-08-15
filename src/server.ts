@@ -80,8 +80,8 @@ const server = Bun.serve({
     const preflight = handlePreflight(req);
     if (preflight) return preflight;
 
-    // Rate limiting
-    const rl = checkRateLimit(ip, path);
+    // Rate limiting (atomic)
+    const rl = await checkRateLimit(ip, path);
     if (!rl.allowed) {
       return error("Too Many Requests", 429, req);
     }
