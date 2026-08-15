@@ -52,6 +52,22 @@ declare module "bun" {
     /** Comma-separated allowed origins. Empty = allow all in dev. */
     CORS_ALLOWED_ORIGINS?: string;
 
+    // --- Security ---
+    /** HMAC secret for CSRF token signing. Required in production. */
+    CSRF_SECRET?: string;
+    /** Trust X-Forwarded-For / CF-Connecting-IP headers. Default: "false" */
+    TRUST_PROXY_HEADERS?: string;
+
+    // --- WebView task execution ---
+    /** Navigation timeout in ms. Default: "30000" */
+    NAV_TIMEOUT?: string;
+    /** WebView viewport width in pixels. Default: "1280" */
+    VIEWPORT_WIDTH?: string;
+    /** WebView viewport height in pixels. Default: "800" */
+    VIEWPORT_HEIGHT?: string;
+    /** Directory for persistent WebView profiles (cookies, localStorage). */
+    PROFILE_DIR?: string;
+
     // --- TLS (dev-server.ts) ---
     /** Path to TLS certificate file. Default: "dev-cert.pem" */
     TLS_CERT_PATH?: string;

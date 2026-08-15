@@ -1,5 +1,9 @@
 # Project Rules — Bun Automation Platform
 
+> See also: CLAUDE.md for Bun API selection guidelines (which APIs to use
+> instead of Node equivalents). This file covers *verification* rules — how
+> to ensure Bun API calls are correct before writing them.
+
 ## MANDATORY: Read docs before writing Bun API calls
 
 Bun's canonical documentation is installed locally at `node_modules/bun-types/docs/`.

@@ -32,9 +32,11 @@ describe("Bun Native APIs & Utilities", () => {
 
   it("Bun.deflateSync and Bun.inflateSync roundtrip correctly", () => {
     const original = new Uint8Array(1024).map((_, i) => (i * 17) % 256);
+    // JUSTIFIED: Uint8Array.buffer is ArrayBuffer-backed; Bun.deflateSync expects ArrayBuffer
     const compressed = Bun.deflateSync(original.buffer as ArrayBuffer);
     expect(compressed.length).toBeLessThan(original.length);
 
+    // JUSTIFIED: same — compressed.buffer is the underlying ArrayBuffer
     const decompressed = Bun.inflateSync(compressed.buffer as ArrayBuffer);
     expect(decompressed).toEqual(original);
   });
@@ -159,10 +161,12 @@ describe("Bun Native APIs & Utilities", () => {
     const text = "## React Heading\n\n[Link](https://bun.com)";
 
     // Default: React 19 (react.transitional.element)
+    // JUSTIFIED: Bun.markdown.react returns ReactElement; narrowing to check $$typeof
     const el19 = Bun.markdown.react(text) as { $$typeof?: symbol };
     expect(String(el19.$$typeof)).toBe("Symbol(react.transitional.element)");
 
     // React 18: (react.element)
+    // JUSTIFIED: same — narrowing the return type to check $$typeof
     const el18 = Bun.markdown.react(text, undefined, { reactVersion: 18 }) as { $$typeof?: symbol };
     expect(String(el18.$$typeof)).toBe("Symbol(react.element)");
   });
@@ -228,7 +232,9 @@ describe("Bun Native APIs & Utilities", () => {
     db.exec("CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT);");
 
     const insert = db.prepare("INSERT INTO items (name) VALUES (?) RETURNING id;");
+    // JUSTIFIED: bun:sqlite .get() returns unknown; narrowing to the RETURNING row type
     const r1 = insert.get("Alpha") as { id: number };
+    // JUSTIFIED: same — narrowing the second insert's return type
     const r2 = insert.get("Beta") as { id: number };
 
     expect(r1.id).toBe(1);

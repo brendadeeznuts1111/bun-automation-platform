@@ -37,8 +37,10 @@ describe("Bun.Image processing", () => {
     ihdrData[11] = 0;
     ihdrData[12] = 0;
 
+    // JUSTIFIED: Uint8Array.buffer is ArrayBuffer-backed; Bun APIs expect ArrayBuffer
     const deflated = Buffer.from(Bun.deflateSync(raw.buffer as ArrayBuffer));
     const adler = Buffer.alloc(4);
+    // JUSTIFIED: same — raw.buffer is the underlying ArrayBuffer
     adler.writeUInt32BE(Bun.hash.adler32(raw.buffer as ArrayBuffer), 0);
     const zlibStream = Buffer.concat([Buffer.from([0x78, 0x9c]), deflated, adler]);
 

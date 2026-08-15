@@ -21,6 +21,7 @@ describe("Database & Audit Layer", () => {
     const promises = Array.from({ length: 8 }, (_, i) =>
       Promise.resolve().then(() =>
         read((db) => {
+          // JUSTIFIED: bun:sqlite .get() returns unknown; narrowing to the row type
           const row = db.query("SELECT 1 as val").get() as { val: number };
           return row.val + i;
         }),

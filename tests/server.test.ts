@@ -65,6 +65,7 @@ describe("Server API Integration", () => {
       body: JSON.stringify(TEST_AGENT),
     });
     if (loginRes.ok) {
+      // JUSTIFIED: req.json() returns unknown; narrowing to the login response shape
       const data = await loginRes.json() as { token: string; csrf_token: string };
       authToken = data.token;
       csrfToken = data.csrf_token;
@@ -91,6 +92,7 @@ describe("Server API Integration", () => {
 
     const res = await fetch(`http://localhost:${TEST_PORT}/health`);
     expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to the typed response interface
     const data = (await res.json()) as HealthResponse;
     expect(data.status).toBe("ok");
     expect(data.workers.total).toBe(1);
@@ -144,6 +146,7 @@ describe("Server API Integration", () => {
       headers: { Authorization: `Bearer ${authToken}` },
     });
     expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to the typed response interface
     const data = (await res.json()) as TasksResponse;
     expect(Array.isArray(data.tasks)).toBe(true);
     expect(typeof data.total).toBe("number");
@@ -160,6 +163,7 @@ describe("Server API Integration", () => {
       headers: { Authorization: `Bearer ${authToken}` },
     });
     expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to the typed response interface
     const data = (await res.json()) as AuditResponse;
     expect(Array.isArray(data.logs)).toBe(true);
   });
@@ -167,13 +171,15 @@ describe("Server API Integration", () => {
   // --- CSRF ---
 
   it("POST /task returns 403 without CSRF token (even with auth)", async () => {
+    // E3: agent_id in the body is now ignored — the server forces it to
+    // ctx.agentId. We send a wrong agent_id to verify it's not used.
     const res = await fetch(`http://localhost:${TEST_PORT}/task`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${authToken}`,
       },
-      body: JSON.stringify({ agent_id: 1, url: "https://example.com" }),
+      body: JSON.stringify({ agent_id: 99999, url: "https://example.com" }),
     });
     expect(res.status).toBe(403);
   });

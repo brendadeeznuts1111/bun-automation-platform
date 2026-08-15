@@ -45,6 +45,7 @@ expect.extend({
       };
     }
 
+    // JUSTIFIED: narrowing unknown to Partial<AuditLogRow> for matcher validation
     const row = actual as Partial<AuditLogRow>;
     const errors: string[] = [];
 

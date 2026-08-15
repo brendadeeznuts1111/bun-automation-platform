@@ -13,7 +13,7 @@ set -euo pipefail
 
 echo "▶ pre-commit: checking for unjustified type casts..."
 
-# Get staged .ts/.tsx files
+# Get staged .ts/.tsx files (including tests)
 staged_files=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx)$' || true)
 
 if [ -z "$staged_files" ]; then

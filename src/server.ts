@@ -32,6 +32,13 @@ const PORT = parseInt(process.env.PORT ?? "3000", 10);
 const HOST = process.env.HOST ?? "0.0.0.0";
 const NODE_ENV = process.env.NODE_ENV ?? "development";
 
+// F7: Pre-compute a real Argon2id hash at startup for the login timing oracle
+// mitigation (E2). Using a real hash with the same parameters as
+// Bun.password.hash() ensures the dummy verify takes nearly the same time as
+// a real "wrong password" verify. Generated once at startup, reused for all
+// non-existent-user login attempts.
+const DUMMY_PASSWORD_HASH = await Bun.password.hash("dummy-password-that-never-matches");
+
 // --- Init ------------------------------------------------------------------
 
 console.log(`[server] starting in ${NODE_ENV} mode on ${HOST}:${PORT}`);
@@ -201,8 +208,11 @@ const loginHandler = withMiddleware<"">(async (req) => {
     if (!agent) {
       // E2: Timing oracle — if we return immediately for non-existent users,
       // an attacker can enumerate valid usernames by measuring response time.
-      // Do a dummy password verify to match the timing of the "wrong password" path.
-      await Bun.password.verify(body.password, "$argon2id$v=19$m=65536,t=3,p=4$c2FsdHNhbHQ$YmFkYmFkYmFkYmFkYmFkYmFkYmFkYmFkYmFkYmFk");
+      // F7: Generate a real Argon2id hash at startup with the same parameters
+      // Bun.password.hash uses by default, then verify against it. This gives
+      // nearly identical timing to the "wrong password" path (both do a full
+      // Argon2id verification with the same m/t/p parameters).
+      await Bun.password.verify(body.password, DUMMY_PASSWORD_HASH);
       await audit({ action: "login_failed", resource: body.username, ip_address: ip });
       return errorResponse("invalid credentials", 401);
     }
@@ -406,10 +416,11 @@ const auditHandler = withAuth<"">((req, ctx) => {
   const url = new URL(req.url);
   const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "50", 10), 200);
   const offset = parseInt(url.searchParams.get("offset") ?? "0", 10);
-  // E3: IDOR fix — agents can only see their own audit logs unless they specify
-  // another agent_id (which we ignore and force to their own)
-  const requestedAgentId = url.searchParams.get("agent_id");
-  const agentId = requestedAgentId ? parseInt(requestedAgentId, 10) : ctx.agentId;
+  // E3: IDOR fix — agents can only see their own audit logs.
+  // F1: The previous code used the requested agent_id if provided — that was
+  // still an IDOR. Now we always force agentId to ctx.agentId regardless of
+  // what the client requests.
+  const agentId = ctx.agentId;
 
   const logs = getAuditLog(limit, offset, agentId);
   return json({ logs, limit, offset });

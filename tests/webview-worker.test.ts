@@ -86,6 +86,7 @@ describe("WebView Worker Integration", () => {
 
     while (Date.now() - start < maxWait) {
       const task = read((db) => {
+        // JUSTIFIED: bun:sqlite .get() returns unknown; narrowing to the task row type
         return db.query("SELECT status, result, error FROM tasks WHERE id = ?").get(taskId) as
           | { status: string; result: string | null; error: string | null }
           | null;
@@ -125,6 +126,7 @@ describe("WebView Worker Integration", () => {
   it("session row is populated with cookies/localStorage (D2)", async () => {
     // Check if a session row was created for this task
     const session = read((db) => {
+      // JUSTIFIED: bun:sqlite .get() returns unknown; narrowing to the session row type
       return db.query(
         "SELECT id, task_id, cookies, local_storage, screenshot_path FROM sessions WHERE task_id = ?",
       ).get(taskId) as
