@@ -7,3 +7,9 @@
 # (symlinks vs file copies) and reduces disk usage across projects.
 # Override with BUN_INSTALL_GLOBAL_STORE=0 if needed.
 globalStore = true
+
+[test]
+# Preload before any test file imports — sets DB_PATH to a temp file so
+# tests never touch ./data/platform.db. See tests/setup.ts.
+# Static test env (NODE_ENV=test) lives in .env.test, auto-loaded by bun test.
+preload = ["./tests/setup.ts"]
