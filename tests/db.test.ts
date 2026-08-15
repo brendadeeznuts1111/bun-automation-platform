@@ -10,8 +10,8 @@ describe("Database & Audit Layer", () => {
   // Clean test-generated rows before each test so tests don't inherit
   // prior test state. Uses unique action/site prefixes as a safety net,
   // but this ensures exact counts for assertions.
-  beforeEach(() => {
-    write((db) => {
+  beforeEach(async () => {
+    await write((db) => {
       db.exec("DELETE FROM audit_log WHERE action LIKE 'test_%' OR action LIKE 'zero-agent-%' OR action LIKE 'other-agent-%'");
       db.exec("DELETE FROM circuit_breakers WHERE site LIKE 'db-mutex-%'");
     });
