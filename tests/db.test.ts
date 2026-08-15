@@ -53,7 +53,12 @@ describe("Database & Audit Layer", () => {
 
     const logs = getAuditLog(10, 0, uniqueAgentId);
     expect(logs.length).toBeGreaterThanOrEqual(1);
+
+    // Every returned row must be a valid audit entry AND match the filter.
+    for (const row of logs) {
+      expect(row).toBeValidAuditEntry();
+      expect(row.agent_id).toBe(uniqueAgentId);
+    }
     expect(logs[0]?.action).toBe("test_audit_event");
-    expect(logs[0]?.agent_id).toBe(uniqueAgentId);
   });
 });
