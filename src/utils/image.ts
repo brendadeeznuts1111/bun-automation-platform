@@ -12,7 +12,7 @@
  */
 
 import { resolve, join } from "node:path";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, realpathSync } from "node:fs";
 
 const SCREENSHOT_DIR = resolve(process.env.SCREENSHOT_DIR ?? "./data/screenshots");
 const THUMBNAIL_WIDTH = parseInt(process.env.THUMBNAIL_WIDTH ?? "400", 10);
@@ -135,7 +135,20 @@ export function serveScreenshot(
     return new Response("forbidden", { status: 403 });
   }
 
-  let img = new Bun.Image(resolved, { maxPixels: 4096 * 4096 });
+  // E9: Use realpath to resolve symlinks — prevents an attacker from creating
+  // a symlink inside SCREENSHOT_DIR that points to a file outside it.
+  let realPath: string;
+  try {
+    realPath = realpathSync(resolved);
+  } catch {
+    return new Response("file not found", { status: 404 });
+  }
+  const realScreenshotDir = realpathSync(SCREENSHOT_DIR);
+  if (!realPath.startsWith(realScreenshotDir + "/") && realPath !== realScreenshotDir) {
+    return new Response("forbidden", { status: 403 });
+  }
+
+  let img = new Bun.Image(realPath, { maxPixels: 4096 * 4096 });
   if (width) img = img.resize(width, width, { fit: "inside" });
 
   switch (format) {

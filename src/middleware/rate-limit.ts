@@ -33,18 +33,23 @@ function getConfig(path: string): RateLimitConfig {
 }
 
 /**
- * Check and increment the rate limit for a key (usually IP + path prefix).
+ * Check and increment the rate limit for a key (usually IP + path prefix + method).
  * Returns true if the request is allowed, false if rate-limited.
  * Atomic upsert with RETURNING count prevents TOCTOU race condition.
+ *
+ * E11: Include the HTTP method in the key so that GET /task/:id (read-heavy)
+ * and POST /task (write-heavy) don't share the same rate limit bucket.
  */
 export async function checkRateLimit(
   ip: string,
   path: string,
+  method: string,
 ): Promise<{ allowed: boolean; remaining: number; resetAt: number }> {
   const cfg = getConfig(path);
   const now = Math.floor(Date.now() / 1000);
   const windowStart = now - (now % cfg.windowSeconds);
-  const key = `${ip}:${path.split("/").slice(0, 2).join("/")}`;
+  // E11: Include method in the key to separate read and write rate limits
+  const key = `${ip}:${method}:${path.split("/").slice(0, 2).join("/")}`;
   const resetAt = (windowStart + cfg.windowSeconds) * 1000;
 
   const count = await write((db) => {

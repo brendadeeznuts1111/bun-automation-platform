@@ -324,16 +324,25 @@ process.on("message", async (msg: ParentToWorkerMessage) => {
       });
 
       completeTask(taskId, result);
-      recordSuccess(getSiteKey(task.url));
+      // E6: Catch circuit breaker write rejections — don't let them become
+      // unhandled rejections that could crash the worker.
+      recordSuccess(getSiteKey(task.url)).catch((e) =>
+        console.error(`[worker:${process.pid}] recordSuccess failed:`, e),
+      );
       // D7: If IPC is closed, the task is still completed in the DB — just can't notify
       sendToParent({ type: "result", taskId, result });
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       failTask(taskId, errMsg);
       // D9: Use getSiteKey to handle data:/file: URLs gracefully
+      // E6: Catch circuit breaker write rejections
       try {
         const task = loadTask(taskId);
-        if (task) recordFailure(getSiteKey(task.url));
+        if (task) {
+          recordFailure(getSiteKey(task.url)).catch((e) =>
+            console.error(`[worker:${process.pid}] recordFailure failed:`, e),
+          );
+        }
       } catch {} // best-effort — don't mask the original error
       sendToParent({ type: "error", taskId, error: errMsg });
     }

@@ -34,6 +34,10 @@ function ensureReaders(): void {
   for (let i = 0; i < READER_COUNT; i++) {
     const r = new Database(DB_PATH, { readonly: true });
     r.exec("PRAGMA journal_mode = WAL;");
+    // E5: Match the writer's busy_timeout so reads don't fail immediately
+    // when a write is in progress (WAL allows concurrent reads, but checkpoint
+    // operations can briefly lock pages).
+    r.exec("PRAGMA busy_timeout = 5000;");
     readers.push(r);
   }
 }
@@ -188,11 +192,21 @@ export function migrate(): void {
 
   for (const m of MIGRATIONS) {
     if (m.version > currentVersion) {
-      writer.exec(m.sql);
-      writer
-        .query("INSERT OR REPLACE INTO _meta (key, value) VALUES ('schema_version', ?)")
-        .run(m.version.toString());
-      console.log(`[db] migrated to schema version ${m.version}`);
+      // E4: Wrap each migration in a transaction. If any statement fails,
+      // the entire migration rolls back — no partial schema changes left behind.
+      writer.exec("BEGIN");
+      try {
+        writer.exec(m.sql);
+        writer
+          .query("INSERT OR REPLACE INTO _meta (key, value) VALUES ('schema_version', ?)")
+          .run(m.version.toString());
+        writer.exec("COMMIT");
+        console.log(`[db] migrated to schema version ${m.version}`);
+      } catch (err) {
+        writer.exec("ROLLBACK");
+        console.error(`[db] migration ${m.version} failed, rolled back:`, err);
+        throw err;
+      }
     }
   }
 

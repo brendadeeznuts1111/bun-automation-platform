@@ -163,7 +163,19 @@ function dispatchNext(): void {
   const task = taskQueue.shift()!;
   idle.busy = true;
   idle.currentTask = task;
-  idle.proc.send({ type: "task", taskId: task.taskId });
+
+  // E7: Catch proc.send() errors — if the IPC channel is closed, reject the
+  // task immediately instead of leaving it stuck in currentTask forever.
+  try {
+    idle.proc.send({ type: "task", taskId: task.taskId });
+  } catch (err) {
+    console.error(`[workers] failed to send task to worker (IPC closed):`, err);
+    idle.busy = false;
+    idle.currentTask = null;
+    task.reject(new Error("worker IPC channel closed"));
+    // Try dispatching to another worker
+    dispatchNext();
+  }
 }
 
 /** Submit a task to the worker pool. Returns a promise that resolves with the result. */
@@ -177,11 +189,13 @@ export function submitTask(taskId: number): Promise<unknown> {
 
 /** Get pool status for health checks. */
 export function getPoolStatus(): { total: number; busy: number; idle: number; queued: number } {
-  const busy = pool.filter((s) => s.busy).length;
+  // E8: Exclude exited workers from the idle count — they can't accept tasks.
+  const active = pool.filter((s) => !s.exited);
+  const busy = active.filter((s) => s.busy).length;
   return {
     total: pool.length,
     busy,
-    idle: pool.length - busy,
+    idle: active.length - busy,
     queued: taskQueue.length,
   };
 }

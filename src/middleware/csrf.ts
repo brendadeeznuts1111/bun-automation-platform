@@ -12,7 +12,14 @@
  * Ref: https://bun.com/docs/runtime/csrf
  */
 
+// E1: In production, require CSRF_SECRET to be set. A hardcoded default
+// would let attackers forge CSRF tokens signed with a publicly known secret.
 const CSRF_SECRET = process.env.CSRF_SECRET ?? "dev-csrf-secret-change-in-prod";
+if (process.env.NODE_ENV === "production" && !process.env.CSRF_SECRET) {
+  console.error("[csrf] FATAL: CSRF_SECRET environment variable is not set in production.");
+  console.error("[csrf] Refusing to start with a known default secret. Set CSRF_SECRET to a random string.");
+  process.exit(1);
+}
 
 /** Generate a CSRF token bound to a session ID. */
 export function generateCsrfToken(sessionId: string): string {

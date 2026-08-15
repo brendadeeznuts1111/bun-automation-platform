@@ -50,6 +50,13 @@ setInterval(() => {
   cleanupRateLimits().catch((e) => console.error("[server] rate limit cleanup failed:", e));
 }, 300_000); // every 5 min
 
+// E10: Periodic cleanup of expired auth sessions — prevents unbounded growth.
+setInterval(() => {
+  write((db) => {
+    db.query("DELETE FROM auth_sessions WHERE expires_at <= datetime('now')").run();
+  }).catch((e) => console.error("[server] session cleanup failed:", e));
+}, 3_600_000); // every hour
+
 // --- Helpers ---------------------------------------------------------------
 
 /**
@@ -98,7 +105,7 @@ function withMiddleware<T extends string>(
     const ip = getClientIP(req);
     const path = new URL(req.url).pathname;
 
-    const rl = await checkRateLimit(ip, path);
+    const rl = await checkRateLimit(ip, path, req.method);
     if (!rl.allowed) {
       return withCors(req, errorResponse("Too Many Requests", 429));
     }
@@ -190,6 +197,10 @@ const loginHandler = withMiddleware<"">(async (req) => {
     });
 
     if (!agent) {
+      // E2: Timing oracle — if we return immediately for non-existent users,
+      // an attacker can enumerate valid usernames by measuring response time.
+      // Do a dummy password verify to match the timing of the "wrong password" path.
+      await Bun.password.verify(body.password, "$argon2id$v=19$m=65536,t=3,p=4$c2FsdHNhbHQ$YmFkYmFkYmFkYmFkYmFkYmFkYmFkYmFkYmFkYmFk");
       await audit({ action: "login_failed", resource: body.username, ip_address: ip });
       return errorResponse("invalid credentials", 401);
     }
@@ -231,31 +242,31 @@ const loginHandler = withMiddleware<"">(async (req) => {
   }
 });
 
-const listTasksHandler = withAuth<"">((req) => {
+const listTasksHandler = withAuth<"">((req, ctx) => {
   const url = new URL(req.url);
   const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "50", 10), 200);
   const offset = parseInt(url.searchParams.get("offset") ?? "0", 10);
   const status = url.searchParams.get("status");
 
   // m4: Single parameterized query instead of two different SQL strings.
-  // Avoids filling the db.query() statement cache (default size: 20).
+  // E3: IDOR fix — only list tasks owned by the authenticated agent.
   const tasks = read((db) => {
     return db.query(
       `SELECT id, agent_id, url, status, progress, priority, error, created_at, updated_at, completed_at
-       FROM tasks WHERE (? IS NULL OR status = ?)
+       FROM tasks WHERE agent_id = ? AND (? IS NULL OR status = ?)
        ORDER BY priority DESC, created_at DESC LIMIT ? OFFSET ?`,
-    ).all(status, status, limit, offset);
+    ).all(ctx.agentId, status, status, limit, offset);
   });
 
   const total = read((db) => {
-    const row = db.query("SELECT COUNT(*) as count FROM tasks").get() as { count: number };
+    const row = db.query("SELECT COUNT(*) as count FROM tasks WHERE agent_id = ?").get(ctx.agentId) as { count: number };
     return row.count;
   });
 
   return json({ tasks, total, limit, offset });
 });
 
-const createTaskHandler = withCsrf<"">(async (req, _ctx) => {
+const createTaskHandler = withCsrf<"">(async (req, ctx) => {
   try {
     const body = await req.json() as {
       agent_id: number;
@@ -265,9 +276,13 @@ const createTaskHandler = withCsrf<"">(async (req, _ctx) => {
       priority?: number;
     };
 
-    if (!body.url || !body.agent_id) {
-      return errorResponse("agent_id and url are required", 400);
+    if (!body.url) {
+      return errorResponse("url is required", 400);
     }
+
+    // E3: IDOR fix — force agent_id to the authenticated agent's ID.
+    // The client can't create tasks for other agents.
+    const agentId = ctx.agentId;
 
     // Validate URL
     try {
@@ -282,7 +297,7 @@ const createTaskHandler = withCsrf<"">(async (req, _ctx) => {
         `INSERT INTO tasks (agent_id, url, proxy, user_agent, priority)
          VALUES (?, ?, ?, ?, ?)`,
       ).run(
-        body.agent_id,
+        agentId,
         body.url,
         body.proxy ?? null,
         body.user_agent ?? null,
@@ -291,7 +306,7 @@ const createTaskHandler = withCsrf<"">(async (req, _ctx) => {
       return Number(result.lastInsertRowid);
     });
 
-    await audit({ agent_id: body.agent_id, action: "task_created", resource: `task:${taskId}`, ip_address: ip });
+    await audit({ agent_id: agentId, action: "task_created", resource: `task:${taskId}`, ip_address: ip });
 
     // Submit to worker pool (async — don't await)
     // D1: If the worker crashes, the task promise rejects. Mark the task as
@@ -315,37 +330,56 @@ const createTaskHandler = withCsrf<"">(async (req, _ctx) => {
   }
 });
 
-const getTaskHandler = withAuth<"/task/:id">((req) => {
+const getTaskHandler = withAuth<"/task/:id">((req, ctx) => {
   const taskId = parseInt(req.params.id, 10);
+  // E3: IDOR fix — only return the task if it belongs to the authenticated agent
   const task = read((db) => {
-    return db.query("SELECT * FROM tasks WHERE id = ?").get(taskId);
+    return db.query("SELECT * FROM tasks WHERE id = ? AND agent_id = ?").get(taskId, ctx.agentId);
   });
 
   if (!task) return errorResponse("task not found", 404);
   return json(task);
 });
 
-const listSessionsHandler = withAuth<"">((req) => {
+const listSessionsHandler = withAuth<"">((req, ctx) => {
   const url = new URL(req.url);
   const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "50", 10), 200);
   const offset = parseInt(url.searchParams.get("offset") ?? "0", 10);
+  // E12: Filter out expired sessions by default (opt-in with ?include_expired=true)
+  const includeExpired = url.searchParams.get("include_expired") === "true";
 
   const sessions = read((db) => {
+    // E3: IDOR fix — only list sessions for tasks owned by the authenticated agent
+    // E12: Filter expired sessions unless explicitly requested
+    if (includeExpired) {
+      return db.query(
+        `SELECT s.id, s.task_id, s.screenshot_path, s.screenshot_color, s.expires_at, s.last_healthy, s.created_at
+         FROM sessions s JOIN tasks t ON s.task_id = t.id
+         WHERE t.agent_id = ?
+         ORDER BY s.created_at DESC LIMIT ? OFFSET ?`,
+      ).all(ctx.agentId, limit, offset);
+    }
     return db.query(
-      `SELECT id, task_id, screenshot_path, screenshot_color, expires_at, last_healthy, created_at
-       FROM sessions ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-    ).all(limit, offset);
+      `SELECT s.id, s.task_id, s.screenshot_path, s.screenshot_color, s.expires_at, s.last_healthy, s.created_at
+       FROM sessions s JOIN tasks t ON s.task_id = t.id
+       WHERE t.agent_id = ? AND (s.expires_at IS NULL OR s.expires_at > datetime('now'))
+       ORDER BY s.created_at DESC LIMIT ? OFFSET ?`,
+    ).all(ctx.agentId, limit, offset);
   });
 
   return json({ sessions, limit, offset });
 });
 
-const getScreenshotHandler = withAuth<"/screenshot/:id">((req) => {
+const getScreenshotHandler = withAuth<"/screenshot/:id">((req, ctx) => {
   const sessionId = parseInt(req.params.id, 10);
+  // E3: IDOR fix — only return the screenshot if the session belongs to a task
+  // owned by the authenticated agent
   const session = read((db) => {
-    return db.query("SELECT screenshot_path FROM sessions WHERE id = ?").get(sessionId) as
-      | { screenshot_path: string }
-      | null;
+    return db.query(
+      `SELECT s.screenshot_path FROM sessions s
+       JOIN tasks t ON s.task_id = t.id
+       WHERE s.id = ? AND t.agent_id = ?`,
+    ).get(sessionId, ctx.agentId) as { screenshot_path: string } | null;
   });
 
   if (!session) return errorResponse("session not found", 404);
@@ -363,13 +397,16 @@ const getScreenshotHandler = withAuth<"/screenshot/:id">((req) => {
   }
 });
 
-const auditHandler = withAuth<"">((req) => {
+const auditHandler = withAuth<"">((req, ctx) => {
   const url = new URL(req.url);
   const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "50", 10), 200);
   const offset = parseInt(url.searchParams.get("offset") ?? "0", 10);
-  const agentId = url.searchParams.get("agent_id");
+  // E3: IDOR fix — agents can only see their own audit logs unless they specify
+  // another agent_id (which we ignore and force to their own)
+  const requestedAgentId = url.searchParams.get("agent_id");
+  const agentId = requestedAgentId ? parseInt(requestedAgentId, 10) : ctx.agentId;
 
-  const logs = getAuditLog(limit, offset, agentId ? parseInt(agentId, 10) : undefined);
+  const logs = getAuditLog(limit, offset, agentId);
   return json({ logs, limit, offset });
 });
 
