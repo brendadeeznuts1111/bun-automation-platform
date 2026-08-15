@@ -139,6 +139,18 @@ describe("Bun Native APIs & Utilities", () => {
     expect(bunBin).toContain("bun");
   });
 
+  it("bun:jsc provides heap stats and debugging snapshots", () => {
+    const { heapStats, heapSize, memoryUsage, generateHeapSnapshotForDebugging } = require("bun:jsc");
+    const stats = heapStats();
+    expect(stats.heapSize).toBeGreaterThan(0);
+    expect(stats.objectCount).toBeGreaterThan(0);
+    expect(heapSize()).toBeGreaterThan(0);
+    expect(memoryUsage().current).toBeGreaterThan(0);
+
+    const snapshot = generateHeapSnapshotForDebugging();
+    expect(typeof snapshot).toBe("object");
+  });
+
   it("Bun.cron.parse parses cron schedule expressions", () => {
     if (Bun.cron && typeof Bun.cron.parse === "function") {
       const parsed = Bun.cron.parse("0 2 * * *");
