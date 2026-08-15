@@ -13,15 +13,9 @@ Each task cites the specific Bun API/doc that grounds it.
 
 ## A. Code Quality Fixes (existing code, no new features)
 
-### A1. Migrate to `routes` property (Bun.serve docs — Routing)
+### A1. Migrate to `routes` property (Bun.serve docs — Routing) — [RESOLVED ✅]
 
-**Current:** `src/server.ts` uses manual `path.match(/^\/task\/(\d+)$/)` regex matching inside a single `fetch()` handler. 326 lines of if/else chains.
-
-**Doc pattern:** `Bun.serve({ routes: { "/task/:id": req => ..., "/users/:id": req => ... } })` — Bun's router does SIMD-accelerated param decoding, type-safe `req.params`, and static response caching. Per-method handlers (`GET`, `POST`) are supported natively.
-
-**Action:** Rewrite server.ts to use the `routes` object. Eliminates all regex matching, gives type-safe params, and improves dispatch performance.
-
-**Ref:** https://bun.com/docs/runtime/http/routing
+**Current:** `src/server.ts` now uses Bun's native `routes` object with per-method handlers (`GET`, `POST`). All 9 endpoints are defined as typed routes with `BunRequest<T>` params. A `withMiddleware()` wrapper applies rate limiting + CORS to all routes. CORS preflight (OPTIONS) is handled in the `fetch()` fallback. Eliminates all regex matching and if/else chains.
 
 ### A2. Fix `require()` calls in ESM context (task-worker.ts:160,192) — [RESOLVED ✅]
 
