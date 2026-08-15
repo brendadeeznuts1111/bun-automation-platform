@@ -28,6 +28,7 @@ All of this is built on Bun's native APIs – no external dependencies, compiled
 | **Native `using` / `await using`** | Automatic resource disposal (WebViews, DB connections, file handles) without transpilation overhead – cleaner, faster, and stack-trace friendly. |
 | **FreeBSD & Android builds** | Deploy Bun on routers (pfSense, TrueNAS), IoT devices, and Android phones – extending automation to edge computing. |
 | **WebSocket `perMessageDeflate: false`** | Reliably connect to enterprise WebSocket gateways that reject compression extensions – essential for corporate environments. |
+| **Event loop refactor** | Eliminates leaks in `DuplexUpgradeContext` on TLS upgrade, fixes `UpgradedDuplex` callback wiring, and properly tracks off-heap SSL memory. |
 | **SIGHUP / SIGBREAK on Windows** | Gracefully shut down on console close – prevents data corruption in long-running services. |
 
 ---
@@ -231,11 +232,12 @@ flowchart TB
 | `bun build --compile` | Built-in | Stable | Standalone executables |
 | HTTP/3 client in `fetch()` | v1.3.14 | Stable | Fast, multiplexed HTTP |
 | Shared SSL_CTX cache | v1.3.14 | Stable | Low-memory TLS |
-| Rewritten `fs.watch` | v1.3.14 | Stable | File system monitoring |
+| Rewritten `fs.watch` | v1.3.14 | Stable | File system monitoring (1 watcher thread on macOS instead of 2) |
 | `Bun.Terminal` (Windows ConPTY) | v1.3.14 | Stable | Cross-platform PTY |
 | Native `using` / `await using` | v1.3.14 | Stable | Resource disposal |
 | FreeBSD / Android builds | v1.3.14 | Stable | Broader OS support |
 | `perMessageDeflate: false` | v1.3.14 | Stable | WebSocket compatibility |
+| Event loop refactor | v1.3.14 | Stable | Event loop reliability & memory lifecycle fixes |
 | SIGHUP / SIGBREAK on Windows | v1.3.14 | Stable | Signal handling |
 
 ### `Bun.markdown` — Built-in Markdown Parser (v1.3.8 core, v1.3.12 ansi, Unstable)

@@ -40,7 +40,8 @@ This table maps every Bun API used in the automation platform to its **version**
 | **`bun build --compile`** | Built-in | [Docs](https://bun.com/docs/bundler/compile) | Stable | `bun build --compile --minify src/server.ts --outfile server` | Creates standalone executable; v1.3.4 added runtime config skip. |
 | **HTTP/3 client in `fetch()`** | v1.3.14 | [Blog](https://bun.com/blog/bun-v1.3.14) | Stable | `fetch("https://cloudflare.com")` automatically uses HTTP/3 if supported. | Experimental HTTP/3 and HTTP/2 clients; QUIC support. |
 | **Shared SSL_CTX cache** | v1.3.14 | [Blog](https://bun.com/blog/bun-v1.3.14) | Stable | All TLS connections share a single SSL context. | Reduces memory from ~50 KB per connection to shared; affects Postgres, MongoDB, etc. |
-| **`fs.watch` rewritten** | v1.3.14 | [Blog](https://bun.com/blog/bun-v1.3.14) | Stable | `fs.watch("./config", (event, filename) => { ... });` | Recursive watching; handles deleted/recreated files; single thread on macOS. |
+| **`fs.watch` rewritten** | v1.3.14 | [Blog](https://bun.com/blog/bun-v1.3.14#rewritten-fs-watch-backend-on-linux-macos-and-freebsd) | Stable | `fs.watch("./config", (event, filename) => { ... });` | Native OS backends (inotify/FSEvents/kqueue); recursive watching; 1 thread per watch on macOS instead of 2. |
+| **Event loop refactor** | v1.3.14 | [Blog](https://bun.com/blog/bun-v1.3.14#event-loop-refactor) | Stable | Event loop reliability & memory lifecycle improvements. | Fixed `DuplexUpgradeContext` TLS leaks, `UpgradedDuplex.onEndCallback` wiring, and off-heap SSL memory accounting. |
 | **WebSocket `perMessageDeflate: false`** | v1.3.14 | [Blog](https://bun.com/blog/bun-v1.3.14) | Stable | `new WebSocket("wss://...", { perMessageDeflate: false });` | Suppresses extension header for gateway compatibility. |
 | **`SIGHUP` / `SIGBREAK` on Windows** | v1.3.14 | [Blog](https://bun.com/blog/bun-v1.3.14) | Stable | `process.on("SIGHUP", () => { cleanup(); });` | Console close (`CTRL_CLOSE_EVENT`) maps to `SIGHUP`; `CTRL_BREAK_EVENT` to `SIGBREAK`. |
 | **Native `using` / `await using`** | v1.3.14 | [Blog](https://bun.com/blog/bun-v1.3.14#using-await-using-no-longer-lowered-when-targeting-bun) | Stable | `{ using view = new Bun.WebView(); }` | No transpilation when target `bun`; JavaScriptCore native support. |
@@ -356,7 +357,7 @@ Same as `Options` plus:
 | v1.3.8 | `Bun.markdown` (`html`, `render`, `react`) |
 | v1.3.11 | `Bun.cron` |
 | v1.3.12 | `Bun.WebView`, `Bun.markdown.ansi()`, `bun ./file.md` CLI |
-| v1.3.14 | `Bun.Image`, `process.execve`, `Bun.Terminal` (Windows), HTTP/3, shared SSL_CTX, `fs.watch` rewrite, `perMessageDeflate: false`, `SIGHUP`/`SIGBREAK` on Windows, native `using`, `--no-orphans`, FreeBSD/Android, `Bun.markdown.ansi()` UTF-8 fix |
+| v1.3.14 | `Bun.Image`, `process.execve`, `Bun.Terminal` (Windows), HTTP/3, shared SSL_CTX, `fs.watch` rewrite (1 thread on macOS instead of 2), event loop refactor, `perMessageDeflate: false`, `SIGHUP`/`SIGBREAK` on Windows, native `using`, `--no-orphans`, FreeBSD/Android, `Bun.markdown.ansi()` UTF-8 fix |
 
 ---
 
