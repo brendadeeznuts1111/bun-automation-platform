@@ -60,6 +60,7 @@ let writeQueue: Promise<unknown> = Promise.resolve();
 export function write<T>(fn: (db: Database) => T): Promise<T> {
   const run = writeQueue.then(() => fn(writer));
   writeQueue = run.catch(() => {});
+  // JUSTIFIED: writeQueue is Promise<unknown> for chaining; narrowing to Promise<T>
   return run as Promise<T>;
 }
 

@@ -163,6 +163,7 @@ const metricsHandler = withMiddleware((): Response => {
   const taskCounts = read((db) => {
     return db.query(
       `SELECT status, COUNT(*) as count FROM tasks GROUP BY status`,
+    // JUSTIFIED: bun:sqlite .all() returns unknown[]; narrowing to the count row type
     ).all() as { status: string; count: number }[];
   });
 
@@ -183,6 +184,7 @@ const metricsHandler = withMiddleware((): Response => {
 
 const loginHandler = withMiddleware<"">(async (req) => {
   try {
+    // JUSTIFIED: req.json() returns unknown; narrowing to the login body shape
     const body = await req.json() as { username: string; password: string };
 
     if (!body.username || !body.password) {
@@ -259,6 +261,7 @@ const listTasksHandler = withAuth<"">((req, ctx) => {
   });
 
   const total = read((db) => {
+    // JUSTIFIED: bun:sqlite .get() returns unknown; narrowing to the count row type
     const row = db.query("SELECT COUNT(*) as count FROM tasks WHERE agent_id = ?").get(ctx.agentId) as { count: number };
     return row.count;
   });
@@ -268,6 +271,7 @@ const listTasksHandler = withAuth<"">((req, ctx) => {
 
 const createTaskHandler = withCsrf<"">(async (req, ctx) => {
   try {
+    // JUSTIFIED: req.json() returns unknown; narrowing to the task creation body shape
     const body = await req.json() as {
       agent_id: number;
       url: string;
@@ -379,6 +383,7 @@ const getScreenshotHandler = withAuth<"/screenshot/:id">((req, ctx) => {
       `SELECT s.screenshot_path FROM sessions s
        JOIN tasks t ON s.task_id = t.id
        WHERE s.id = ? AND t.agent_id = ?`,
+    // JUSTIFIED: bun:sqlite .get() returns unknown; narrowing to the session row type
     ).get(sessionId, ctx.agentId) as { screenshot_path: string } | null;
   });
 

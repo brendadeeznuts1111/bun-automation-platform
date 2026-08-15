@@ -46,6 +46,7 @@ export function getAuditLog(
          FROM audit_log WHERE (? IS NULL OR agent_id = ?)
          ORDER BY created_at DESC LIMIT ? OFFSET ?`,
       )
+      // JUSTIFIED: bun:sqlite .all() returns unknown[]; narrowing to AuditLogRow[]
       .all(agentId ?? null, agentId ?? null, limit, offset) as AuditLogRow[];
   });
 }

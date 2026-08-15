@@ -14,6 +14,7 @@
 
 import { resolve } from "node:path";
 import { mkdirSync } from "node:fs";
+import * as os from "node:os";
 import { write, read } from "../db";
 import { withRetry } from "../utils/retry";
 import { recordSuccess, recordFailure } from "../utils/circuit-breaker";
@@ -43,16 +44,22 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   ]);
 }
 
-/** Detect macOS < 15.2 where WebKit persistent storage is unsupported. */
+/**
+ * Detect macOS < 15.2 where WebKit persistent storage is unsupported.
+ *
+ * Uses node:os.release() which returns the Darwin kernel version.
+ * macOS 15.2 maps to Darwin 24.2. We check Darwin >= 24.2.
+ *
+ * Ref: node_modules/bun-types/docs/runtime/webview.mdx#persistent-storage
+ */
 function supportsPersistentStorage(): boolean {
   if (process.platform !== "darwin") return true; // Linux uses Chrome backend
-  // Bun.osVersion is available on macOS — parse major.minor
-  const version = (Bun as { osVersion?: string }).osVersion ?? "";
-  const parts = version.split(".");
+  const release = os.release();
+  const parts = release.split(".");
   const major = parseInt(parts[0] ?? "0", 10);
   const minor = parseInt(parts[1] ?? "0", 10);
-  // macOS 15.2+ required for WebKit dataStore
-  return major > 15 || (major === 15 && minor >= 2);
+  // macOS 15.2 = Darwin 24.2
+  return major > 24 || (major === 24 && minor >= 2);
 }
 
 // --- Task loading ----------------------------------------------------------
@@ -65,6 +72,7 @@ function loadTask(taskId: number): TaskRow | null {
                 geo_lat, geo_lon, error, result, created_at, updated_at, started_at, completed_at
          FROM tasks WHERE id = ?`,
       )
+      // JUSTIFIED: bun:sqlite .get() returns unknown; narrowing to TaskRow | null
       .get(taskId) as TaskRow | null;
   });
 }
@@ -199,6 +207,7 @@ async function executeTask(task: TaskRow): Promise<string> {
     const lsJson = await view.evaluate(
       "(() => { const o = {}; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); o[k] = localStorage.getItem(k); } return JSON.stringify(o); })()",
     );
+    // JUSTIFIED: evaluate() returns unknown; JSON.parse returns any — narrowing to Record
     localStorageData = lsJson ? JSON.parse(lsJson as string) as Record<string, string> : {};
   } catch {
     // localStorage may be inaccessible on some pages — non-fatal

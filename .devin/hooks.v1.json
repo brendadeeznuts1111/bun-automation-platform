@@ -1,0 +1,14 @@
+{
+  "PreToolUse": [
+    {
+      "matcher": "edit|write",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "./.devin/hooks/check-type-casts.sh",
+          "timeout": 10
+        }
+      ]
+    }
+  ]
+}

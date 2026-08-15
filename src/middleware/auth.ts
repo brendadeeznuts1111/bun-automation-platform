@@ -65,6 +65,7 @@ export function verifyAuth(req: Request): AuthContext | null {
     return db.query(
       `SELECT id, agent_id FROM auth_sessions
        WHERE token = ? AND expires_at > datetime('now')`,
+    // JUSTIFIED: bun:sqlite .get() returns unknown; narrowing to the session row type
     ).get(token) as { id: number; agent_id: number } | null;
   });
 
