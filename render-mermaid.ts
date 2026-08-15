@@ -373,7 +373,10 @@ try {
     await view.resize(clip.x + clip.width, clip.y + clip.height);
     await Bun.sleep(100); // let the resize settle
 
-    const pngBlob = await view.screenshot({ format: "png", encoding: "blob" });
+    // L5: "blob" is the default encoding for view.screenshot(), so we
+    // don't need to specify it explicitly.
+    // Ref: node_modules/bun-types/bun.d.ts — screenshot(options?: { encoding?: "blob"; ... }): Promise<Blob>
+    const pngBlob = await view.screenshot({ format: "png" });
     await write(outPath, pngBlob);
     console.log(`${c.ok("done:")} ${c.value(outPath)}`);
   }
