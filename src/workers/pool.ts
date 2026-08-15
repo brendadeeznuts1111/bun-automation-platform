@@ -84,6 +84,14 @@ function spawnWorker(): WorkerSlot {
       ...process.env,
       // Strip --hot to prevent event loop hang in child
       BUN_OPTIONS: undefined,
+      // P1: --no-orphans — automatically exit when the parent process dies,
+      // even if the parent is SIGKILLed and never sends a shutdown signal.
+      // On Linux: prctl(PR_SET_PDEATHSIG, SIGKILL) — kernel-delivered, no polling.
+      // On macOS: kqueue EVFILT_PROC NOTE_EXIT — same mechanism as child process watching.
+      // The flag is inherited by nested Bun processes, so workers' subprocesses
+      // (Bun.WebView Chrome processes) also die when the server dies.
+      // Ref: https://bun.sh/blog/bun-v1.3.14#no-orphans-exit-when-the-parent-process-dies
+      BUN_FEATURE_FLAG_NO_ORPHANS: "1",
     },
   });
 

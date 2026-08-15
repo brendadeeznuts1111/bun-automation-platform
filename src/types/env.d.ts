@@ -101,5 +101,7 @@ declare module "bun" {
     // --- Bun feature flags ---
     /** Enable experimental HTTP/3 fetch client (used by render-mermaid.ts). */
     BUN_FEATURE_FLAG_EXPERIMENTAL_HTTP3_CLIENT?: string;
+    /** Exit automatically when parent process dies (set on worker subprocesses). */
+    BUN_FEATURE_FLAG_NO_ORPHANS?: string;
   }
 }
