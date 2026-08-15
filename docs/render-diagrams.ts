@@ -199,9 +199,46 @@ const gfmContent = [
   "- `subscribe(topic)` / `unsubscribe(topic)` — Bun native pub/sub",
   "- `close(code?, reason?)` — close the WebSocket connection",
   "",
+  "## GFM Case-Sensitivity Reference",
+  "",
+  "Tested against `Bun.markdown.html()` — GFM defaults: `tables`, `strikethrough`, `tasklists` enabled.",
+  "",
+  "| Feature | Input | Case-sensitive? | Notes |",
+  "|---------|-------|-----------------|-------|",
+  "| Task list checkbox | `- [x]` vs `- [X]` | No — both render checked | Only `[x]` and `[X]` work; `[Xx]` is literal text |",
+  "| Task list uncheck | `- [ ]` | N/A | Space-only inside brackets |",
+  "| Code lang tag | ` ```ts ` vs ` ```TS ` | Yes — preserved in class | `language-ts` vs `language-TS` — breaks syntax highlighters that expect lowercase |",
+  "| Reference link | `[text][REF]` vs `[text][ref]` | No — case-insensitive match | GFM spec: reference labels are case-insensitive |",
+  "| Autolink scheme | `http://` vs `HTTPS://` | No — both autolinked | URL is preserved as-is in href attribute |",
+  "| Strikethrough | `~~text~~` | N/A | Content inside `~~` is preserved as-is |",
+  "| Heading IDs | `headings: { ids: true }` | N/A | Option name is `headings` (not `headingIds`); generates slug from heading text |",
+  "| Table alignment | `\\|:---\\|` vs `\\|:--:\\|` | N/A | Colons control alignment, not case |",
+  "| Emphasis | `*italic*` vs `_italic_` | N/A | Both render `<em>`; `__` renders `<strong>` unless `underline: true` |",
+  "",
+  '> **Warning:** Code block language tags are case-sensitive. Use lowercase (`ts`, `js`, `python`) for syntax highlighter compatibility. `Bun.markdown.html()` preserves the case in the class="language-X" attribute.',
+  "",
+  "> **Warning:** Table cells with pipes inside inline code (`` `a|b` ``) are broken — the pipe splits the cell. Escape pipes as `\\|` outside code, or avoid pipes in table cell content.",
+  "",
+  "### Bun.markdown.html options",
+  "",
+  "| Option | Default | Description |",
+  "|--------|---------|-------------|",
+  "| `tables` | `true` | GFM tables |",
+  "| `strikethrough` | `true` | `~~text~~` → `<del>` |",
+  "| `tasklists` | `true` | `- [x]` → checkbox |",
+  "| `autolinks` | `false` | Autolink bare URLs/emails |",
+  "| `headings` | `false` | `{ ids: true }` → heading anchor IDs |",
+  "| `wikiLinks` | `false` | `[[wiki links]]` |",
+  "| `underline` | `false` | `__text__` → `<u>` instead of `<strong>` |",
+  "| `latexMath` | `false` | `$inline$` and `$$display$$` |",
+  "| `tagFilter` | `false` | GFM tag filter for disallowed HTML |",
+  "| `hardSoftBreaks` | `false` | Soft breaks → `<br>` |",
+  "| `collapseWhitespace` | `false` | Collapse whitespace in text |",
+  "",
   "## Related",
   "",
   "- [Bun.markdown docs](https://bun.com/docs/runtime/markdown) — GFM parser used for this page",
+  "- [Bun.markdown reference](https://bun.com/reference/bun/markdown) — full API reference",
   "- [Bun.color docs](https://bun.com/docs/runtime/bun-apis) — color format converter for branding",
   "- [Bun.serve WebSocket docs](https://bun.com/docs/runtime/http/websockets) — pub/sub API",
   "- [Bun.spawn IPC docs](https://bun.com/docs/runtime/spawn) — parent-child IPC",
@@ -210,6 +247,8 @@ const gfmContent = [
 
 const gfmHtml = Bun.markdown.html(gfmContent, {
   autolinks: true,
+  // Generate heading IDs for anchor links (e.g. #gfm-case-sensitivity-reference)
+  headings: { ids: true },
 });
 
 // --- Assemble final HTML with brand colors ----------------------------------
@@ -255,6 +294,20 @@ const html = `<!DOCTYPE html>
       color: var(--brand-label);
       margin-top: 2.5rem;
       font-size: 1.4rem;
+      /* Heading anchor links */
+      position: relative;
+    }
+
+    h2[id]::before {
+      content: "#";
+      position: absolute;
+      left: -1.2rem;
+      color: rgba(${brandRgb.label}, 0.3);
+      font-weight: 400;
+    }
+
+    h2[id]:hover::before {
+      color: var(--brand-label);
     }
 
     h3 {
@@ -287,6 +340,12 @@ const html = `<!DOCTYPE html>
       border-radius: 6px;
       padding: 1rem;
       overflow-x: auto;
+    }
+
+    /* GFM code language tags are case-sensitive (language-TS vs language-ts).
+       Normalize via CSS attribute selector so highlighters don't break. */
+    pre code[class*="language-"] {
+      font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
     }
 
     pre code {

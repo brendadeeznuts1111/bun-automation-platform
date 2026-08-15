@@ -39,6 +39,20 @@
       color: var(--brand-label);
       margin-top: 2.5rem;
       font-size: 1.4rem;
+      /* Heading anchor links */
+      position: relative;
+    }
+
+    h2[id]::before {
+      content: "#";
+      position: absolute;
+      left: -1.2rem;
+      color: rgba(rgb(139, 233, 253), 0.3);
+      font-weight: 400;
+    }
+
+    h2[id]:hover::before {
+      color: var(--brand-label);
     }
 
     h3 {
@@ -71,6 +85,12 @@
       border-radius: 6px;
       padding: 1rem;
       overflow-x: auto;
+    }
+
+    /* GFM code language tags are case-sensitive (language-TS vs language-ts).
+       Normalize via CSS attribute selector so highlighters don't break. */
+    pre code[class*="language-"] {
+      font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
     }
 
     pre code {
@@ -211,7 +231,7 @@
     <span class="brand-item"><span class="brand-swatch" style="background:#1f2020"></span><code>bg</code></span>
   </div>
 
-  <h2>Architecture Overview</h2>
+  <h2 id="architecture-overview">Architecture Overview</h2>
 <p>High-level view of the <code>Channel&lt;TSend, TRecv&gt;</code> interface, <code>BaseChannel</code> abstract class, and transport implementations.</p>
 <p><img src="../channel-architecture.svg" alt="Channel Architecture" /></p>
 <details>
@@ -262,7 +282,7 @@
     style MPChannel fill:#DDD,color:#999,stroke:#BBB,stroke-dasharray: 5 5
 </code></pre>
 </details>
-<h2>Message Flow</h2>
+<h2 id="message-flow">Message Flow</h2>
 <p>Sequence diagram showing how a task flows from HTTP creation through IPC to WebSocket subscribers.</p>
 <p><img src="../channel-message-flow.svg" alt="Message Flow" /></p>
 <details>
@@ -315,7 +335,7 @@
     Note over S: wsChannels cleanup&lt;br/&gt;delete empty Set
 </code></pre>
 </details>
-<h2>Class Hierarchy</h2>
+<h2 id="class-hierarchy">Class Hierarchy</h2>
 <p>UML class diagram showing the interface, abstract class, and concrete implementations.</p>
 <p><img src="../channel-class-hierarchy.svg" alt="Class Hierarchy" /></p>
 <details>
@@ -391,7 +411,7 @@
     ChannelMessage ..&gt; Channel : TSend, TRecv
 </code></pre>
 </details>
-<h2>File Reference</h2>
+<h2 id="file-reference">File Reference</h2>
 <table>
 <thead>
 <tr><th>File</th><th>Transport</th><th>Status</th><th>Description</th></tr>
@@ -406,7 +426,7 @@
 <tr><td><code>tests/channels.test.ts</code></td><td>—</td><td>stable</td><td>49 tests covering all transports</td></tr>
 </tbody>
 </table>
-<h2>Implementation Status</h2>
+<h2 id="implementation-status">Implementation Status</h2>
 <ul>
 <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled checked>C1: Channel interface (<code>src/types/channel.ts</code>)</li>
 <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled checked>C2: IPCChannel implementation (<code>src/channels/ipc-channel.ts</code>)</li>
@@ -421,7 +441,7 @@
 <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled checked>E2: Worker IPC channel verified with real task execution</li>
 <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled>MessagePortChannel (future — worker ↔ worker via postMessage)</li>
 </ul>
-<h2>Bug Fixes (Deeper Audit)</h2>
+<h2 id="bug-fixes-deeper-audit">Bug Fixes (Deeper Audit)</h2>
 <ol>
 <li><strong>IPCChannel missing <code>handleClose</code></strong> — channel stayed connected after IPC disconnect</li>
 <li><strong><code>wsChannels</code> Map memory leak</strong> — empty Sets never cleaned up</li>
@@ -434,8 +454,8 @@
 <blockquote>
 <p><strong>Note:</strong> All bug fixes have dedicated tests in <code>tests/channels.test.ts</code>. See the <a href="https://github.com/brendadeeznuts1111/bun-automation-platform/commit/be1b1fe">deeper audit commit</a> for details.</p>
 </blockquote>
-<h2>API Reference</h2>
-<h3>Channel&lt;TSend, TRecv&gt; interface</h3>
+<h2 id="api-reference">API Reference</h2>
+<h3 id="channeltsend-trecv-interface">Channel&lt;TSend, TRecv&gt; interface</h3>
 <ul>
 <li><code>send(msg: TSend): boolean</code> — send a typed message, returns false if closed</li>
 <li><code>on(type, handler): Unsubscribe</code> — subscribe to a specific message type</li>
@@ -443,23 +463,67 @@
 <li><code>close(): void</code> — close the channel, remove all handlers</li>
 <li><code>onClose(handler): Unsubscribe</code> — called when the channel closes</li>
 </ul>
-<h3>IPCChannel (parent ↔ worker)</h3>
+<h3 id="ipcchannel-parent-worker">IPCChannel (parent ↔ worker)</h3>
 <ul>
 <li><code>handleMessage(msg)</code> — parent-side: called from Bun.spawn ipc callback</li>
 <li><code>handleClose()</code> — called on IPC disconnect (Bug 1 fix)</li>
 <li><code>setSender(proc)</code> — deferred init after Bun.spawn returns</li>
 <li><code>setId(id)</code> — update id after proc.pid is known</li>
 </ul>
-<h3>WSChannel (server ↔ client)</h3>
+<h3 id="wschannel-server-client">WSChannel (server ↔ client)</h3>
 <ul>
 <li><code>handleMessage(raw)</code> — parse JSON (string, ArrayBuffer, Uint8Array)</li>
 <li><code>publish(topic, msg)</code> — broadcast to all subscribers via server.publish</li>
 <li><code>subscribe(topic)</code> / <code>unsubscribe(topic)</code> — Bun native pub/sub</li>
 <li><code>close(code?, reason?)</code> — close the WebSocket connection</li>
 </ul>
-<h2>Related</h2>
+<h2 id="gfm-case-sensitivity-reference">GFM Case-Sensitivity Reference</h2>
+<p>Tested against <code>Bun.markdown.html()</code> — GFM defaults: <code>tables</code>, <code>strikethrough</code>, <code>tasklists</code> enabled.</p>
+<table>
+<thead>
+<tr><th>Feature</th><th>Input</th><th>Case-sensitive?</th><th>Notes</th></tr>
+</thead>
+<tbody>
+<tr><td>Task list checkbox</td><td><code>- [x]</code> vs <code>- [X]</code></td><td>No — both render checked</td><td>Only <code>[x]</code> and <code>[X]</code> work; <code>[Xx]</code> is literal text</td></tr>
+<tr><td>Task list uncheck</td><td><code>- [ ]</code></td><td>N/A</td><td>Space-only inside brackets</td></tr>
+<tr><td>Code lang tag</td><td><code>```ts</code> vs <code>```TS</code></td><td>Yes — preserved in class</td><td><code>language-ts</code> vs <code>language-TS</code> — breaks syntax highlighters that expect lowercase</td></tr>
+<tr><td>Reference link</td><td><code>[text][REF]</code> vs <code>[text][ref]</code></td><td>No — case-insensitive match</td><td>GFM spec: reference labels are case-insensitive</td></tr>
+<tr><td>Autolink scheme</td><td><code>http://</code> vs <code>HTTPS://</code></td><td>No — both autolinked</td><td>URL is preserved as-is in href attribute</td></tr>
+<tr><td>Strikethrough</td><td><code>~~text~~</code></td><td>N/A</td><td>Content inside <code>~~</code> is preserved as-is</td></tr>
+<tr><td>Heading IDs</td><td><code>headings: { ids: true }</code></td><td>N/A</td><td>Option name is <code>headings</code> (not <code>headingIds</code>); generates slug from heading text</td></tr>
+<tr><td>Table alignment</td><td><code>|:---|</code> vs <code>|:--:|</code></td><td>N/A</td><td>Colons control alignment, not case</td></tr>
+<tr><td>Emphasis</td><td><code>*italic*</code> vs <code>_italic_</code></td><td>N/A</td><td>Both render <code>&lt;em&gt;</code>; <code>__</code> renders <code>&lt;strong&gt;</code> unless <code>underline: true</code></td></tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Warning:</strong> Code block language tags are case-sensitive. Use lowercase (<code>ts</code>, <code>js</code>, <code>python</code>) for syntax highlighter compatibility. <code>Bun.markdown.html()</code> preserves the case in the class=&quot;language-X&quot; attribute.</p>
+</blockquote>
+<blockquote>
+<p><strong>Warning:</strong> Table cells with pipes inside inline code (<code>`a|b`</code>) are broken — the pipe splits the cell. Escape pipes as <code>\|</code> outside code, or avoid pipes in table cell content.</p>
+</blockquote>
+<h3 id="bunmarkdownhtml-options">Bun.markdown.html options</h3>
+<table>
+<thead>
+<tr><th>Option</th><th>Default</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>tables</code></td><td><code>true</code></td><td>GFM tables</td></tr>
+<tr><td><code>strikethrough</code></td><td><code>true</code></td><td><code>~~text~~</code> → <code>&lt;del&gt;</code></td></tr>
+<tr><td><code>tasklists</code></td><td><code>true</code></td><td><code>- [x]</code> → checkbox</td></tr>
+<tr><td><code>autolinks</code></td><td><code>false</code></td><td>Autolink bare URLs/emails</td></tr>
+<tr><td><code>headings</code></td><td><code>false</code></td><td><code>{ ids: true }</code> → heading anchor IDs</td></tr>
+<tr><td><code>wikiLinks</code></td><td><code>false</code></td><td><code>[[wiki links]]</code></td></tr>
+<tr><td><code>underline</code></td><td><code>false</code></td><td><code>__text__</code> → <code>&lt;u&gt;</code> instead of <code>&lt;strong&gt;</code></td></tr>
+<tr><td><code>latexMath</code></td><td><code>false</code></td><td><code>$inline$</code> and <code>$$display$$</code></td></tr>
+<tr><td><code>tagFilter</code></td><td><code>false</code></td><td>GFM tag filter for disallowed HTML</td></tr>
+<tr><td><code>hardSoftBreaks</code></td><td><code>false</code></td><td>Soft breaks → <code>&lt;br&gt;</code></td></tr>
+<tr><td><code>collapseWhitespace</code></td><td><code>false</code></td><td>Collapse whitespace in text</td></tr>
+</tbody>
+</table>
+<h2 id="related">Related</h2>
 <ul>
 <li><a href="https://bun.com/docs/runtime/markdown">Bun.markdown docs</a> — GFM parser used for this page</li>
+<li><a href="https://bun.com/reference/bun/markdown">Bun.markdown reference</a> — full API reference</li>
 <li><a href="https://bun.com/docs/runtime/bun-apis">Bun.color docs</a> — color format converter for branding</li>
 <li><a href="https://bun.com/docs/runtime/http/websockets">Bun.serve WebSocket docs</a> — pub/sub API</li>
 <li><a href="https://bun.com/docs/runtime/spawn">Bun.spawn IPC docs</a> — parent-child IPC</li>
