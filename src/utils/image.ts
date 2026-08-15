@@ -151,19 +151,17 @@ export async function serveScreenshot(
   let img = new Bun.Image(realPath, { maxPixels: 4096 * 4096 });
   if (width) img = img.resize(width, width, { fit: "inside" });
 
-  // H9: img.jpeg()/png()/webp() return `this` (the Image object), not a Blob.
-  // While Bun's runtime accepts Image in new Response() via special handling,
-  // the correct approach is to call .blob() to get the encoded Blob with the
-  // right MIME type. This is type-safe and documented.
-  // Ref: node_modules/bun-types/docs/runtime/image.mdx
+  // Bun.Image instances work directly as Response bodies with automatic
+  // Content-Type. Ref: https://bun.sh/blog/bun-v1.3.14#body-integration
+  //   return new Response(new Bun.Image(upload).resize(200).jpeg());
   switch (format) {
     case "jpeg":
-      return new Response(await img.jpeg().blob(), { headers: { "Content-Type": "image/jpeg" } });
+      return new Response(img.jpeg());
     case "png":
-      return new Response(await img.png().blob(), { headers: { "Content-Type": "image/png" } });
+      return new Response(img.png());
     case "webp":
     default:
-      return new Response(await img.webp({ quality: FULL_QUALITY }).blob(), { headers: { "Content-Type": "image/webp" } });
+      return new Response(img.webp({ quality: FULL_QUALITY }));
   }
 }
 
