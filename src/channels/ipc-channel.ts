@@ -106,6 +106,15 @@ export class IPCChannel<TSend extends ChannelMessage, TRecv extends ChannelMessa
     }
   }
 
+  /**
+   * E9/Bug 1: Called when the IPC channel disconnects (onDisconnect callback).
+   * Without this, the channel stays "connected" after the worker exits,
+   * and handlers keep firing on a dead channel.
+   */
+  override handleClose(): void {
+    this.notifyClosed("ipc disconnected");
+  }
+
   send(msg: TSend): boolean {
     if (!this._connected) {
       console.error(`[ipc:${this.id}] cannot send — channel closed`);

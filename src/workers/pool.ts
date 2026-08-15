@@ -171,6 +171,11 @@ function spawnWorker(): WorkerSlot {
     slot.exited = true;
     slot.untrack();
 
+    // E9e/Bug 9: Close the channel to clean up handlers and mark as disconnected.
+    // Without this, the channel stays "connected" and handlers remain registered
+    // on a dead channel. The respawned worker gets a fresh channel.
+    slot.channel.close();
+
     // D1: If a new task was dispatched to this slot between the "result" message
     // and the exit, that task was sent to a now-dead worker. Reject it so the
     // caller (server.ts submitTask.catch) can log the failure. The task stays

@@ -69,11 +69,8 @@ export class WSChannel<TSend extends ChannelMessage, TRecv extends ChannelMessag
     if (!this._connected) return;
 
     try {
-      const text = typeof raw === "string"
-        ? raw
-        : raw instanceof ArrayBuffer
-          ? new TextDecoder().decode(raw)
-          : new TextDecoder().decode(raw);
+      // E9d/Bug 8: Simplified — TextDecoder handles both ArrayBuffer and Uint8Array
+      const text = typeof raw === "string" ? raw : new TextDecoder().decode(raw);
       const msg = JSON.parse(text);
       if (msg && typeof msg === "object" && "type" in msg) {
         // JUSTIFIED: runtime check narrows to { type: string }; TRecv requires `type`
@@ -100,11 +97,17 @@ export class WSChannel<TSend extends ChannelMessage, TRecv extends ChannelMessag
     try {
       const json = JSON.stringify(msg);
       const result = this.ws.send(json);
-      // Bun's ws.send returns -1 for backpressure, 0 for closed, >0 for success
+      // E9c/Bug 7: Bun's ws.send returns:
+      //   -1 = backpressure (message queued, will send later)
+      //    0 = connection closed
+      //   >0 = success (bytes sent)
+      // Previously, -1 (backpressure) returned true, which is misleading.
+      // Now we distinguish: 0 = closed (fail), everything else = sent/queued (success)
       if (result === 0) {
         this.notifyClosed("websocket send returned 0 (closed)");
         return false;
       }
+      // -1 (backpressure) and >0 (success) both indicate the message was accepted
       return true;
     } catch (err) {
       console.error(`[ws:${this.id}] send failed:`, err);

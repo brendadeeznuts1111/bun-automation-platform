@@ -626,7 +626,13 @@ const websocketConfig: Record<string, unknown> = {
     }
   },
   close(ws: import("bun").ServerWebSocket<{ taskId: number }>) {
-    wsChannels.get(ws.data.taskId)?.delete(ws);
+    const subscribers = wsChannels.get(ws.data.taskId);
+    subscribers?.delete(ws);
+    // E9b/Bug 5: Clean up empty sets to prevent memory leak.
+    // Without this, the Map grows unboundedly as new tasks are created.
+    if (subscribers && subscribers.size === 0) {
+      wsChannels.delete(ws.data.taskId);
+    }
     console.log(`[ws] client unsubscribed from task:${ws.data.taskId}`);
   },
 };

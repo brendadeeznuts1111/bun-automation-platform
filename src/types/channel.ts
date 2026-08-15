@@ -140,7 +140,9 @@ export abstract class BaseChannel<TSend extends ChannelMessage, TRecv extends Ch
 
   on<T extends TRecv["type"]>(type: T, handler: MessageHandler<TRecv, T>): Unsubscribe {
     if (!this._connected) {
-      console.warn(`[channel:${this.id}] subscribing to "${type}" on closed channel`);
+      // E9f: Don't allow subscribing on a closed channel — return a no-op unsub
+      console.warn(`[channel:${this.id}] subscribing to "${type}" on closed channel — handler will never fire`);
+      return () => {};
     }
 
     let set = this.handlers.get(type);
@@ -172,8 +174,12 @@ export abstract class BaseChannel<TSend extends ChannelMessage, TRecv extends Ch
   /**
    * Dispatch a received message to all matching handlers.
    * Called by subclasses when a message arrives from the transport.
+   * E9g: No-ops if the channel is closed — prevents handler invocation
+   * on a dead channel (e.g. after IPC disconnect but before transport stops).
    */
   protected dispatch(msg: TRecv): void {
+    if (!this._connected) return;
+
     // Type-specific handlers
     const set = this.handlers.get(msg.type);
     if (set) {

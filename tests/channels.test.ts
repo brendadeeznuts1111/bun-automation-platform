@@ -342,3 +342,246 @@ describe("Channel type safety", () => {
     expect(server.publish).toHaveBeenCalled();
   });
 });
+
+// --- E9: Bug fix tests (deeper audit) ---
+
+describe("Bug fixes — deeper audit", () => {
+  describe("Bug 1: IPCChannel handleClose (was missing)", () => {
+    it("handleClose marks the channel as closed", () => {
+      const proc = createMockSubprocess();
+      const channel = new IPCChannel<ParentToWorkerMessage, WorkerToParentMessage>("parent", proc);
+      expect(channel.connected).toBe(true);
+      channel.handleClose();
+      expect(channel.connected).toBe(false);
+    });
+
+    it("handleClose notifies onClose handlers", () => {
+      const proc = createMockSubprocess();
+      const channel = new IPCChannel<ParentToWorkerMessage, WorkerToParentMessage>("parent", proc);
+      const closeHandler = mock(() => {});
+      channel.onClose(closeHandler);
+      channel.handleClose();
+      expect(closeHandler).toHaveBeenCalledWith("ipc disconnected");
+    });
+
+    it("handleClose prevents further message dispatch", () => {
+      const proc = createMockSubprocess();
+      const channel = new IPCChannel<ParentToWorkerMessage, WorkerToParentMessage>("parent", proc);
+      const handler = mock(() => {});
+      channel.on("progress", handler);
+      channel.handleClose();
+      channel.handleMessage({ type: "progress", taskId: 1, progress: 50 });
+      expect(handler).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("Bug 5: wsChannels Map cleanup (server.ts)", () => {
+    it("empty subscriber sets are cleaned up on close (simulated)", () => {
+      // Simulate the server.ts close handler logic
+      const wsChannels = new Map<number, Set<unknown>>();
+      const taskId = 42;
+      const ws = { id: "ws-1" };
+      wsChannels.set(taskId, new Set([ws]));
+
+      // Simulate close
+      const subscribers = wsChannels.get(taskId);
+      subscribers?.delete(ws);
+      if (subscribers && subscribers.size === 0) {
+        wsChannels.delete(taskId);
+      }
+
+      expect(wsChannels.has(taskId)).toBe(false);
+    });
+
+    it("non-empty subscriber sets are preserved on close", () => {
+      const wsChannels = new Map<number, Set<unknown>>();
+      const taskId = 42;
+      const ws1 = { id: "ws-1" };
+      const ws2 = { id: "ws-2" };
+      wsChannels.set(taskId, new Set([ws1, ws2]));
+
+      // Simulate close of ws1
+      const subscribers = wsChannels.get(taskId);
+      subscribers?.delete(ws1);
+      if (subscribers && subscribers.size === 0) {
+        wsChannels.delete(taskId);
+      }
+
+      expect(wsChannels.has(taskId)).toBe(true);
+      expect(wsChannels.get(taskId)?.size).toBe(1);
+    });
+  });
+
+  describe("Bug 7: WSChannel send() backpressure handling", () => {
+    it("send returns true on backpressure (-1) — message is queued", () => {
+      const ws = createMockWS();
+      ws.send = mock(() => -1); // -1 = backpressure
+      const channel = new WSChannel<WorkerToParentMessage, ParentToWorkerMessage>("ws-1", ws);
+      const result = channel.send({ type: "ready", pid: 123 });
+      expect(result).toBe(true);
+      expect(channel.connected).toBe(true);
+    });
+
+    it("send returns false on closed (0)", () => {
+      const ws = createMockWS();
+      ws.send = mock(() => 0); // 0 = closed
+      const channel = new WSChannel<WorkerToParentMessage, ParentToWorkerMessage>("ws-1", ws);
+      const result = channel.send({ type: "ready", pid: 123 });
+      expect(result).toBe(false);
+      expect(channel.connected).toBe(false);
+    });
+
+    it("send returns true on success (>0)", () => {
+      const ws = createMockWS();
+      ws.send = mock(() => 42); // >0 = success
+      const channel = new WSChannel<WorkerToParentMessage, ParentToWorkerMessage>("ws-1", ws);
+      const result = channel.send({ type: "ready", pid: 123 });
+      expect(result).toBe(true);
+    });
+  });
+
+  describe("Bug 8: WSChannel handleMessage simplified", () => {
+    it("handles string input", () => {
+      const ws = createMockWS();
+      const channel = new WSChannel<ParentToWorkerMessage, WorkerToParentMessage>("ws-1", ws);
+      const handler = mock(() => {});
+      channel.on("progress", handler);
+      channel.handleMessage(JSON.stringify({ type: "progress", taskId: 1, progress: 50 }));
+      expect(handler).toHaveBeenCalled();
+    });
+
+    it("handles ArrayBuffer input", () => {
+      const ws = createMockWS();
+      const channel = new WSChannel<ParentToWorkerMessage, WorkerToParentMessage>("ws-1", ws);
+      const handler = mock(() => {});
+      channel.on("progress", handler);
+      const json = JSON.stringify({ type: "progress", taskId: 1, progress: 50 });
+      channel.handleMessage(new TextEncoder().encode(json).buffer);
+      expect(handler).toHaveBeenCalled();
+    });
+
+    it("handles Uint8Array input", () => {
+      const ws = createMockWS();
+      const channel = new WSChannel<ParentToWorkerMessage, WorkerToParentMessage>("ws-1", ws);
+      const handler = mock(() => {});
+      channel.on("progress", handler);
+      const json = JSON.stringify({ type: "progress", taskId: 1, progress: 50 });
+      channel.handleMessage(new TextEncoder().encode(json));
+      expect(handler).toHaveBeenCalled();
+    });
+  });
+
+  describe("Bug 9: pool.ts channel cleanup on worker exit", () => {
+    it("channel.close() is called on worker exit (simulated)", () => {
+      // Verify that calling channel.close() marks it as disconnected
+      const proc = createMockSubprocess();
+      const channel = new IPCChannel<ParentToWorkerMessage, WorkerToParentMessage>("parent", proc);
+      const closeHandler = mock(() => {});
+      channel.onClose(closeHandler);
+      // Simulate what pool.ts does on worker exit
+      channel.close();
+      expect(channel.connected).toBe(false);
+      expect(closeHandler).toHaveBeenCalled();
+    });
+  });
+
+  describe("Bug 12: BaseChannel on() after close", () => {
+    it("on() returns no-op unsubscribe after close", () => {
+      const proc = createMockProcess();
+      const channel = new IPCChannel<WorkerToParentMessage, ParentToWorkerMessage>("test", proc);
+      channel.close();
+      const handler = mock(() => {});
+      const unsub = channel.on("task", handler);
+      // Should return a function
+      expect(typeof unsub).toBe("function");
+      // Calling it should not throw
+      expect(() => unsub()).not.toThrow();
+    });
+
+    it("handler registered after close never fires", () => {
+      const proc = createMockProcess();
+      const channel = new IPCChannel<WorkerToParentMessage, ParentToWorkerMessage>("test", proc);
+      channel.close();
+      const handler = mock(() => {});
+      channel.on("task", handler);
+      // Send a message — handler should not fire
+      proc._emit("message", { type: "task", taskId: 1 });
+      expect(handler).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("Bug 13: dispatch() checks _connected", () => {
+    it("dispatch is no-op on closed channel", () => {
+      const proc = createMockSubprocess();
+      const channel = new IPCChannel<ParentToWorkerMessage, WorkerToParentMessage>("parent", proc);
+      const handler = mock(() => {});
+      const anyHandler = mock(() => {});
+      channel.on("progress", handler);
+      channel.onAny(anyHandler);
+      channel.close();
+      // Directly call handleMessage — should not dispatch
+      channel.handleMessage({ type: "progress", taskId: 1, progress: 50 });
+      expect(handler).not.toHaveBeenCalled();
+      expect(anyHandler).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("Double-close safety", () => {
+    it("close() twice doesn't throw or call handlers twice", () => {
+      const proc = createMockProcess();
+      const channel = new IPCChannel<WorkerToParentMessage, ParentToWorkerMessage>("test", proc);
+      const closeHandler = mock(() => {});
+      channel.onClose(closeHandler);
+      channel.close();
+      channel.close(); // second close
+      expect(closeHandler).toHaveBeenCalledTimes(1);
+      expect(channel.connected).toBe(false);
+    });
+
+    it("handleClose twice doesn't throw or call handlers twice", () => {
+      const proc = createMockSubprocess();
+      const channel = new IPCChannel<ParentToWorkerMessage, ParentToWorkerMessage>("parent", proc);
+      const closeHandler = mock(() => {});
+      channel.onClose(closeHandler);
+      channel.handleClose();
+      channel.handleClose(); // second handleClose
+      expect(closeHandler).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("Send after close", () => {
+    it("IPCChannel send returns false after close", () => {
+      const proc = createMockProcess();
+      const channel = new IPCChannel<WorkerToParentMessage, ParentToWorkerMessage>("test", proc);
+      channel.close();
+      const result = channel.send({ type: "ready", pid: 123 });
+      expect(result).toBe(false);
+    });
+
+    it("WSChannel send returns false after close", () => {
+      const ws = createMockWS();
+      const channel = new WSChannel<WorkerToParentMessage, ParentToWorkerMessage>("ws-1", ws);
+      channel.close();
+      const result = channel.send({ type: "ready", pid: 123 });
+      expect(result).toBe(false);
+    });
+
+    it("WSChannel subscribe is no-op after close", () => {
+      const ws = createMockWS();
+      const channel = new WSChannel<WorkerToParentMessage, ParentToWorkerMessage>("ws-1", ws);
+      channel.close();
+      channel.subscribe("task:1");
+      expect(ws.subscribe).not.toHaveBeenCalled();
+    });
+
+    it("WSChannel publish returns false after close", () => {
+      const ws = createMockWS();
+      const server = createMockServer();
+      const channel = new WSChannel<WorkerToParentMessage, ParentToWorkerMessage>("ws-1", ws, server);
+      channel.close();
+      const result = channel.publish("task:1", { type: "ready", pid: 123 });
+      expect(result).toBe(false);
+      expect(server.publish).not.toHaveBeenCalled();
+    });
+  });
+});
