@@ -28,15 +28,19 @@ if (process.env.NODE_ENV === "production" && !process.env.CSRF_SECRET) {
 /**
  * Derive a per-session secret by HMAC-ing the session ID into the base secret.
  * This binds CSRF tokens to a specific session without relying on a Bun API
- * feature that doesn't exist. Uses Bun's built-in Bun.password for key derivation.
+ * feature that doesn't exist. Uses Bun.CryptoHasher with HMAC-SHA256 to derive
+ * a per-session secret from the base CSRF_SECRET and the session ID.
+ *
+ * Ref: node_modules/bun-types/bun.d.ts (CryptoHasher constructor)
  */
 function deriveSessionSecret(sessionId: string): string {
-  // Use Web Crypto API (available in Bun) to HMAC the session ID into the secret
-  const key = new Bun.CryptoHasher("sha256");
-  key.update(CSRF_SECRET);
-  key.update(":");
-  key.update(sessionId);
-  return key.digest("hex");
+  // H8: Use proper HMAC-SHA256 by passing the secret as the hmacKey to the
+  // CryptoHasher constructor, then feeding the session ID as the data.
+  // Previously this was a plain hash (no hmacKey) — still cryptographically
+  // binding, but HMAC is the standard construction for this purpose.
+  const hasher = new Bun.CryptoHasher("sha256", CSRF_SECRET);
+  hasher.update(sessionId);
+  return hasher.digest("hex");
 }
 
 /** Generate a CSRF token bound to a session ID. */

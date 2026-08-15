@@ -401,7 +401,7 @@ const listSessionsHandler = withAuth<"">((req, ctx) => {
   return json({ sessions, limit, offset });
 });
 
-const getScreenshotHandler = withAuth<"/screenshot/:id">((req, ctx) => {
+const getScreenshotHandler = withAuth<"/screenshot/:id">(async (req, ctx) => {
   const sessionId = parseInt(req.params.id, 10);
   // E3: IDOR fix — only return the screenshot if the session belongs to a task
   // owned by the authenticated agent
@@ -426,7 +426,7 @@ const getScreenshotHandler = withAuth<"/screenshot/:id">((req, ctx) => {
     formatParam === "jpeg" || formatParam === "png" ? formatParam : "webp";
 
   try {
-    return serveScreenshot(session.screenshot_path, width, format);
+    return await serveScreenshot(session.screenshot_path, width, format);
   } catch (err) {
     // G9: Distinguish "file not found" from "invalid image" for debugging
     console.error("[server] serveScreenshot error:", err);

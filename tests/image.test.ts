@@ -68,7 +68,11 @@ describe("Bun.Image processing", () => {
     const png = createTestPng();
     const result = await processScreenshot(png, "test-serve");
 
-    const res = serveScreenshot(result.fullPath, 32, "webp");
+    // H9: serveScreenshot is now async (calls .blob() on the Image pipeline)
+    const res = await serveScreenshot(result.fullPath, 32, "webp");
     expect(res).toBeInstanceOf(Response);
+    expect(res.status).toBe(200);
+    // H9: Verify the Content-Type header is set correctly
+    expect(res.headers.get("Content-Type")).toBe("image/webp");
   });
 });

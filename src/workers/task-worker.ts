@@ -136,6 +136,8 @@ async function executeTask(task: TaskRow): Promise<string> {
   const agentProfileDir = resolve(PROFILE_DIR, `agent-${task.agent_id}`);
 
   // Build WebView options
+  // Backend: defaults to "webkit" on macOS, "chrome" on Linux/Windows.
+  // Ref: node_modules/bun-types/docs/runtime/webview.mdx#backends
   // m8: On macOS < 15.2, WebKit persistent storage is unsupported — fall back to ephemeral.
   const usePersistent = supportsPersistentStorage();
   if (usePersistent) {
@@ -152,6 +154,10 @@ async function executeTask(task: TaskRow): Promise<string> {
         console.error(`[webview:${task.id}] page ${type}:`, ...args);
       }
     },
+    // Note: We don't pass `url` here because we want to set onNavigated/
+    // onNavigationFailed callbacks BEFORE navigation starts. If we passed
+    // url in the constructor, the navigation would begin before we could
+    // attach the callbacks, and they wouldn't fire for the initial load.
   };
 
   let screenshotResult: ScreenshotResult | null = null;
@@ -176,8 +182,10 @@ async function executeTask(task: TaskRow): Promise<string> {
   updateProgress(task.id, 0);
 
   await withTimeout(view.navigate(task.url), NAV_TIMEOUT, "navigate");
-  pageTitle = view.title ?? "";
-  finalUrl = view.url ?? task.url;
+  // H1: view.url and view.title are typed as `string` (not `string | undefined`).
+  // The ?? fallbacks were dead code. Removed.
+  pageTitle = view.title;
+  finalUrl = view.url;
 
   // m1: Override user agent via CDP if provided (Chrome backend only)
   if (task.user_agent) {

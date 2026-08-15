@@ -30,7 +30,7 @@ export interface ScreenshotResult {
   metadata: {
     width: number;
     height: number;
-    format: string;
+    format: import("bun").Image.Format;
   };
   /** Dominant color (hex) for placeholder background. */
   dominantColor: string;
@@ -124,11 +124,11 @@ async function extractDominantColor(_img: import("bun").Image): Promise<string> 
  * Validates that the path resolves within the screenshot directory to
  * prevent path traversal attacks (e.g. "../../etc/passwd").
  */
-export function serveScreenshot(
+export async function serveScreenshot(
   path: string,
   width?: number,
   format: "webp" | "jpeg" | "png" = "webp",
-): Response {
+): Promise<Response> {
   // Resolve and verify the path is within the screenshot directory
   const resolved = resolve(path);
   if (!resolved.startsWith(SCREENSHOT_DIR + "/") && resolved !== SCREENSHOT_DIR) {
@@ -151,14 +151,19 @@ export function serveScreenshot(
   let img = new Bun.Image(realPath, { maxPixels: 4096 * 4096 });
   if (width) img = img.resize(width, width, { fit: "inside" });
 
+  // H9: img.jpeg()/png()/webp() return `this` (the Image object), not a Blob.
+  // While Bun's runtime accepts Image in new Response() via special handling,
+  // the correct approach is to call .blob() to get the encoded Blob with the
+  // right MIME type. This is type-safe and documented.
+  // Ref: node_modules/bun-types/docs/runtime/image.mdx
   switch (format) {
     case "jpeg":
-      return new Response(img.jpeg());
+      return new Response(await img.jpeg().blob(), { headers: { "Content-Type": "image/jpeg" } });
     case "png":
-      return new Response(img.png());
+      return new Response(await img.png().blob(), { headers: { "Content-Type": "image/png" } });
     case "webp":
     default:
-      return new Response(img.webp({ quality: FULL_QUALITY }));
+      return new Response(await img.webp({ quality: FULL_QUALITY }).blob(), { headers: { "Content-Type": "image/webp" } });
   }
 }
 
