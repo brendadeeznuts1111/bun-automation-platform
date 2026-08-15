@@ -177,6 +177,49 @@ describe("Bun Native APIs & Utilities", () => {
     expect(linked).toContain("https://bun.com");
   });
 
+  it("Bun.markdown.render extracts full ListItemMeta and ListMeta", () => {
+    const listMd = `3. Item A\n4. Item B\n   - [x] Subtask Done\n   - [ ] Subtask Todo\n5. Item C`;
+
+    interface CapturedItem {
+      index: number;
+      depth: number;
+      ordered: boolean;
+      start?: number;
+      checked?: boolean;
+    }
+
+    const captured: CapturedItem[] = [];
+
+    Bun.markdown.render(listMd, {
+      listItem: (children, meta) => {
+        captured.push({
+          index: meta.index,
+          depth: meta.depth,
+          ordered: meta.ordered,
+          start: meta.start,
+          checked: meta.checked,
+        });
+        return children;
+      },
+    });
+
+    // Top-level ordered items (start: 3)
+    const topItems = captured.filter((c) => c.depth === 0);
+    expect(topItems.length).toBe(3);
+    expect(topItems[0]!.start).toBe(3);
+    expect(topItems[0]!.ordered).toBe(true);
+    expect(topItems[0]!.index).toBe(0);
+    expect(topItems[1]!.index).toBe(1);
+    expect(topItems[2]!.index).toBe(2);
+
+    // Subtask items (depth: 1, unordered, checked true/false)
+    const subtasks = captured.filter((c) => c.depth === 1);
+    expect(subtasks.length).toBe(2);
+    expect(subtasks[0]!.checked).toBe(true);
+    expect(subtasks[0]!.ordered).toBe(false);
+    expect(subtasks[1]!.checked).toBe(false);
+  });
+
   it("bun:sqlite executes prepared statements and transactions", () => {
     const db = new Database(":memory:");
     db.exec("CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT);");
