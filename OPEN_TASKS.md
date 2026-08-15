@@ -47,6 +47,8 @@ Each task cites the specific Bun API/doc that grounds it.
 
 **Current:** `credentials` table has `username_enc`/`password_enc` columns but no encryption layer. `MASTER_KEY` is in `.env` (plaintext on disk).
 
+**Files:** `src/db/index.ts:123-132` (credentials table schema), `.env` (MASTER_KEY), new `src/utils/crypto.ts`
+
 **Doc pattern:** `Bun.secrets` uses OS keychain (macOS Keychain, Linux libsecret, Windows Credential Manager). `secrets.get({ service, name })` → `string | null`. `secrets.set({ service, name, value })`. Memory is zeroed after use.
 
 **Action:** Store the master encryption key in `Bun.secrets` instead of `.env`. Use it to encrypt/decrypt credential fields with `Bun.hash` or AES-GCM via WebCrypto.
@@ -62,6 +64,8 @@ Each task cites the specific Bun API/doc that grounds it.
 ### C1. WebSocket server for live progress streaming
 
 **Current:** Worker sends progress via IPC → pool logs to console. No way to push updates to a connected client.
+
+**Files:** `src/server.ts` (add websocket handler + `/ws/task/:id` route), `src/workers/pool.ts:116-139` (handleWorkerMessage — publish to WebSocket topic instead of console.log), `src/types/ipc.ts` (extend WorkerToParentMessage if needed)
 
 **Doc pattern:**
 ```ts
@@ -91,15 +95,21 @@ Bun's WebSocket is built on uWebSockets — 7x more throughput than Node + `ws`.
 
 **Doc pattern:** `Bun.WebView.screenshot()` returns `ArrayBuffer`. Stream via `ws.send(arrayBuffer)` — Bun's WebSocket supports `ArrayBuffer`, `Uint8Array`, `Blob`, `string` directly.
 
+**Files:** `src/server.ts` (add `/ws/control/:taskId` route), `src/workers/task-worker.ts` (screenshot capture loop), `src/workers/pool.ts` (relay screenshot IPC → WebSocket publish), `src/utils/image.ts:139-145` (screenshotToBase64 already exists for this)
+
 **Action:** When `Bun.WebView` is integrated (see D1), add a `/ws/control/:taskId` endpoint that streams screenshots at intervals. Worker captures screenshots and sends them via IPC → server publishes to the WebSocket topic.
 
 ---
 
 ## D. Browser Automation (Bun.WebView)
 
-### D1. Replace stub with `Bun.WebView`
+### D1. Replace stub with `Bun.WebView` — [RESOLVED ✅]
 
-**Current:** `task-worker.ts:116-146` generates a synthetic 1280x720 PNG with a manual PNG encoder. The `executeTask()` function simulates work with `setTimeout(500)` per step.
+**Current:** `src/workers/task-worker.ts` now uses `Bun.WebView` for real browser automation. The `executeTask()` function creates a WebView, navigates to the task URL, captures a PNG screenshot via `view.screenshot()`, and processes it through the existing `processScreenshot()` pipeline. The manual PNG encoder (`generatePlaceholderScreenshot`, `encodePng`, `crc32`, `hashString`) has been removed. Uses `await using view` for automatic cleanup via `Symbol.asyncDispose` (I4).
+
+**Current:** `src/workers/task-worker.ts:53-107` (`executeTask`) simulates work with `setTimeout(500)` per step. `src/workers/task-worker.ts:114-191` (`generatePlaceholderScreenshot` + `encodePng` + `crc32` + `hashString`) is a manual PNG encoder that generates a synthetic 1280x720 image. The real screenshot pipeline in `src/utils/image.ts:55-95` (`processScreenshot`) already accepts `ArrayBuffer | Uint8Array | Blob | BunFile` — ready for `view.screenshot()` output.
+
+**Files:** `src/workers/task-worker.ts` (rewrite executeTask, remove placeholder PNG encoder), `src/utils/image.ts` (no changes — already accepts ArrayBuffer)
 
 **Doc pattern:**
 ```ts
@@ -131,11 +141,15 @@ Key API surface from docs:
 
 **Ref:** https://bun.com/docs/runtime/webview
 
-### D2. Session persistence across tasks
+### D2. Session persistence across tasks — [RESOLVED ✅]
 
-**Current:** `sessions` table has `cookies`, `local_storage`, `session_storage` columns but they're never populated (default `'{}'`).
+**Current:** `src/workers/task-worker.ts` uses per-agent `dataStore: { directory: ./data/profiles/agent-{id} }` directories so cookies/localStorage persist across tasks for the same agent. After each task, cookies are extracted via `view.evaluate("document.cookie")` and localStorage via `view.evaluate(...)` — both stored in the `sessions` table's `cookies` and `local_storage` columns. Views sharing the same profile directory share cookies and storage across runs.
+
+**Current:** `sessions` table (`src/db/index.ts:108-119`) has `cookies`, `local_storage`, `session_storage` columns but they're never populated (default `'{}'`). The `executeTask` function in `src/workers/task-worker.ts:77-88` inserts a session row with only `screenshot_path` and `screenshot_color`.
 
 **Doc pattern:** `Bun.WebView({ dataStore: { directory: "./browser-profile" } })` — views sharing the same directory share cookies and storage. Persistent across runs.
+
+**Files:** `src/workers/task-worker.ts` (extract cookies/localStorage after task, populate session row), `src/db/index.ts:108-119` (sessions table schema — already has the columns)
 
 **Action:** Use per-agent profile directories. After task completion, extract cookies via `view.evaluate("document.cookie")` and store in the `sessions` table. On next task for the same agent+site, reuse the profile directory to skip login.
 
@@ -146,6 +160,8 @@ Key API surface from docs:
 ### E1. Scheduled data collection
 
 **Current:** No scheduling. Tasks are created manually via POST `/task`.
+
+**Files:** `src/server.ts` (register cron jobs on boot, add `POST /schedule` route), `src/db/index.ts` (new `schedules` table migration), `src/workers/pool.ts` (submitTask called from cron handler)
 
 **Doc pattern:**
 ```ts
@@ -176,7 +192,9 @@ await Bun.cron("./worker.ts", "30 2 * * MON", "weekly-report");
 
 ### F1. Dashboard via HTML imports
 
-**Current:** No frontend. API-only.
+**Current:** No frontend. API-only. `src/server.ts` routes are all JSON API endpoints.
+
+**Files:** new `src/dashboard/index.html`, new `src/dashboard/frontend.tsx`, `src/server.ts` (add `"/": index` route)
 
 **Doc pattern (CLAUDE.md + Server docs):**
 ```ts
@@ -209,11 +227,15 @@ HTML imports run Bun's bundler — supports React, TypeScript, Tailwind CSS. Dev
 
 **Current:** `console.log("[server] ...")` everywhere. No levels, no structured output, no log routing.
 
+**Files:** new `src/utils/logger.ts`, `src/server.ts` (replace all console.log/error), `src/workers/task-worker.ts` (replace console.log/error), `src/workers/pool.ts` (replace console.log)
+
 **Action:** Create `src/utils/logger.ts` with levels (debug/info/warn/error), structured JSON output, and optional file transport. Replace all `console.log`/`console.error` calls.
 
 ### G2. Per-request traceId
 
 **Current:** No request tracing.
+
+**Files:** `src/server.ts` (generate traceId in withMiddleware, add X-Trace-Id header), `src/types/ipc.ts` (add traceId to ParentToWorkerMessage), `src/workers/task-worker.ts` (accept traceId, include in logs)
 
 **Action:** Generate a `traceId` per request (UUID), attach to all log entries, propagate to workers via IPC. Add `X-Trace-Id` response header.
 
@@ -223,7 +245,9 @@ HTML imports run Bun's bundler — supports React, TypeScript, Tailwind CSS. Dev
 
 ### H1. Unit tests for core modules
 
-**Current:** Zero tests. `bun run test` finds nothing.
+**Current:** 63 tests pass across 10 files (server integration, db, rate-limit, circuit-breaker, retry, image, bun-apis, known-limitations, matchers, setup). Coverage at 44% functions / 54% lines. Key untested modules: `src/db/audit.ts` (0%), `src/middleware/rate-limit.ts` (0%), `src/utils/circuit-breaker.ts` (0%).
+
+**Files:** `tests/server.test.ts`, `tests/db.test.ts`, `tests/rate-limit.test.ts`, `tests/circuit-breaker.test.ts`, `tests/image.test.ts`, `tests/retry.test.ts`, `tests/bun-apis.test.ts`, `tests/known-limitations.test.ts`, `tests/matchers.ts`, `tests/setup.ts`
 
 **Doc pattern (CLAUDE.md):**
 ```ts
@@ -252,6 +276,8 @@ test("rate limit allows up to max", () => {
 
 **Release note:** `--no-orphans` flag exits child processes when the parent dies. Prevents zombie workers if the main server crashes.
 
+**Files:** `src/workers/pool.ts:54-70` (Bun.spawn cmd array — add `--no-orphans` flag)
+
 **Action:** Add `--no-orphans` to the worker spawn command in `pool.ts`, or set it via `BUN_OPTIONS` env. Currently we strip `BUN_OPTIONS` — need to selectively pass `--no-orphans`.
 
 **Ref:** [v1.3.14 blog — `--no-orphans`](https://bun.com/blog/bun-v1.3.14#no-orphans-exit-when-the-parent-process-dies)
@@ -260,6 +286,8 @@ test("rate limit allows up to max", () => {
 
 **Release note:** `process.execve()` replaces the current process image without fork+exec. Faster than spawning a new process.
 
+**Files:** `src/workers/pool.ts:104-110` (respawn logic — worker self-restart via execve instead of parent spawning new process)
+
 **Action:** In worker respawn logic (`pool.ts:106`), consider `process.execve()` in the worker instead of spawning a new process from the parent. Reduces respawn overhead from ~50ms to near-zero.
 
 **Ref:** [v1.3.14 blog — `process.execve()` support](https://bun.com/blog/bun-v1.3.14#process-execve-support)
@@ -267,6 +295,8 @@ test("rate limit allows up to max", () => {
 ### I3. HTTP/3 (QUIC) support
 
 **Release note:** `Bun.serve({ tls: {...}, http3: true })` — experimental HTTP/3 over QUIC.
+
+**Files:** `src/server.ts:340-355` (Bun.serve config — add tls + http3 options)
 
 **Action:** When TLS is configured, enable `http3: true`. Clients with HTTP/3 support get lower latency. Requires TLS certs.
 
@@ -316,10 +346,12 @@ var __callDispose = (stack, error, hasError) => { /* ... */ };
 ```
 
 **Action:**
-1. Use `await using view = new Bun.WebView(...)` in task-worker.ts for automatic cleanup on scope exit (no manual `view.close()` needed)
+1. Use `await using view = new Bun.WebView(...)` in task-worker.ts for automatic cleanup on scope exit (no manual `view.close()` needed) — **done in D1**
 2. Use `using` for database connections / file handles where appropriate
 3. Verify `bun build --target=bun --compile` (used for the 61MB standalone executable) now produces smaller output — no `__using`/`__callDispose` helpers emitted
 4. If any `.cjs` files use `using`, confirm they no longer throw the wrapper error
+
+**Files:** `src/workers/task-worker.ts` (await using view — done in D1), `src/db/index.ts` (using for Database connections — optional)
 
 **Ref:** [v1.3.14 blog — `using` / `await using` no longer lowered](https://bun.com/blog/bun-v1.3.14#using-await-using-no-longer-lowered-when-targeting-bun) · [TC39 proposal](https://github.com/tc39/proposal-explicit-resource-management)
 

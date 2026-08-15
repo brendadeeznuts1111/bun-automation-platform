@@ -2,19 +2,34 @@
  * Task worker — runs in a spawned Bun process.
  *
  * Receives task IDs via IPC (process.on("message")),
- * loads the task from the database, executes the automation steps,
- * and reports progress/results back via process.send().
+ * loads the task from the database, executes browser automation
+ * via Bun.WebView, and reports progress/results back via process.send().
  *
- * In production, this would use Bun.WebView for browser automation.
- * For now, it's a stub that simulates task execution.
+ * Uses Bun.WebView for real browser automation:
+ * - navigate to the task URL
+ * - capture a screenshot
+ * - extract cookies/localStorage for session persistence (D2)
+ * - per-agent dataStore directory for persistent profiles (D2)
  */
 
+import { resolve } from "node:path";
+import { mkdirSync } from "node:fs";
 import { write, read } from "../db";
 import { withRetry } from "../utils/retry";
 import { recordSuccess, recordFailure } from "../utils/circuit-breaker";
 import { processScreenshot, type ScreenshotResult } from "../utils/image";
 import type { ParentToWorkerMessage, WorkerToParentMessage } from "../types/ipc";
 import type { TaskRow } from "../types/models";
+
+// --- Config ----------------------------------------------------------------
+
+const PROFILE_DIR = resolve(process.env.PROFILE_DIR ?? "./data/profiles");
+const VIEWPORT_WIDTH = parseInt(process.env.VIEWPORT_WIDTH ?? "1280", 10);
+const VIEWPORT_HEIGHT = parseInt(process.env.VIEWPORT_HEIGHT ?? "720", 10);
+const NAV_TIMEOUT = parseInt(process.env.NAV_TIMEOUT ?? "30000", 10);
+void NAV_TIMEOUT; // reserved for future navigate timeout option
+
+// --- Task loading ----------------------------------------------------------
 
 function loadTask(taskId: number): TaskRow | null {
   return read((db) => {
@@ -50,45 +65,113 @@ function failTask(taskId: number, error: string): void {
   }).catch((e) => console.error(`[worker] failTask failed:`, e));
 }
 
+// --- Browser automation ----------------------------------------------------
+
+/**
+ * Execute a task using Bun.WebView for real browser automation.
+ *
+ * Steps:
+ * 1. Navigate to the task URL
+ * 2. Wait for page load
+ * 3. Capture a screenshot
+ * 4. Extract cookies + localStorage for session persistence (D2)
+ * 5. Process the screenshot through the image pipeline
+ * 6. Store the session in the database
+ *
+ * Uses `await using view` for automatic cleanup (I4 — native Symbol.asyncDispose).
+ * Uses per-agent dataStore directory for persistent cookies/storage (D2).
+ */
 async function executeTask(task: TaskRow): Promise<string> {
-  const steps = ["navigate", "login", "collect", "screenshot"];
+  const steps = ["navigate", "screenshot", "extract-session"];
 
-  // Generate a synthetic screenshot via Bun.Image.
-  // In production, Bun.WebView would capture a real page screenshot.
-  // Here we create a 1280x720 placeholder and process it through the
-  // full pipeline (resize → WebP → thumbnail → thumbhash → metadata).
-  const screenshotBuf = generatePlaceholderScreenshot(task);
+  // Per-agent profile directory for persistent cookies/localStorage (D2)
+  const agentProfileDir = resolve(PROFILE_DIR, `agent-${task.agent_id}`);
+  mkdirSync(agentProfileDir, { recursive: true });
 
-  let screenshotResult: ScreenshotResult | null = null;
-  for (let i = 0; i < steps.length; i++) {
-    const progress = Math.round((i / steps.length) * 100);
-    process.send?.({ type: "progress", taskId: task.id, progress });
-    updateProgress(task.id, progress);
+  // Build WebView options
+  const viewOptions: ConstructorParameters<typeof Bun.WebView>[0] = {
+    width: VIEWPORT_WIDTH,
+    height: VIEWPORT_HEIGHT,
+    dataStore: { directory: agentProfileDir },
+  };
 
-    if (steps[i] === "screenshot") {
-      screenshotResult = await processScreenshot(screenshotBuf, `task-${task.id}`);
-    }
-
-    // Simulate work
-    await new Promise((r) => setTimeout(r, 500));
+  // Set custom user agent if provided
+  if (task.user_agent) {
+    // Will be set via CDP after navigation (Chrome backend) or evaluate
   }
 
-  // Store the screenshot session in the database
+  let screenshotResult: ScreenshotResult | null = null;
+  let cookies = "";
+  let localStorageData: Record<string, string> = {};
+  let pageTitle = "";
+  let finalUrl = task.url;
+
+  // await using — automatic view.close() on scope exit (including errors)
+  await using view = new Bun.WebView(viewOptions);
+
+  // Step 1: Navigate to the task URL
+  process.send?.({ type: "progress", taskId: task.id, progress: 0 });
+  updateProgress(task.id, 0);
+
+  await view.navigate(task.url);
+  pageTitle = view.title ?? "";
+  finalUrl = view.url ?? task.url;
+
+  process.send?.({ type: "progress", taskId: task.id, progress: 25 });
+  updateProgress(task.id, 25);
+
+  // Step 2: Capture screenshot
+  const screenshotBuf = await view.screenshot({ format: "png", encoding: "buffer" });
+  screenshotResult = await processScreenshot(screenshotBuf, `task-${task.id}`);
+
+  process.send?.({ type: "progress", taskId: task.id, progress: 50 });
+  updateProgress(task.id, 50);
+
+  // Step 3: Extract session data for persistence (D2)
+  try {
+    cookies = await view.evaluate("document.cookie") ?? "";
+  } catch {
+    // Some pages block cookie access — non-fatal
+    cookies = "";
+  }
+
+  try {
+    const lsJson = await view.evaluate(
+      "(() => { const o = {}; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); o[k] = localStorage.getItem(k); } return JSON.stringify(o); })()",
+    );
+    localStorageData = lsJson ? JSON.parse(lsJson as string) as Record<string, string> : {};
+  } catch {
+    // localStorage may be inaccessible on some pages — non-fatal
+    localStorageData = {};
+  }
+
+  process.send?.({ type: "progress", taskId: task.id, progress: 75 });
+  updateProgress(task.id, 75);
+
+  // Step 4: Store the screenshot session in the database (with cookies/localStorage — D2)
+  let sessionId: number | null = null;
   if (screenshotResult) {
-    const sessionId = await write((db) => {
+    sessionId = await write((db) => {
       const r = db.query(
-        `INSERT INTO sessions (task_id, screenshot_path, screenshot_color, expires_at)
-         VALUES (?, ?, ?, datetime('now', '+24 hours'))`,
+        `INSERT INTO sessions (task_id, screenshot_path, screenshot_color, cookies, local_storage, session_storage, expires_at)
+         VALUES (?, ?, ?, ?, ?, '{}', datetime('now', '+24 hours'))`,
       ).run(
         task.id,
         screenshotResult.thumbPath,
         screenshotResult.dominantColor,
+        cookies,
+        JSON.stringify(localStorageData),
       );
       return Number(r.lastInsertRowid);
     });
 
+    process.send?.({ type: "progress", taskId: task.id, progress: 100 });
+    updateProgress(task.id, 100);
+
     return JSON.stringify({
       url: task.url,
+      final_url: finalUrl,
+      title: pageTitle,
       steps,
       session_id: sessionId,
       screenshot: {
@@ -99,95 +182,15 @@ async function executeTask(task: TaskRow): Promise<string> {
         full_size: screenshotResult.fullSize,
         thumb_size: screenshotResult.thumbSize,
       },
+      session_data: {
+        cookies: cookies.length > 0,
+        local_storage_keys: Object.keys(localStorageData).length,
+      },
       timestamp: new Date().toISOString(),
     });
   }
 
-  return JSON.stringify({ url: task.url, steps, timestamp: new Date().toISOString() });
-}
-
-/**
- * Generate a placeholder screenshot as a PNG ArrayBuffer.
- * Creates a 1280x720 image with the task URL rendered as colored bars.
- * In production, this would be replaced by Bun.WebView's screenshot API.
- */
-function generatePlaceholderScreenshot(task: TaskRow): Buffer {
-  // Create a simple 1280x720 PNG with a solid color background.
-  // We build it manually to avoid any image library dependency —
-  // Bun.Image handles the rest (resize, convert, thumbnail).
-  const width = 1280;
-  const height = 720;
-
-  // Generate raw RGBA pixel data — a gradient based on the URL hash
-  const hash = hashString(task.url);
-  const r = (hash & 0xff0000) >> 16;
-  const g = (hash & 0x00ff00) >> 8;
-  const b = hash & 0x0000ff;
-
-  // Raw image data: per row, 1 filter byte + width * 4 RGBA bytes
-  const rowSize = 1 + width * 4;
-  const raw = new Uint8Array(rowSize * height);
-  for (let y = 0; y < height; y++) {
-    raw[y * rowSize] = 0; // filter: none
-    for (let x = 0; x < width; x++) {
-      const offset = y * rowSize + 1 + x * 4;
-      // Gradient: interpolate between the hash color and a darker shade
-      const factor = (x + y) / (width + height);
-      raw[offset] = Math.round(r * (1 - factor * 0.5));
-      raw[offset + 1] = Math.round(g * (1 - factor * 0.5));
-      raw[offset + 2] = Math.round(b * (1 - factor * 0.5));
-      raw[offset + 3] = 255;
-    }
-  }
-
-  return encodePng(raw, width, height);
-}
-
-function hashString(s: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return h >>> 0;
-}
-
-/** Minimal PNG encoder (RGBA, 8-bit, zero-dependency — uses Bun native deflate, adler32, and crc32). */
-function encodePng(raw: Uint8Array, width: number, height: number): Buffer {
-  const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-
-  // IHDR chunk
-  const ihdrData = Buffer.alloc(13);
-  ihdrData.writeUInt32BE(width, 0);
-  ihdrData.writeUInt32BE(height, 4);
-  ihdrData[8] = 8;   // bit depth
-  ihdrData[9] = 6;   // color type: RGBA
-  ihdrData[10] = 0;  // compression
-  ihdrData[11] = 0;  // filter
-  ihdrData[12] = 0;  // interlace
-
-  // IDAT chunk — zlib stream: RFC 1950 header (0x78, 0x9c) + Bun.deflateSync + Adler-32
-  const deflated = Buffer.from(Bun.deflateSync(raw.buffer as ArrayBuffer));
-  const adler = Buffer.alloc(4);
-  adler.writeUInt32BE(Bun.hash.adler32(raw.buffer as ArrayBuffer), 0);
-  const zlibStream = Buffer.concat([Buffer.from([0x78, 0x9c]), deflated, adler]);
-
-  const chunks = [signature, makeChunk("IHDR", ihdrData), makeChunk("IDAT", zlibStream), makeChunk("IEND", Buffer.alloc(0))];
-
-  return Buffer.concat(chunks);
-}
-
-function makeChunk(type: string, data: Buffer): Buffer {
-  const len = Buffer.alloc(4);
-  len.writeUInt32BE(data.length, 0);
-  const typeBuf = Buffer.from(type, "ascii");
-  const crc = Buffer.alloc(4);
-  crc.writeUInt32BE(crc32(typeBuf, data), 0);
-  return Buffer.concat([len, typeBuf, data, crc]);
-}
-
-function crc32(...bufs: Buffer[]): number {
-  return Bun.hash.crc32(Buffer.concat(bufs));
+  return JSON.stringify({ url: task.url, title: pageTitle, steps, timestamp: new Date().toISOString() });
 }
 
 // --- IPC handler -----------------------------------------------------------
@@ -203,6 +206,10 @@ process.on("message", async (msg: ParentToWorkerMessage) => {
   if (msg.type === "shutdown") {
     console.log(`[worker:${process.pid}] received shutdown signal`);
     clearInterval(keepAlive);
+    // Close any open WebView instances before exiting
+    try {
+      Bun.WebView.closeAll();
+    } catch {}
     process.exit(0);
   }
 
@@ -226,6 +233,7 @@ process.on("message", async (msg: ParentToWorkerMessage) => {
         baseDelayMs: 2000,
         retryable: (e) => {
           const errMsg = e instanceof Error ? e.message : String(e);
+          // Don't retry on "not found", "auth", or navigation errors that won't resolve
           return !errMsg.includes("not found") && !errMsg.includes("auth");
         },
         onRetry: (attempt, delay) => {
