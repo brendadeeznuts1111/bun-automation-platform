@@ -36,6 +36,7 @@ This table maps every Bun API used in the automation platform to its **version**
 | **`Bun.write` / `Bun.file`** | Built-in | [Docs](https://bun.com/docs/runtime/bun-apis) | Stable | `await Bun.write("out.png", screenshot); const file = Bun.file("in.png");` | File/S3 operations; handles Blob, Buffer, streams. |
 | **`bun:sqlite`** | Built-in | [Docs](https://bun.com/docs/runtime/bun-apis) | Stable | `import { Database } from "bun:sqlite"; const db = new Database("data.db");` | SQLite3 built-in; supports prepared statements. |
 | **`console` with `%j`** | v1.3.4 | [Blog](https://bun.com/blog/bun-v1.3.4) | Stable | `console.log("%j", { foo: "bar" });` | JSON-formatted logging; matches Node.js behaviour. |
+| **`bun -p` (print mode)** | v1.3.14 | [Blog](https://bun.com/blog/bun-v1.3.14#other-cli-runtime-fixes) | Stable | `bun -p '(await 1) + 1'` | Evaluates & prints expressions; v1.3.14 fixed top-level `await` to return final completion value (prints 2 instead of 1). |
 | **`--define`** | Built-in | [Docs](https://bun.com/docs/guides/runtime/define-constant) | Stable | `bun run --define process.env.NODE_ENV="'production'" index.ts` | Replace identifiers/properties at transpile time. |
 | **`bun build --compile`** | Built-in | [Docs](https://bun.com/docs/bundler/compile) | Stable | `bun build --compile --minify src/server.ts --outfile server` | Creates standalone executable; v1.3.4 added runtime config skip. |
 | **HTTP/3 client in `fetch()`** | v1.3.14 | [Blog](https://bun.com/blog/bun-v1.3.14) | Stable | `fetch("https://cloudflare.com")` automatically uses HTTP/3 if supported. | Experimental HTTP/3 and HTTP/2 clients; QUIC support. |
@@ -357,7 +358,7 @@ Same as `Options` plus:
 | v1.3.8 | `Bun.markdown` (`html`, `render`, `react`) |
 | v1.3.11 | `Bun.cron` |
 | v1.3.12 | `Bun.WebView`, `Bun.markdown.ansi()`, `bun ./file.md` CLI |
-| v1.3.14 | `Bun.Image`, `process.execve`, `Bun.Terminal` (Windows), HTTP/3, shared SSL_CTX, `fs.watch` rewrite (1 thread on macOS instead of 2), event loop refactor, `perMessageDeflate: false`, `SIGHUP`/`SIGBREAK` on Windows, native `using`, `--no-orphans`, FreeBSD/Android, `Bun.markdown.ansi()` UTF-8 fix |
+| v1.3.14 | `Bun.Image`, `process.execve`, `Bun.Terminal` (Windows), HTTP/3, shared SSL_CTX, `fs.watch` rewrite (1 thread on macOS instead of 2), event loop refactor, `bun -p` top-level await fix, `perMessageDeflate: false`, `SIGHUP`/`SIGBREAK` on Windows, native `using`, `--no-orphans`, FreeBSD/Android, `Bun.markdown.ansi()` UTF-8 fix |
 
 ---
 

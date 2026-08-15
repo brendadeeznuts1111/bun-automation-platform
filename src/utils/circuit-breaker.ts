@@ -20,6 +20,11 @@ interface CircuitStatus {
   trippedAt: number | null;
 }
 
+function parseSqliteDate(dateStr: string): number {
+  if (dateStr.endsWith("Z")) return new Date(dateStr).getTime();
+  return new Date(dateStr.replace(" ", "T") + "Z").getTime();
+}
+
 /** Get the current state of a site's circuit breaker. */
 export function getCircuitStatus(site: string): CircuitStatus {
   const row = read((db) => {
@@ -36,7 +41,7 @@ export function getCircuitStatus(site: string): CircuitStatus {
     return { state: "closed", failures: row.failures, trippedAt: null };
   }
 
-  const trippedAt = new Date(row.tripped_at).getTime();
+  const trippedAt = parseSqliteDate(row.tripped_at);
   const elapsed = Date.now() - trippedAt;
 
   if (elapsed >= COOLDOWN_MS) {

@@ -14,7 +14,7 @@ describe("circuit-breaker", () => {
   });
 
   it("starts in closed state", async () => {
-    const site = "test-site-init.example.com";
+    const site = `test-init-${Date.now()}.example.com`;
     await recordSuccess(site);
     const status = getCircuitStatus(site);
     expect(status.state).toBe("closed");
@@ -23,7 +23,7 @@ describe("circuit-breaker", () => {
   });
 
   it("trips after threshold consecutive failures", async () => {
-    const site = "test-fail.example.com";
+    const site = `test-fail-${Date.now()}.example.com`;
     for (let i = 0; i < 5; i++) {
       await recordFailure(site);
     }
@@ -34,7 +34,7 @@ describe("circuit-breaker", () => {
   });
 
   it("resets on recordSuccess", async () => {
-    const site = "test-reset.example.com";
+    const site = `test-reset-${Date.now()}.example.com`;
     for (let i = 0; i < 5; i++) {
       await recordFailure(site);
     }

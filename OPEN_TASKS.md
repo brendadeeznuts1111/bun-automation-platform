@@ -984,6 +984,13 @@ Same as `Options` plus:
 | Windows | [#windows](https://bun.com/blog/bun-v1.3.14#windows) | — (macOS target) |
 | CLI and runtime | [#cli-and-runtime](https://bun.com/blog/bun-v1.3.14#cli-and-runtime) | — |
 
+### Subsections (`####`) under CLI and runtime
+
+| Header | Anchor URL | Description |
+|--------|------------|-------------|
+| Pipeline producer exit no longer clobbers downstream pager's terminal state | [#pipeline-producer-exit-no-longer-clobbers-downstream-pager-s-terminal-state](https://bun.com/blog/bun-v1.3.14#pipeline-producer-exit-no-longer-clobbers-downstream-pager-s-terminal-state) | When piping to pagers (`bun script.js \| less`), gates exit-time `tcsetattr` so raw mode is preserved |
+| Other CLI/runtime fixes | [#other-cli-runtime-fixes](https://bun.com/blog/bun-v1.3.14#other-cli-runtime-fixes) | `bun -p` with top-level `await` now returns final completion value (`bun -p '(await 1) + 1'` prints 2 instead of 1) |
+
 ### Coverage summary
 
 | Status | Count | Sections |
