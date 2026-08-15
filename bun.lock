@@ -9,6 +9,12 @@
         "@types/bun": "^1.3.14",
         "typescript": "^7.0.2",
       },
+      "peerDependencies": {
+        "puppeteer": "^23 || ^24 || ^25",
+      },
+      "optionalPeers": [
+        "puppeteer",
+      ],
     },
   },
   "packages": {
