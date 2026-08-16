@@ -1139,6 +1139,89 @@ console.log(color("red", "number"));`;
     expect(html).toContain("BUN-DEV");
   });
 
+  it("GET /dashboard has live health polling and status cards", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
+    const html = await res.text();
+    expect(html).toContain("pollHealth");
+    expect(html).toContain("health-pulse");
+    expect(html).toContain("health-stat");
+    expect(html).toContain("workers-stat");
+    expect(html).toContain("routes-stat");
+  });
+
+  it("GET /dashboard has network status indicator", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
+    const html = await res.text();
+    expect(html).toContain("net-status");
+    expect(html).toContain("navigator.onLine");
+    expect(html).toContain("updateNetStatus");
+  });
+
+  it("GET /dashboard has icon gallery with all BUN-DEV and bun.com icons", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
+    const html = await res.text();
+    expect(html).toContain("icon-gallery");
+    // BUN-DEV icons
+    expect(html).toContain("/icons/icon-16.png");
+    expect(html).toContain("/icons/icon-512.png");
+    expect(html).toContain("/icons/icon-1024.png");
+    expect(html).toContain("/icons/maskable-512.png");
+    // bun.com icons
+    expect(html).toContain("/bun-com/icons/favicon-16x16.png");
+    expect(html).toContain("/bun-com/icons/icon-512x512.png");
+    expect(html).toContain("/bun-com/icons/logo.svg");
+    expect(html).toContain("/bun-com/icons/apple-touch-icon.png");
+  });
+
+  it("GET /dashboard has visual icon comparison section", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
+    const html = await res.text();
+    expect(html).toContain("icon-vs");
+    expect(html).toContain("BUN-DEV (ours)");
+    expect(html).toContain("bun.com (theirs)");
+  });
+
+  it("GET /dashboard has SW cache status panel", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
+    const html = await res.text();
+    expect(html).toContain("sw-cache-content");
+    expect(html).toContain("checkSWCache");
+    expect(html).toContain("sw-cache-fill");
+  });
+
+  it("GET /dashboard has copy-to-clipboard for manifest", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
+    const html = await res.text();
+    expect(html).toContain("copyManifest");
+    expect(html).toContain("navigator.clipboard");
+    expect(html).toContain("Copy Manifest JSON");
+  });
+
+  it("GET /dashboard has keyboard shortcuts", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
+    const html = await res.text();
+    expect(html).toContain("keydown");
+    expect(html).toContain("case 'r'");
+    expect(html).toContain("case 'i'");
+    expect(html).toContain("case 'c'");
+    expect(html).toContain("case 'v'");
+    expect(html).toContain("case 'g'");
+    expect(html).toContain("Shortcuts:");
+  });
+
+  it("GET /dashboard has toast notification element", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
+    const html = await res.text();
+    expect(html).toContain('id="toast"');
+    expect(html).toContain("showToast");
+  });
+
+  it("GET /dashboard has toggleSection helper for collapsible panels", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
+    const html = await res.text();
+    expect(html).toContain("toggleSection");
+  });
+
   it("GET /features lists pwa as active when ENABLE_PWA=1", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/features`);
     expect(res.status).toBe(200);

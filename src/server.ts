@@ -826,6 +826,45 @@ const dashboardHandler = withMiddleware((): Response => {
       border: 1px solid var(--border); border-radius: 4px; text-decoration: none;
     }
     .pwa-section .pwa-links a:hover { background: var(--border); }
+    .pwa-section .pwa-links button {
+      background: var(--border); color: var(--info); border: 1px solid var(--border);
+      padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.8rem; cursor: pointer;
+      font-family: inherit;
+    }
+    .pwa-section .pwa-links button:hover { background: var(--accent-dim); color: var(--accent); }
+    .icon-gallery { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem; }
+    .icon-gallery .icon-item {
+      text-align: center; padding: 0.4rem; background: var(--bg-nav);
+      border: 1px solid var(--border); border-radius: 6px;
+    }
+    .icon-gallery .icon-item img { display: block; margin: 0 auto 0.2rem; border-radius: 4px; }
+    .icon-gallery .icon-item .icon-size { font-size: 0.65rem; color: var(--fg-dim); }
+    .icon-gallery .icon-item .icon-label { font-size: 0.65rem; color: var(--info); }
+    .icon-vs { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.5rem; }
+    .icon-vs .icon-col h4 { color: var(--accent); font-size: 0.85rem; margin-bottom: 0.3rem; }
+    .icon-vs .icon-col .icon-grid { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+    .icon-vs .icon-col .icon-grid img { border-radius: 4px; border: 1px solid var(--border); }
+    .net-badge {
+      font-size: 0.75rem; padding: 0.2rem 0.6rem; border-radius: 12px;
+      background: var(--accent-dim); color: var(--accent);
+    }
+    .net-badge.offline { background: #4a2b2b; color: var(--err); }
+    .sw-cache-bar { height: 6px; background: var(--bg-nav); border-radius: 3px; margin-top: 0.3rem; overflow: hidden; }
+    .sw-cache-bar .sw-cache-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.3s; }
+    .kbd { font-size: 0.7rem; padding: 0.1rem 0.35rem; border: 1px solid var(--border); border-radius: 3px; background: var(--bg-nav); color: var(--fg-dim); }
+    .toast {
+      position: fixed; bottom: 1rem; right: 1rem; background: var(--bg-card);
+      border: 1px solid var(--accent); border-radius: 6px; padding: 0.6rem 1rem;
+      color: var(--accent); font-size: 0.85rem; z-index: 999;
+      opacity: 0; transition: opacity 0.3s; pointer-events: none;
+    }
+    .toast.show { opacity: 1; }
+    .health-pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 0.3rem; }
+    .health-pulse.ok { background: var(--accent); animation: pulse 2s infinite; }
+    .health-pulse.err { background: var(--err); }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+    .copy-btn { cursor: pointer; font-size: 0.75rem; color: var(--info); }
+    .copy-btn:hover { color: var(--accent); }
     footer { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border); color: var(--fg-dim); font-size: 0.75rem; text-align: center; }
   </style>
 </head>
@@ -845,11 +884,14 @@ const dashboardHandler = withMiddleware((): Response => {
   </nav>
   <div class="header-row">
     <h1>BUN-DEV <span class="version">v${Bun.version}</span></h1>
-    ${ENABLE_PWA ? '<span class="sw-badge" id="sw-status">SW: checking...</span>' : ""}
+    <div style="display: flex; gap: 0.5rem; align-items: center;">
+      <span class="net-badge" id="net-status">● Online</span>
+      ${ENABLE_PWA ? '<span class="sw-badge" id="sw-status">SW: checking...</span>' : ""}
+    </div>
   </div>
   <p style="color: var(--fg-dim); font-size: 0.85rem; margin-bottom: 1rem;">Bun Automation Platform — Player Health Dashboard</p>
 
-  <h2>Status</h2>
+  <h2>Status <span class="health-pulse ok" id="health-pulse"></span></h2>
   <div class="status-grid">
     <div class="stat-card">
       <div class="label">Environment</div>
@@ -865,7 +907,7 @@ const dashboardHandler = withMiddleware((): Response => {
     </div>
     <div class="stat-card">
       <div class="label">Workers</div>
-      <div class="value">${pool.idle}/${pool.total} idle</div>
+      <div class="value" id="workers-stat">${pool.idle}/${pool.total} idle</div>
     </div>
     <div class="stat-card">
       <div class="label">Uptime</div>
@@ -874,6 +916,14 @@ const dashboardHandler = withMiddleware((): Response => {
     <div class="stat-card">
       <div class="label">PWA</div>
       <div class="value ${ENABLE_PWA ? "" : "warn"}">${ENABLE_PWA ? "Enabled" : "Off"}</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Health</div>
+      <div class="value" id="health-stat" style="font-size: 0.9rem;">checking...</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Routes</div>
+      <div class="value" id="routes-stat">—</div>
     </div>
   </div>
 
@@ -905,6 +955,79 @@ const dashboardHandler = withMiddleware((): Response => {
       <a href="/api/pwa/compare">vs bun.com</a>
       <a href="/bun-com/manifest.json">bun.com manifest</a>
       <a href="/bun-com/icons/icon-512x512.png">bun.com icon</a>
+      <button onclick="copyManifest()">Copy Manifest JSON</button>
+    </div>
+  </div>
+
+  <div class="pwa-section" style="margin-top: 0.5rem;">
+    <h3 style="color: var(--accent); cursor: pointer;" onclick="toggleSection('icon-gallery-content', this)">
+      Icon Gallery ▸
+    </h3>
+    <div id="icon-gallery-content" style="display: none; margin-top: 0.5rem;">
+      <h4 style="color:var(--info); font-size:0.85rem; margin-bottom:0.3rem;">BUN-DEV Icons</h4>
+      <div class="icon-gallery">
+        <div class="icon-item"><img src="/icons/icon-16.png" width="16" height="16"><span class="icon-size">16px</span></div>
+        <div class="icon-item"><img src="/icons/icon-32.png" width="32" height="32"><span class="icon-size">32px</span></div>
+        <div class="icon-item"><img src="/icons/icon-48.png" width="48" height="48"><span class="icon-size">48px</span></div>
+        <div class="icon-item"><img src="/icons/icon-64.png" width="64" height="64"><span class="icon-size">64px</span></div>
+        <div class="icon-item"><img src="/icons/icon-96.png" width="96" height="96"><span class="icon-size">96px</span></div>
+        <div class="icon-item"><img src="/icons/icon-128.png" width="128" height="128"><span class="icon-size">128px</span></div>
+        <div class="icon-item"><img src="/icons/icon-192.png" width="64" height="64"><span class="icon-size">192px</span></div>
+        <div class="icon-item"><img src="/icons/icon-256.png" width="64" height="64"><span class="icon-size">256px</span></div>
+        <div class="icon-item"><img src="/icons/icon-512.png" width="64" height="64"><span class="icon-size">512px</span></div>
+        <div class="icon-item"><img src="/icons/icon-1024.png" width="64" height="64"><span class="icon-size">1024px</span></div>
+        <div class="icon-item"><img src="/icons/maskable-512.png" width="64" height="64"><span class="icon-label">maskable</span></div>
+      </div>
+      <h4 style="color:var(--info); font-size:0.85rem; margin: 0.75rem 0 0.3rem;">bun.com Icons</h4>
+      <div class="icon-gallery">
+        <div class="icon-item"><img src="/bun-com/icons/favicon-16x16.png" width="16" height="16"><span class="icon-size">16px</span></div>
+        <div class="icon-item"><img src="/bun-com/icons/favicon-32x32.png" width="32" height="32"><span class="icon-size">32px</span></div>
+        <div class="icon-item"><img src="/bun-com/icons/favicon-96x96.png" width="48" height="48"><span class="icon-size">96px</span></div>
+        <div class="icon-item"><img src="/bun-com/icons/icon-192x192.png" width="64" height="64"><span class="icon-size">192px</span></div>
+        <div class="icon-item"><img src="/bun-com/icons/icon-512x512.png" width="64" height="64"><span class="icon-size">512px</span></div>
+        <div class="icon-item"><img src="/bun-com/icons/logo@1024x.png" width="64" height="64"><span class="icon-size">1024px</span></div>
+        <div class="icon-item"><img src="/bun-com/icons/logo.svg" width="48" height="48"><span class="icon-label">SVG</span></div>
+        <div class="icon-item"><img src="/bun-com/icons/apple-touch-icon.png" width="48" height="48"><span class="icon-label">apple</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pwa-section" style="margin-top: 0.5rem;">
+    <h3 style="color: var(--accent); cursor: pointer;" onclick="toggleSection('icon-vs-content', this)">
+      Visual Icon Comparison ▸
+    </h3>
+    <div id="icon-vs-content" style="display: none; margin-top: 0.5rem;">
+      <div class="icon-vs">
+        <div class="icon-col">
+          <h4>BUN-DEV (ours)</h4>
+          <div class="icon-grid">
+            <img src="/icons/icon-128.png" width="64" height="64" title="128px">
+            <img src="/icons/icon-256.png" width="64" height="64" title="256px">
+            <img src="/icons/icon-512.png" width="64" height="64" title="512px">
+            <img src="/icons/maskable-512.png" width="64" height="64" title="maskable">
+          </div>
+        </div>
+        <div class="icon-col">
+          <h4>bun.com (theirs)</h4>
+          <div class="icon-grid">
+            <img src="/bun-com/icons/favicon-96x96.png" width="64" height="64" title="96px">
+            <img src="/bun-com/icons/icon-192x192.png" width="64" height="64" title="192px">
+            <img src="/bun-com/icons/icon-512x512.png" width="64" height="64" title="512px">
+            <img src="/bun-com/icons/logo.svg" width="64" height="64" title="SVG">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pwa-section" style="margin-top: 0.5rem;">
+    <h3 style="color: var(--accent); cursor: pointer;" onclick="toggleSection('sw-cache-content', this)">
+      Service Worker Cache Status ▸
+    </h3>
+    <div id="sw-cache-content" style="display: none; margin-top: 0.5rem;">
+      <div id="sw-cache-info" style="color: var(--fg-dim); font-size: 0.8rem;">Checking cache status...</div>
+      <div class="sw-cache-bar"><div class="sw-cache-fill" id="sw-cache-fill" style="width: 0%"></div></div>
+      <div id="sw-cache-detail" style="margin-top: 0.3rem; font-size: 0.8rem;"></div>
     </div>
   </div>
 
@@ -948,6 +1071,10 @@ const dashboardHandler = withMiddleware((): Response => {
   </ul>
 
   <footer>BUN-DEV — Bun Automation Platform | Powered by Bun v${Bun.version}</footer>
+  <div style="margin-top: 0.5rem; color: var(--fg-dim); font-size: 0.7rem; text-align: center;">
+    Shortcuts: <span class="kbd">R</span> refresh <span class="kbd">I</span> install <span class="kbd">C</span> compare <span class="kbd">V</span> validate <span class="kbd">G</span> gallery
+  </div>
+  <div class="toast" id="toast"></div>
 
   <script>
     async function fetchFeatures() {
@@ -978,6 +1105,125 @@ const dashboardHandler = withMiddleware((): Response => {
       const s = uptimeStart % 60;
       document.getElementById('uptime').textContent = m > 0 ? m + 'm ' + s + 's' : s + 's';
     }, 1000);
+
+    // Live health polling — every 5s
+    async function pollHealth() {
+      try {
+        const res = await fetch('/health');
+        const data = await res.json();
+        const pulse = document.getElementById('health-pulse');
+        const stat = document.getElementById('health-stat');
+        const workers = document.getElementById('workers-stat');
+        if (data.status === 'ok') {
+          pulse.className = 'health-pulse ok';
+          stat.textContent = '✅ OK';
+          stat.style.color = 'var(--accent)';
+          workers.textContent = data.workers.idle + '/' + data.workers.total + ' idle';
+        } else {
+          pulse.className = 'health-pulse err';
+          stat.textContent = '❌ Down';
+          stat.style.color = 'var(--err)';
+        }
+      } catch (e) {
+        const pulse = document.getElementById('health-pulse');
+        const stat = document.getElementById('health-stat');
+        pulse.className = 'health-pulse err';
+        stat.textContent = '❌ Error';
+        stat.style.color = 'var(--err)';
+      }
+    }
+    pollHealth();
+    setInterval(pollHealth, 5000);
+
+    // Fetch metrics for routes count
+    async function fetchMetrics() {
+      try {
+        const res = await fetch('/metrics');
+        const text = await res.text();
+        const totalMatch = text.match(/routes\{type="total"\} (\\d+)/);
+        const pwaMatch = text.match(/routes\{type="pwa"\} (\\d+)/);
+        if (totalMatch) document.getElementById('routes-stat').textContent = totalMatch[1] + ' total';
+      } catch (e) {}
+    }
+    fetchMetrics();
+
+    // Network status indicator
+    function updateNetStatus() {
+      const badge = document.getElementById('net-status');
+      if (navigator.onLine) {
+        badge.textContent = '● Online';
+        badge.className = 'net-badge';
+      } else {
+        badge.textContent = '● Offline';
+        badge.className = 'net-badge offline';
+      }
+    }
+    updateNetStatus();
+    window.addEventListener('online', updateNetStatus);
+    window.addEventListener('offline', updateNetStatus);
+
+    // Toast helper
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2000);
+    }
+
+    // Copy manifest to clipboard
+    async function copyManifest() {
+      try {
+        const res = await fetch('/manifest.json');
+        const text = await res.text();
+        await navigator.clipboard.writeText(text);
+        showToast('✅ Manifest copied to clipboard');
+      } catch (e) {
+        showToast('❌ Copy failed: ' + e.message);
+      }
+    }
+
+    // Toggle section helper
+    function toggleSection(id, h3) {
+      const el = document.getElementById(id);
+      if (el.style.display === 'none') {
+        el.style.display = 'block';
+        h3.textContent = h3.textContent.replace('▸', '▾');
+      } else {
+        el.style.display = 'none';
+        h3.textContent = h3.textContent.replace('▾', '▸');
+      }
+    }
+
+    // SW cache status
+    async function checkSWCache() {
+      const info = document.getElementById('sw-cache-info');
+      const fill = document.getElementById('sw-cache-fill');
+      const detail = document.getElementById('sw-cache-detail');
+      if ('caches' in window) {
+        try {
+          const keys = await caches.keys();
+          if (keys.length === 0) {
+            info.textContent = 'No caches found (SW not yet active)';
+            fill.style.width = '0%';
+            return;
+          }
+          let totalRequests = 0;
+          let cachedRequests = 0;
+          for (const key of keys) {
+            const cache = await caches.open(key);
+            const requests = await cache.keys();
+            totalRequests += requests.length;
+          }
+          info.textContent = 'Cache: ' + keys.join(', ') + ' (' + totalRequests + ' entries)';
+          fill.style.width = Math.min(100, totalRequests * 10) + '%';
+          detail.innerHTML = '<span style="color:var(--accent);">' + totalRequests + '</span> cached responses across <span style="color:var(--info);">' + keys.length + '</span> cache(s)';
+        } catch (e) {
+          info.textContent = 'Cache check failed: ' + e.message;
+        }
+      } else {
+        info.textContent = 'Cache API not supported';
+      }
+    }
 
     // PWA manifest comparison panel
     async function loadPWACompare() {
@@ -1131,6 +1377,25 @@ const dashboardHandler = withMiddleware((): Response => {
         badge.classList.add('inactive');
       }
     }
+
+    // Check SW cache after registration
+    setTimeout(checkSWCache, 2000);
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      switch (e.key.toLowerCase()) {
+        case 'r': pollHealth(); fetchMetrics(); showToast('🔄 Refreshed'); break;
+        case 'i': installPWA(); break;
+        case 'c': loadPWACompare(); break;
+        case 'v': loadPWAValidate(); break;
+        case 'g':
+          const gal = document.getElementById('icon-gallery-content');
+          const galH3 = document.querySelector('#icon-gallery-content').previousElementSibling;
+          toggleSection('icon-gallery-content', galH3);
+          break;
+      }
+    });
   </script>` : ""}
 </body>
 </html>`;
