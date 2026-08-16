@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { type Subprocess } from "bun";
 import { migrate, write } from "../src/db";
+import { consumeJsonlStream } from "../src/utils/jsonl-stream";
 
 describe("Server API Integration", () => {
   const TEST_PORT = 3199;
@@ -470,6 +471,123 @@ describe("Server API Integration", () => {
     buf.set(payload, bom.length);
     const values = Bun.JSONL.parse(buf);
     expect(values).toEqual([{ ok: true }]);
+  });
+
+  it("Bun.JSONL.parseChunk error recovery: can continue after skipping bad line", () => {
+    // Ref: https://bun.com/docs/runtime/jsonl#error-recovery
+    // parseChunk never throws but gets stuck at read=0 when the buffer
+    // starts with invalid JSON. Manually skip past the bad line to continue.
+    const input = '{"a":1}\n{invalid}\n{"b":2}\n';
+    let buf = input;
+    const collected: Record<string, unknown>[] = [];
+    let hadError = false;
+
+    // First parse — gets {a:1}, then hits error
+    const r1 = Bun.JSONL.parseChunk(buf);
+    // JUSTIFIED: parseChunk returns unknown[]; narrowing to record shape
+    collected.push(...(r1.values as Record<string, unknown>[]));
+    buf = buf.slice(r1.read);
+    expect(r1.error).toBeInstanceOf(SyntaxError);
+    hadError = true;
+
+    // Manual recovery: skip leading newlines, then skip to end of bad line
+    if (r1.error) {
+      while (buf.startsWith("\n")) buf = buf.slice(1);
+      const nlIdx = buf.indexOf("\n");
+      expect(nlIdx).toBeGreaterThanOrEqual(0);
+      buf = buf.slice(nlIdx + 1);
+    }
+
+    // Second parse — should now get {b:2}
+    const r2 = Bun.JSONL.parseChunk(buf);
+    // JUSTIFIED: parseChunk returns unknown[]; narrowing to record shape
+    collected.push(...(r2.values as Record<string, unknown>[]));
+    expect(r2.error).toBeNull();
+    expect(r2.done).toBe(true);
+
+    expect(hadError).toBe(true);
+    expect(collected).toEqual([{ a: 1 }, { b: 2 }]);
+  });
+
+  it("consumeJsonlStream helper: zero-copy streaming with error recovery", async () => {
+    // Ref: src/utils/jsonl-stream.ts
+    // Build a stream with two valid lines and one bad line in the middle
+    const encoder = new TextEncoder();
+    const chunks = [
+      encoder.encode('{"id":1}\n{"id":2}\n'),
+      encoder.encode('{bad}\n'),
+      encoder.encode('{"id":3}\n'),
+    ];
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const chunk of chunks) controller.enqueue(chunk);
+        controller.close();
+      },
+    });
+
+    const values: { id: number }[] = [];
+    const errors: SyntaxError[] = [];
+    const result = await consumeJsonlStream(stream, {
+      // JUSTIFIED: onValue receives unknown; narrowing to the expected shape
+      onValue: (v) => values.push(v as { id: number }),
+      onError: (err) => errors.push(err),
+    });
+
+    expect(values).toEqual([{ id: 1 }, { id: 2 }, { id: 3 }]);
+    expect(errors.length).toBe(1);
+    expect(errors[0]).toBeInstanceOf(SyntaxError);
+    expect(result.count).toBe(3);
+    expect(result.errors).toBe(1);
+  });
+
+  it("consumeJsonlStream helper: handles partial values across chunk boundaries", async () => {
+    // Ref: src/utils/jsonl-stream.ts
+    // Split a JSON object across two chunks to test the remainder buffer
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('{"id":1}\n{"id":2,"name":"Al'));
+        controller.enqueue(encoder.encode('ice"}\n{"id":3}\n'));
+        controller.close();
+      },
+    });
+
+    const values: { id: number; name?: string }[] = [];
+    const result = await consumeJsonlStream(stream, {
+      // JUSTIFIED: onValue receives unknown; narrowing to the expected shape
+      onValue: (v) => values.push(v as { id: number; name?: string }),
+    });
+
+    expect(values).toEqual([
+      { id: 1 },
+      { id: 2, name: "Alice" },
+      { id: 3 },
+    ]);
+    expect(result.count).toBe(3);
+    expect(result.errors).toBe(0);
+  });
+
+  it("consumeJsonlStream helper: consumes /api/audit.jsonl end-to-end", async () => {
+    // Ref: src/utils/jsonl-stream.ts
+    // Use the helper to consume the real server endpoint
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/audit.jsonl?limit=5`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    expect(res.status).toBe(200);
+    expect(res.body).toBeDefined();
+
+    const events: Record<string, unknown>[] = [];
+    const result = await consumeJsonlStream(res.body!, {
+      // JUSTIFIED: onValue receives unknown; narrowing to audit record shape
+      onValue: (v) => events.push(v as Record<string, unknown>),
+    });
+
+    expect(result.count).toBeGreaterThan(0);
+    expect(result.errors).toBe(0);
+    for (const event of events) {
+      expect(event).toHaveProperty("action");
+      expect(event).toHaveProperty("created_at");
+    }
   });
 
   // --- CSRF ---
