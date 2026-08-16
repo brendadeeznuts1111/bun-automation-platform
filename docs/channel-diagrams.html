@@ -2702,6 +2702,70 @@ bun ./README.md | pbcopy
 <tr><td><code>Bun.inspect.table</code> <code>compact</code>, <code>showHidden</code>, <code>showPrototype</code>, <code>sorted</code>, <code>breakLength</code></td><td>Undocumented</td><td>Accepted but no effect</td></tr>
 <tr><td><code>console.write()</code> return value</td><td>Undocumented</td><td>Returns byte count (number)</td></tr>
 <tr><td><code>console.write()</code> multiple args</td><td>Undocumented</td><td><code>console.write(&quot;a&quot;, &quot;b&quot;)</code> works</td></tr>
+<tr><td><code>Bun.inspect.custom</code> <code>stylize</code> option</td><td>Undocumented</td><td>Passed in options but not in docs</td></tr>
+</tbody>
+</table>
+<h3 id="deep-audit-bugs-19-25-additional-findings">Deep audit: Bugs 19-25 (additional findings)</h3>
+<table>
+<thead>
+<tr><th>Bug</th><th>API</th><th>Description</th><th>Severity</th></tr>
+</thead>
+<tbody>
+<tr><td>19</td><td><code>Bun.inspect.table</code></td><td>Symbol keys appear as column headers (using description) but cells are empty</td><td>Low</td></tr>
+<tr><td>20</td><td><code>Bun.inspect.table</code></td><td>String/Number/undefined/null/boolean input produces empty string (silent failure, no error)</td><td>Medium</td></tr>
+<tr><td>21</td><td><code>Bun.inspect.table</code></td><td>Mixed types (objects + primitives + arrays) create confusing merged column layout</td><td>Low</td></tr>
+<tr><td>22</td><td><code>Bun.inspect.table</code></td><td>Error objects in cells render full stack trace with source code context (massive output)</td><td>Medium</td></tr>
+<tr><td>23</td><td><code>Bun.markdown.html</code></td><td><code>noHtmlBlocks: true</code> alone does NOT block HTML blocks — only works combined with <code>noHtmlSpans: true</code></td><td>High</td></tr>
+<tr><td>24</td><td><code>Bun.markdown.html</code></td><td><code>headings: { prefix: &quot;...&quot; }</code> option silently ignored — no prefix added to heading IDs</td><td>Low</td></tr>
+<tr><td>25</td><td><code>Bun.markdown.html</code></td><td><code>headings: { slugify: custom }</code> option silently ignored — default slugify always used</td><td>Low</td></tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Bug 23 detail:</strong> <code>noHtmlBlocks: true</code> alone wraps block HTML in <code>&lt;p&gt;</code> tags instead of escaping it. Only when combined with <code>noHtmlSpans: true</code> does it actually escape the HTML. This is because Bun treats block-level HTML as inline HTML internally, so <code>noHtmlBlocks</code> misses it but <code>noHtmlSpans</code> catches it.</p>
+</blockquote>
+<blockquote>
+<p><strong>Bug 24-25 detail:</strong> The <code>headings</code> options object accepts <code>prefix</code> and <code>slugify</code> properties at runtime without error, but they have no effect. The heading ID is always the default slugified text. These options may be planned but unimplemented.</p>
+</blockquote>
+<h3 id="deep-audit-buninspectcustom-additional-behaviors">Deep audit: Bun.inspect.custom additional behaviors</h3>
+<table>
+<thead>
+<tr><th>Feature</th><th>Behavior</th></tr>
+</thead>
+<tbody>
+<tr><td>Receives <code>(depth, options)</code></td><td>✅ <code>options</code> has <code>stylize</code>, <code>depth</code>, <code>colors</code> keys</td></tr>
+<tr><td><code>stylize</code> function</td><td>✅ Passed but undocumented (Node.js compat)</td></tr>
+<tr><td><code>showHidden</code>, <code>compact</code></td><td>❌ Silently ignored (not passed to custom inspect)</td></tr>
+<tr><td>Nested custom inspect</td><td>✅ Depth decreases by 1 for each level</td></tr>
+<tr><td>Self-referential</td><td>❌ Throws <code>Maximum call stack size exceeded</code> (no circular detection)</td></tr>
+<tr><td>ANSI in return string</td><td>Passes through as-is (not stripped, not processed)</td></tr>
+<tr><td>Returning object</td><td>Recursively inspected (with decreased depth)</td></tr>
+<tr><td>Returning array</td><td>Inspected as array</td></tr>
+<tr><td>Returning null/undefined</td><td>Shows as <code>&quot;null&quot;</code> / <code>&quot;undefined&quot;</code></td></tr>
+</tbody>
+</table>
+<h3 id="deep-audit-buninspecttable-type-handling">Deep audit: Bun.inspect.table type handling</h3>
+<table>
+<thead>
+<tr><th>Type</th><th>Cell display</th></tr>
+</thead>
+<tbody>
+<tr><td>Date</td><td>ISO string (<code>2024-01-01T00:00:00.000Z</code>)</td></tr>
+<tr><td>RegExp</td><td><code>/pattern/g</code></td></tr>
+<tr><td>Promise</td><td><code>Promise { &lt;resolved&gt; }</code></td></tr>
+<tr><td>Uint8Array</td><td><code>Uint8Array(3) [ 1, 2, 3 ]</code></td></tr>
+<tr><td>BigInt</td><td><code>9007199254740993n</code> (with <code>n</code> suffix)</td></tr>
+<tr><td>NaN</td><td><code>NaN</code></td></tr>
+<tr><td>Infinity</td><td><code>Infinity</code></td></tr>
+<tr><td>-Infinity</td><td><code>-Infinity</code></td></tr>
+<tr><td>-0</td><td><code>-0</code></td></tr>
+<tr><td>Function</td><td><code>[Function: name]</code></td></tr>
+<tr><td>Circular</td><td><code>[Circular]</code></td></tr>
+<tr><td>Error</td><td>Full stack trace with source code (Bug 22)</td></tr>
+<tr><td>Map (as input)</td><td>Key/Values columns</td></tr>
+<tr><td>Set (as input)</td><td>Values column</td></tr>
+<tr><td>Proxy</td><td>Transparent (delegates to target)</td></tr>
+<tr><td>Frozen object</td><td>Works normally</td></tr>
+<tr><td>null-prototype object</td><td>Works normally</td></tr>
 </tbody>
 </table>
 <h2 id="related">Related</h2>
