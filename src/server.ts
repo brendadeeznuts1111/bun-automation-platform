@@ -1961,53 +1961,123 @@ const dashboardHandler = withMiddleware((): Response => {
   </div>
   ` : ""}
 
-  <h2>Endpoints</h2>
-  <ul>
-    <li><a href="/health">/health</a> — health check (JSON)</li>
-    <li><a href="/metrics">/metrics</a> — Prometheus metrics</li>
-    ${ENABLE_SITEMAP ? '<li><a href="/sitemap.xml">/sitemap.xml</a> — sitemap XML</li>' : ""}
-    <li><a href="/protocol">/protocol</a> — protocol info</li>
-    <li><a href="/features">/features</a> — feature flags (JSON)</li>
-    <li><a href="/dashboard">/dashboard</a> — this page</li>
-    <li><code>GET /api/audit.jsonl</code> — audit log JSONL export</li>
-    <li><code>GET /api/tasks.jsonl</code> — tasks JSONL export</li>
-    <li><code>GET /api/sessions.jsonl</code> — sessions JSONL export</li>
-    <li><code>GET /api/color?color=red&amp;format=css</code> — color conversion</li>
-    <li><code>GET /api/env</code> — environment variable inspection</li>
-    <li><a href="/manifest.json">/manifest.json</a> — PWA manifest</li>
-    <li><a href="/sw.js">/sw.js</a> — service worker</li>
-    <li><a href="/api/pwa/validate">/api/pwa/validate</a> — PWA installability validation</li>
-    <li><a href="/api/pwa/compare">/api/pwa/compare</a> — BUN-DEV vs bun.com manifest comparison</li>
-    <li><a href="/api/openapi.json">/api/openapi.json</a> — OpenAPI 3.1 spec (auto-generated)</li>
-    <li><a href="/api/semver">/api/semver</a> — Bun.semver version negotiation</li>
-    <li><a href="/api/health-log">/api/health-log</a> — cron health check history</li>
-    <li><a href="/api/diagrams">/api/diagrams</a> — auto-discovered diagram files (Bun.glob)</li>
-    <li><a href="/api/config">/api/config</a> — multi-format config parser (YAML/TOML/JSON5)</li>
-    <li><code>POST /api/markdown</code> — render markdown to HTML</li>
-    <li><code>POST /api/features/toggle</code> — toggle feature flag at runtime (auth+CSRF)</li>
-    <li><code>POST /api/admin/shell</code> — safe admin commands: vacuum, status, workers (auth+CSRF)</li>
-    <li><code>GET /api/export/bundle.tar</code> — tar bundle of all JSONL exports (Bun.Archive)</li>
-    <li><code>GET /api/audit/stream</code> — SSE real-time audit log stream</li>
-    <li><code>POST /api/mermaid</code> — Mermaid live render to SVG (Bun.WebView)</li>
-    <li><a href="/api/redis">/api/redis</a> — Redis rate limit status (Bun.redis)</li>
-    <li><a href="/api/s3/backup">/api/s3/backup</a> — S3 offsite backup status (Bun.s3)</li>
-    <li><a href="/api/logs">/api/logs</a> — structured log buffer (Bun.console)</li>
-    <li><code>GET /api/stream/:path</code> — streaming file response (Bun.streams)</li>
-    <li><code>GET /ws/metrics</code> — WebSocket live metrics (500ms push)</li>
-    <li><a href="/api/ffi">/api/ffi</a> — native library loading (Bun.ffi)</li>
-    <li><a href="/api/hash?input=hello">/api/hash</a> — hash computation (Bun.CryptoHasher)</li>
-    <li><code>POST /api/sql</code> — SQL query via tagged template (Bun.sql pattern)</li>
-    <li><code>GET /api/image?src=/icons/icon-512.png&amp;width=64&amp;format=webp</code> — image processing (Bun.Image)</li>
-    <li><code>GET /api/screenshot?url=https://example.com</code> — screenshot via Bun.WebView</li>
-    <li><code>POST /api/config/write</code> — write YAML/TOML/JSON5 config (auth+CSRF)</li>
-    <li><a href="/api/transpile?code=const%20x:%20number%20=%201">/api/transpile</a> — TS/JSX transpiler (Bun.Transpiler)</li>
-    <li><code>POST /api/dns</code> — DNS lookup (Bun.dns)</li>
-    <li><a href="/api/processes">/api/processes</a> — process manager (Bun.spawn)</li>
-    <li><a href="/api/fs">/api/fs</a> — filesystem browser (Bun.file + Bun.Glob)</li>
-    <li><a href="/api/compress?input=hello&action=compress">/api/compress</a> — compression utility (Bun.deflateSync)</li>
-    <li><a href="/api/utils?tool=escape&input=<hello>">/api/utils</a> — escape/base64/clone (Bun.escapeHTML)</li>
-    <li><a href="/api/runtime">/api/runtime</a> — runtime introspection (Bun.gc/nanoseconds/shrink)</li>
-  </ul>
+  <h2>API Reference <span style="font-size:0.75rem; color:var(--fg-dim);">— searchable, categorized, ${'40+'} endpoints</span></h2>
+  <input type="text" id="api-search" placeholder="Search endpoints... (e.g. hash, image, sql, auth)" style="width:100%; background:var(--bg-nav); color:var(--fg); border:1px solid var(--border); border-radius:4px; padding:0.4rem 0.6rem; font-family:inherit; font-size:0.85rem; margin-bottom:0.5rem;" oninput="filterEndpoints()">
+  <div id="api-reference">
+    <style>
+      .api-cat { margin-top: 0.8rem; }
+      .api-cat h3 { color: var(--info); font-size: 0.85rem; margin: 0 0 0.3rem 0; border-bottom: 1px solid var(--border); padding-bottom: 0.2rem; }
+      .api-row { display: flex; align-items: center; gap: 0.4rem; padding: 0.2rem 0.3rem; border-radius: 3px; font-size: 0.78rem; }
+      .api-row:hover { background: var(--bg-nav); }
+      .api-method { font-size: 0.65rem; font-weight: bold; padding: 0.1rem 0.35rem; border-radius: 3px; min-width: 38px; text-align: center; }
+      .api-get { background: #2a5a2a; color: #50fa7b; }
+      .api-post { background: #5a4a2a; color: #ffb86c; }
+      .api-ws { background: #2a3a5a; color: #8be9fd; }
+      .api-sse { background: #4a2a5a; color: #bd93f9; }
+      .api-path { font-family: monospace; color: var(--accent); flex-shrink: 0; }
+      .api-desc { color: var(--fg-dim); }
+      .api-auth { font-size: 0.6rem; color: var(--warn); padding: 0.05rem 0.3rem; border: 1px solid var(--warn); border-radius: 2px; }
+      .api-csrf { font-size: 0.6rem; color: var(--err); padding: 0.05rem 0.3rem; border: 1px solid var(--err); border-radius: 2px; }
+      .api-bun { font-size: 0.6rem; color: var(--info); padding: 0.05rem 0.3rem; background: rgba(139,233,253,0.1); border-radius: 2px; }
+    </style>
+
+    <div class="api-cat">
+      <h3>🏥 Health &amp; Metrics</h3>
+      <div class="api-row"><a href="/health" class="api-method api-get">GET</a><span class="api-path">/health</span><span class="api-desc">health check + worker pool status</span></div>
+      <div class="api-row"><a href="/metrics" class="api-method api-get">GET</a><span class="api-path">/metrics</span><span class="api-desc">Prometheus-format metrics</span></div>
+      <div class="api-row"><a href="/api/health-log" class="api-method api-get">GET</a><span class="api-path">/api/health-log</span><span class="api-desc">cron health check history</span><span class="api-bun">Bun.cron</span></div>
+      <div class="api-row"><a href="/api/runtime" class="api-method api-get">GET</a><span class="api-path">/api/runtime</span><span class="api-desc">runtime introspection (gc, nanoseconds, shrink)</span><span class="api-auth">auth</span><span class="api-bun">Bun.gc</span></div>
+    </div>
+
+    <div class="api-cat">
+      <h3>🔐 Authentication &amp; Admin</h3>
+      <div class="api-row"><span class="api-method api-post">POST</span><span class="api-path">/login</span><span class="api-desc">agent auth → token + csrf_token + session cookie</span><span class="api-bun">Bun.CookieMap</span></div>
+      <div class="api-row"><span class="api-method api-post">POST</span><span class="api-path">/api/admin/shell</span><span class="api-desc">safe admin commands (vacuum, status, workers, git, disk, env)</span><span class="api-auth">auth</span><span class="api-csrf">CSRF</span><span class="api-bun">Bun.shell</span></div>
+      <div class="api-row"><span class="api-method api-post">POST</span><span class="api-path">/api/features/toggle</span><span class="api-desc">toggle feature flag at runtime — no restart</span><span class="api-auth">auth</span><span class="api-csrf">CSRF</span></div>
+    </div>
+
+    <div class="api-cat">
+      <h3>📋 Tasks &amp; Sessions</h3>
+      <div class="api-row"><span class="api-method api-get">GET</span><span class="api-path">/tasks</span><span class="api-desc">paginated task list</span><span class="api-auth">auth</span></div>
+      <div class="api-row"><span class="api-method api-post">POST</span><span class="api-path">/task</span><span class="api-desc">create automation task (WebView screenshot)</span><span class="api-auth">auth</span><span class="api-csrf">CSRF</span></div>
+      <div class="api-row"><span class="api-method api-get">GET</span><span class="api-path">/task/:id</span><span class="api-desc">get task by ID</span><span class="api-auth">auth</span></div>
+      <div class="api-row"><span class="api-method api-get">GET</span><span class="api-path">/sessions</span><span class="api-desc">list sessions</span><span class="api-auth">auth</span></div>
+      <div class="api-row"><span class="api-method api-get">GET</span><span class="api-path">/screenshot/:id</span><span class="api-desc">serve task screenshot</span><span class="api-auth">auth</span></div>
+    </div>
+
+    <div class="api-cat">
+      <h3>📤 Data Export &amp; Streaming</h3>
+      <div class="api-row"><span class="api-method api-get">GET</span><span class="api-path">/api/tasks.jsonl</span><span class="api-desc">tasks JSONL stream</span><span class="api-auth">auth</span><span class="api-bun">Bun.JSONL</span></div>
+      <div class="api-row"><span class="api-method api-get">GET</span><span class="api-path">/api/sessions.jsonl</span><span class="api-desc">sessions JSONL stream</span><span class="api-auth">auth</span></div>
+      <div class="api-row"><span class="api-method api-get">GET</span><span class="api-path">/api/audit.jsonl</span><span class="api-desc">audit log JSONL stream</span><span class="api-auth">auth</span></div>
+      <div class="api-row"><span class="api-method api-get">GET</span><span class="api-path">/api/export/bundle.tar</span><span class="api-desc">tar bundle of all JSONL + manifest</span><span class="api-auth">auth</span><span class="api-bun">Bun.Archive</span></div>
+      <div class="api-row"><span class="api-method api-get">GET</span><span class="api-path">/api/export/bundle.tar?gzip=1</span><span class="api-desc">gzip-compressed tar with ratio header</span><span class="api-auth">auth</span><span class="api-bun">Bun.Archive</span></div>
+      <div class="api-row"><span class="api-method api-get">GET</span><span class="api-path">/api/stream/:path</span><span class="api-desc">streaming file response (public dir)</span><span class="api-bun">Bun.file</span></div>
+      <div class="api-row"><span class="api-method api-sse">SSE</span><a href="/api/audit/stream" class="api-path">/api/audit/stream</a><span class="api-desc">real-time audit log stream</span><span class="api-auth">auth</span></div>
+    </div>
+
+    <div class="api-cat">
+      <h3>🎨 Bun Runtime APIs</h3>
+      <div class="api-row"><a href="/api/color?color=red&format=css" class="api-method api-get">GET</a><span class="api-path">/api/color</span><span class="api-desc">color conversion (hex/rgb/hsl/css)</span><span class="api-bun">Bun.color</span></div>
+      <div class="api-row"><a href="/api/hash?input=hello" class="api-method api-get">GET</a><span class="api-path">/api/hash</span><span class="api-desc">hash computation (sha256/sha512/md5)</span><span class="api-bun">Bun.CryptoHasher</span></div>
+      <div class="api-row"><a href="/api/transpile?code=const%20x:number=1" class="api-method api-get">GET</a><span class="api-path">/api/transpile</span><span class="api-desc">TS/JSX → JS transpiler</span><span class="api-bun">Bun.Transpiler</span></div>
+      <div class="api-row"><a href="/api/compress?input=hello&action=compress" class="api-method api-get">GET</a><span class="api-path">/api/compress</span><span class="api-desc">compress/decompress (zlib + base64)</span><span class="api-bun">Bun.deflateSync</span></div>
+      <div class="api-row"><a href="/api/utils?tool=escape&input=<test>" class="api-method api-get">GET</a><span class="api-path">/api/utils</span><span class="api-desc">escape HTML, base64, URL encode/decode</span><span class="api-bun">Bun.escapeHTML</span></div>
+      <div class="api-row"><span class="api-method api-post">POST</span><span class="api-path">/api/markdown</span><span class="api-desc">render markdown → HTML</span><span class="api-bun">Bun.markdown</span></div>
+      <div class="api-row"><a href="/api/semver" class="api-method api-get">GET</a><span class="api-path">/api/semver</span><span class="api-desc">version negotiation + feature detection</span><span class="api-bun">Bun.semver</span></div>
+      <div class="api-row"><a href="/api/env" class="api-method api-get">GET</a><span class="api-path">/api/env</span><span class="api-desc">environment variable inspection</span></div>
+    </div>
+
+    <div class="api-cat">
+      <h3>🌐 Network &amp; Process</h3>
+      <div class="api-row"><span class="api-method api-post">POST</span><span class="api-path">/api/dns</span><span class="api-desc">DNS lookup (async, returns address + family)</span><span class="api-bun">Bun.dns</span></div>
+      <div class="api-row"><a href="/api/processes" class="api-method api-get">GET</a><span class="api-path">/api/processes</span><span class="api-desc">top 20 processes (ps aux)</span><span class="api-auth">auth</span><span class="api-bun">Bun.spawn</span></div>
+      <div class="api-row"><a href="/api/ffi" class="api-method api-get">GET</a><span class="api-path">/api/ffi</span><span class="api-desc">native library loading (libsqlite3 version)</span><span class="api-bun">Bun.ffi</span></div>
+      <div class="api-row"><a href="/api/redis" class="api-method api-get">GET</a><span class="api-path">/api/redis</span><span class="api-desc">Redis rate limit status</span><span class="api-bun">Bun.redis</span></div>
+      <div class="api-row"><a href="/api/s3/backup" class="api-method api-get">GET</a><span class="api-path">/api/s3/backup</span><span class="api-desc">S3 offsite backup status</span><span class="api-auth">auth</span><span class="api-bun">Bun.s3</span></div>
+      <div class="api-row"><span class="api-method api-ws">WS</span><span class="api-path">/ws/metrics</span><span class="api-desc">live metrics push (500ms interval)</span></div>
+      <div class="api-row"><span class="api-method api-ws">WS</span><span class="api-path">/ws/task/:id</span><span class="api-desc">task progress updates</span></div>
+    </div>
+
+    <div class="api-cat">
+      <h3>🖼️ Image &amp; Screenshot</h3>
+      <div class="api-row"><span class="api-method api-get">GET</span><span class="api-path">/api/image</span><span class="api-desc">resize/convert (png/webp/jpeg)</span><span class="api-auth">auth</span><span class="api-bun">Bun.Image</span></div>
+      <div class="api-row"><span class="api-method api-get">GET</span><span class="api-path">/api/screenshot</span><span class="api-desc">capture PNG of any URL</span><span class="api-auth">auth</span><span class="api-bun">Bun.WebView</span></div>
+      <div class="api-row"><span class="api-method api-post">POST</span><span class="api-path">/api/mermaid</span><span class="api-desc">Mermaid diagram → SVG render</span><span class="api-auth">auth</span><span class="api-bun">Bun.WebView</span></div>
+    </div>
+
+    <div class="api-cat">
+      <h3>💾 Database &amp; Config</h3>
+      <div class="api-row"><span class="api-method api-post">POST</span><span class="api-path">/api/sql</span><span class="api-desc">SELECT-only SQL query</span><span class="api-auth">auth</span><span class="api-bun">bun:sqlite</span></div>
+      <div class="api-row"><a href="/api/config" class="api-method api-get">GET</a><span class="api-path">/api/config</span><span class="api-desc">multi-format config parser</span><span class="api-bun">Bun.YAML/TOML/JSON5</span></div>
+      <div class="api-row"><span class="api-method api-post">POST</span><span class="api-path">/api/config/write</span><span class="api-desc">write YAML/TOML/JSON5 config file</span><span class="api-auth">auth</span><span class="api-csrf">CSRF</span></div>
+      <div class="api-row"><a href="/api/fs" class="api-method api-get">GET</a><span class="api-path">/api/fs</span><span class="api-desc">filesystem browser (dirs + files)</span><span class="api-auth">auth</span><span class="api-bun">Bun.file</span></div>
+      <div class="api-row"><a href="/api/logs" class="api-method api-get">GET</a><span class="api-path">/api/logs</span><span class="api-desc">structured log ring buffer</span><span class="api-auth">auth</span></div>
+    </div>
+
+    <div class="api-cat">
+      <h3>📐 Diagrams &amp; Docs</h3>
+      <div class="api-row"><a href="/api/diagrams" class="api-method api-get">GET</a><span class="api-path">/api/diagrams</span><span class="api-desc">auto-discovered .mmd files</span><span class="api-bun">Bun.glob</span></div>
+      <div class="api-row"><a href="/api/openapi.json" class="api-method api-get">GET</a><span class="api-path">/api/openapi.json</span><span class="api-desc">OpenAPI 3.1 spec (auto-generated)</span></div>
+      <div class="api-row"><a href="/api/pwa/validate" class="api-method api-get">GET</a><span class="api-path">/api/pwa/validate</span><span class="api-desc">PWA installability validation</span></div>
+      <div class="api-row"><a href="/api/pwa/compare" class="api-method api-get">GET</a><span class="api-path">/api/pwa/compare</span><span class="api-desc">BUN-DEV vs bun.com manifest</span></div>
+    </div>
+
+    <div class="api-cat">
+      <h3>📦 PWA &amp; Static</h3>
+      <div class="api-row"><a href="/manifest.json" class="api-method api-get">GET</a><span class="api-path">/manifest.json</span><span class="api-desc">PWA manifest</span></div>
+      <div class="api-row"><a href="/sw.js" class="api-method api-get">GET</a><span class="api-path">/sw.js</span><span class="api-desc">service worker</span></div>
+      ${ENABLE_SITEMAP ? '<div class="api-row"><a href="/sitemap.xml" class="api-method api-get">GET</a><span class="api-path">/sitemap.xml</span><span class="api-desc">sitemap XML</span></div>' : ""}
+      <div class="api-row"><a href="/protocol" class="api-method api-get">GET</a><span class="api-path">/protocol</span><span class="api-desc">protocol info (HTTP/3 status)</span></div>
+      <div class="api-row"><a href="/features" class="api-method api-get">GET</a><span class="api-path">/features</span><span class="api-desc">feature flags (JSON)</span></div>
+      <div class="api-row"><a href="/dashboard" class="api-method api-get">GET</a><span class="api-path">/dashboard</span><span class="api-desc">this page</span></div>
+    </div>
+  </div>
+  <p style="margin-top:0.5rem; font-size:0.7rem; color:var(--fg-dim);">
+    <span class="api-auth">auth</span> = requires Bearer token &nbsp;
+    <span class="api-csrf">CSRF</span> = requires X-CSRF-Token header &nbsp;
+    <span class="api-bun">Bun.*</span> = Bun-native API used
+  </p>
 
   <div class="pwa-section" style="margin-top: 0.5rem;">
     <h3 style="color: var(--accent); cursor: pointer;" onclick="toggleSection('transpiler-content', this)">
@@ -2428,6 +2498,27 @@ const dashboardHandler = withMiddleware((): Response => {
         startWSChart();
       }
     });
+
+    // API reference search filter
+    function filterEndpoints() {
+      const query = document.getElementById('api-search').value.toLowerCase();
+      const rows = document.querySelectorAll('#api-reference .api-row');
+      let visibleCount = 0;
+      rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        if (!query || text.includes(query)) {
+          row.style.display = '';
+          visibleCount++;
+        } else {
+          row.style.display = 'none';
+        }
+      });
+      // Hide empty categories
+      document.querySelectorAll('#api-reference .api-cat').forEach(cat => {
+        const visible = cat.querySelectorAll('.api-row:not([style*="display: none"])');
+        cat.style.display = visible.length > 0 ? '' : 'none';
+      });
+    }
 
     // Code Transpiler Playground
     async function runTranspile() {
