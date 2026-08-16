@@ -32,6 +32,7 @@ describe("Server API Integration", () => {
         NODE_ENV: "development",
         WORKER_POOL_SIZE: "1",
         ENABLE_SITEMAP: "1",
+        ENABLE_HTML_REWRITER: "1",
       },
       stdin: "ignore",
       stdout: "pipe",
@@ -162,6 +163,69 @@ describe("Server API Integration", () => {
     expect(html).toContain("<h1>");
     expect(html).toContain("<table>");
     expect(html).toContain("Hello");
+  });
+
+  it("HTMLRewriter injects theme-color meta and feature flags into /dashboard", async () => {
+    // Ref: https://bun.com/docs/runtime/htmlrewriter
+    const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    // HTMLRewriter should have injected theme-color meta into <head>
+    expect(html).toContain('<meta name="theme-color" content="#50fa7b">');
+    // Feature flags script should be injected
+    expect(html).toContain("window.__FEATURE_FLAGS__");
+    expect(html).toContain("'sitemap': true");
+    expect(html).toContain("'htmlRewriter': true");
+    // Body should have data-html-rewritten attribute
+    expect(html).toContain('data-html-rewritten="true"');
+  });
+
+  it("HTMLRewriter marks /api/markdown output with data-markdown-rendered", async () => {
+    // Ref: https://bun.com/docs/runtime/htmlrewriter
+    const md = "# Test\n\nHello world";
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/markdown`, {
+      method: "POST",
+      body: md,
+    });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    // HTMLRewriter should have added data-markdown-rendered to <body>
+    expect(html).toContain('data-markdown-rendered="true"');
+  });
+
+  it("GET /features lists htmlRewriter as active when ENABLE_HTML_REWRITER=1", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/features`);
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to the features response shape
+    const data = (await res.json()) as { features: { key: string; active: boolean }[] };
+    const rewriter = data.features.find((f) => f.key === "htmlRewriter");
+    expect(rewriter).toBeDefined();
+    expect(rewriter!.active).toBe(true);
+  });
+
+  it("HTMLRewriter can scrape and transform external HTML", () => {
+    // Ref: https://bun.com/docs/runtime/htmlrewriter
+    // Unit test: verify HTMLRewriter element handlers work correctly
+    const html = "<html><head><title>Test</title></head><body><h1>Hello</h1></body></html>";
+    const res = new Response(html, { headers: { "Content-Type": "text/html" } });
+    const rw = new HTMLRewriter()
+      .on("head", {
+        element(el) {
+          el.append('<meta name="injected" content="yes">', { html: true });
+        },
+      })
+      .on("h1", {
+        element(el) {
+          el.setAttribute("data-transformed", "true");
+        },
+      });
+    const out = rw.transform(res);
+    // JUSTIFIED: out.text() returns a Promise<string>; this is a sync test
+    // but we can use expect with the resolved value via Bun's sync-ish test
+    return out.text().then((text) => {
+      expect(text).toContain('<meta name="injected" content="yes">');
+      expect(text).toContain('data-transformed="true"');
+    });
   });
 
   // --- Auth ---

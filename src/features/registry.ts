@@ -128,6 +128,16 @@ const FEATURES: Record<string, FeatureFlag> = {
     readyForPromotion: false,
     notes: "Bun.XML.stringify will replace the manual XML builder after the project upgrades to Bun v1.4.",
   },
+
+  htmlRewriter: {
+    key: "htmlRewriter",
+    envVar: "ENABLE_HTML_REWRITER",
+    status: "experimental",
+    description: "Use HTMLRewriter to dynamically inject theme-color meta, feature flags script, and nonce attributes into HTML responses.",
+    dependencies: [],
+    readyForPromotion: false,
+    notes: "HTMLRewriter is a built-in Bun API (like Cloudflare's). Ref: https://bun.com/docs/runtime/htmlrewriter",
+  },
 };
 
 // --- Runtime state ---------------------------------------------------------

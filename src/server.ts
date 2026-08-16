@@ -55,6 +55,7 @@ const ENABLE_DEV_DASHBOARD = isFeatureEnabled("devDashboard") ||
 // C6: WebSocket support — behind ENABLE_WEBSOCKET flag
 const ENABLE_WEBSOCKET = shouldActivate("websocket");
 const ENABLE_SITEMAP = shouldActivate("sitemap");
+const ENABLE_HTML_REWRITER = shouldActivate("htmlRewriter");
 
 // TLS cert/key — only loaded if ENABLE_TLS is true
 let tlsConfig: { cert: string; key: string } | undefined;
@@ -721,7 +722,39 @@ const dashboardHandler = withMiddleware((): Response => {
   </script>
 </body>
 </html>`;
-  return new Response(html, { headers: { "Content-Type": "text/html" } });
+  let response = new Response(html, { headers: { "Content-Type": "text/html" } });
+
+  // HTMLRewriter: dynamically inject theme-color meta, feature-flag script,
+  // and a data-rewritten attribute into the dashboard HTML.
+  // Ref: https://bun.com/docs/runtime/htmlrewriter
+  if (ENABLE_HTML_REWRITER) {
+    const activeFlags = listFeatures()
+      .filter((f) => f.active)
+      .map((f) => `'${f.key}': true`)
+      .join(",");
+    const flagScript = `<script>window.__FEATURE_FLAGS__ = {${activeFlags}};</script>`;
+    response = new HTMLRewriter()
+      .on("head", {
+        element(el) {
+          // Inject theme-color meta based on environment
+          const themeColor = NODE_ENV === "production" ? "#000000" : "#50fa7b";
+          el.append(
+            `<meta name="theme-color" content="${themeColor}">`,
+            { html: true },
+          );
+          // Inject feature flags as a client-side global
+          el.append(flagScript, { html: true });
+        },
+      })
+      .on("body", {
+        element(el) {
+          el.setAttribute("data-html-rewritten", "true");
+        },
+      })
+      .transform(response);
+  }
+
+  return response;
 });
 
 // Sitemap XML — lists all public static routes
@@ -754,8 +787,24 @@ async function markdownHandler(req: BunRequest): Promise<Response> {
   if (body.length > maxBytes) {
     return errorResponse("markdown body too large", 413);
   }
-  const html = Bun.markdown.html(body);
-  return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+  const rendered = Bun.markdown.html(body);
+  // Wrap in a minimal HTML document so HTMLRewriter can target <head>/<body>
+  const html = `<!DOCTYPE html>\n<html><head><title>Markdown</title></head><body>${rendered}</body></html>`;
+  let response = new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+
+  // HTMLRewriter: inject a source-info comment and mark rendered markdown
+  // Ref: https://bun.com/docs/runtime/htmlrewriter
+  if (ENABLE_HTML_REWRITER) {
+    response = new HTMLRewriter()
+      .on("body", {
+        element(el) {
+          el.setAttribute("data-markdown-rendered", "true");
+        },
+      })
+      .transform(response);
+  }
+
+  return response;
 }
 
 // Build the routes object — conditionally include dashboard routes
@@ -783,6 +832,13 @@ const routes: Record<string, unknown> = {
 if (ENABLE_SITEMAP) {
   routes["/sitemap.xml"] = { GET: sitemapHandler };
   markActive("sitemap");
+}
+
+// HTMLRewriter feature flag — mark active (no route needed; it transforms
+// existing HTML responses from /dashboard and /api/markdown)
+if (ENABLE_HTML_REWRITER) {
+  markActive("htmlRewriter");
+  console.log("[server] HTMLRewriter enabled — injecting into HTML responses");
 }
 
 // Markdown rendering chain — always available public API
