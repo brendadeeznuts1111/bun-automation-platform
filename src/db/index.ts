@@ -151,6 +151,15 @@ const MIGRATIONS: { version: number; sql: string }[] = [
       CREATE INDEX IF NOT EXISTS idx_audit_agent ON audit_log(agent_id);
       CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at DESC);
 
+      CREATE TABLE IF NOT EXISTS health_log (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts          INTEGER NOT NULL,
+        pool_status TEXT NOT NULL,
+        uptime      REAL NOT NULL,
+        bun_version TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_health_ts ON health_log(ts DESC);
+
       CREATE TABLE IF NOT EXISTS rate_limits (
         key         TEXT NOT NULL,
         window_start INTEGER NOT NULL,

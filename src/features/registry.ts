@@ -283,4 +283,56 @@ export function getFeatureSummary(): string {
 export function _reset(): void {
   activeFeatures.clear();
   blockedFeatures.clear();
+  runtimeOverrides.clear();
+}
+
+// --- Dynamic runtime overrides ---
+// Allows toggling features at runtime without restarting the server.
+// Set via POST /api/features/toggle — values override env var checks.
+const runtimeOverrides = new Map<string, boolean>();
+
+/**
+ * Toggle a feature at runtime without restarting the server.
+ * This updates the in-memory override map and the active set.
+ * Returns the result with the new active state.
+ */
+export function toggleFeature(key: string, enabled: boolean): {
+  ok: boolean;
+  error?: string;
+  active: boolean;
+} {
+  const feature = FEATURES[key];
+  if (!feature) {
+    return { ok: false, error: `unknown feature: ${key}`, active: false };
+  }
+  // Check dependencies before enabling
+  if (enabled) {
+    const missingDeps = (feature.dependencies ?? []).filter(
+      (dep) => !runtimeOverrides.has(dep) && !isFeatureEnabled(dep),
+    );
+    if (missingDeps.length > 0) {
+      return {
+        ok: false,
+        error: `requires ${missingDeps.join(", ")} to be enabled`,
+        active: false,
+      };
+    }
+    runtimeOverrides.set(key, true);
+    activeFeatures.add(key);
+    blockedFeatures.delete(key);
+    console.log(`[features] ${key} enabled at runtime`);
+  } else {
+    runtimeOverrides.set(key, false);
+    activeFeatures.delete(key);
+    console.log(`[features] ${key} disabled at runtime`);
+  }
+  return { ok: true, active: enabled };
+}
+
+/**
+ * Check if a feature has a runtime override.
+ * If so, the override takes precedence over the env var.
+ */
+export function getRuntimeOverride(key: string): boolean | undefined {
+  return runtimeOverrides.get(key);
 }

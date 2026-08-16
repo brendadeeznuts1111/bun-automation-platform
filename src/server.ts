@@ -17,7 +17,7 @@
 
 import type { BunRequest } from "bun";
 import { migrate, read, write } from "./db";
-import { audit, getAuditLog } from "./db/audit";
+import { audit, getAuditLog, onAuditEvent } from "./db/audit";
 import { checkRateLimit, cleanupRateLimits } from "./middleware/rate-limit";
 import { handlePreflight, withCors } from "./middleware/cors";
 import { verifyAuth, type AuthContext } from "./middleware/auth";
@@ -174,7 +174,13 @@ function getClientIP(req: Request): string {
   return "unknown";
 }
 
-function json(data: unknown, status = 200): Response {
+function json(data: unknown, status = 200, extraHeaders?: Record<string, string>): Response {
+  if (extraHeaders) {
+    const headers = new Headers();
+    headers.set("Content-Type", "application/json");
+    for (const [k, v] of Object.entries(extraHeaders)) headers.set(k, v);
+    return Response.json(data, { status, headers });
+  }
   return Response.json(data, { status });
 }
 
@@ -347,7 +353,9 @@ const loginHandler = withMiddleware<"">(async (req) => {
       return createSession();
     });
 
-    return json({ token: authToken, csrf_token: csrfToken, agent_id: agent.id, username: agent.username });
+    return json({ token: authToken, csrf_token: csrfToken, agent_id: agent.id, username: agent.username }, 200, {
+      "Set-Cookie": `session=${authToken}; HttpOnly; SameSite=Strict; Max-Age=86400; Path=/`,
+    });
   } catch (err) {
     // G3: Distinguish JSON parse errors (400) from unexpected errors (500).
     // Previously all errors returned "invalid request body" which hid DB
@@ -706,6 +714,234 @@ const envHandler = withMiddleware<"">((req: BunRequest<"">): Response => {
   });
 });
 
+// SSE audit log stream — real-time audit events via Server-Sent Events
+// Ref: node_modules/bun-types/docs/runtime/streams.mdx
+// Ref: https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events
+const auditStreamHandler = withAuth<"">((req: BunRequest<"">): Response => {
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      // Send initial comment to keep connection alive
+      controller.enqueue(new TextEncoder().encode(": connected\n\n"));
+      // Subscribe to audit events
+      const unsubscribe = onAuditEvent((entry) => {
+        const data = `data: ${JSON.stringify(entry)}\n\n`;
+        try {
+          controller.enqueue(new TextEncoder().encode(data));
+        } catch {
+          // Controller closed — stop listening
+          unsubscribe();
+        }
+      });
+      // Heartbeat every 30s to keep connection alive through proxies
+      const heartbeat = setInterval(() => {
+        try {
+          controller.enqueue(new TextEncoder().encode(": heartbeat\n\n"));
+        } catch {
+          unsubscribe();
+          clearInterval(heartbeat);
+        }
+      }, 30_000);
+      // Cleanup on abort
+      req.signal?.addEventListener("abort", () => {
+        unsubscribe();
+        clearInterval(heartbeat);
+        try { controller.close(); } catch { /* already closed */ }
+      });
+    },
+  });
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+    },
+  });
+});
+
+// Health log — recent health checks recorded by cron jobs
+// Ref: node_modules/bun-types/docs/runtime/cron.mdx
+const healthLogHandler = withMiddleware<"">((req: BunRequest<"">): Response => {
+  const url = new URL(req.url);
+  const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "20", 10), 100);
+  const { getHealthLog } = require("./cron") as typeof import("./cron");
+  return json({ entries: getHealthLog(limit) });
+});
+
+// OpenAPI spec — auto-generated from the routes object
+// Ref: node_modules/bun-types/docs/runtime/http/routing.mdx
+function generateOpenAPI(routesObj: Record<string, unknown>): Record<string, unknown> {
+  const paths: Record<string, Record<string, unknown>> = {};
+  for (const [path, handlers] of Object.entries(routesObj)) {
+    // JUSTIFIED: routes object values are typed as unknown; narrowing to handler shape
+    const h = handlers as { GET?: unknown; POST?: unknown };
+    const pathItem: Record<string, unknown> = {};
+    if (h.GET) {
+      pathItem.get = {
+        summary: `GET ${path}`,
+        responses: { "200": { description: "Success" }, "401": { description: "Unauthorized" } },
+      };
+    }
+    if (h.POST) {
+      pathItem.post = {
+        summary: `POST ${path}`,
+        responses: { "200": { description: "Success" }, "401": { description: "Unauthorized" }, "403": { description: "CSRF required" } },
+      };
+    }
+    if (Object.keys(pathItem).length > 0) {
+      paths[path] = pathItem;
+    }
+  }
+  return {
+    openapi: "3.1.0",
+    info: { title: "BUN-DEV API", version: Bun.version, description: "Bun Automation Platform" },
+    paths,
+  };
+}
+
+const openApiHandler = withMiddleware<"">((): Response => {
+  return json(generateOpenAPI(routes));
+});
+
+// Bun.semver — API version negotiation
+// Ref: node_modules/bun-types/docs/runtime/semver.mdx
+const semverHandler = withMiddleware<"">((req: BunRequest<"">): Response => {
+  const url = new URL(req.url);
+  const version = url.searchParams.get("version") ?? Bun.version;
+  const range = url.searchParams.get("range") ?? ">=1.3.0";
+  const satisfies = Bun.semver.satisfies(version, range);
+  return json({
+    version,
+    range,
+    satisfies,
+    serverVersion: Bun.version,
+    features: {
+      http3: Bun.semver.satisfies(version, ">=1.3.14"),
+      webview: Bun.semver.satisfies(version, ">=1.3.12"),
+      cron: Bun.semver.satisfies(version, ">=1.3.11"),
+      image: Bun.semver.satisfies(version, ">=1.3.14"),
+    },
+  });
+});
+
+// Tar export bundle — all JSONL exports in a single .tar download
+// Ref: node_modules/bun-types/docs/runtime/archive.mdx
+const exportBundleHandler = withAuth<"">(async (): Promise<Response> => {
+  const { createExportBundle } = await import("./utils/archive");
+  const { archive, date, files } = createExportBundle();
+  // JUSTIFIED: Bun.Archive is Blob-like; Response accepts it per archive.mdx docs
+  return new Response(archive as unknown as ArrayBuffer, {
+    headers: {
+      "Content-Type": "application/x-tar",
+      "Content-Disposition": `attachment; filename="bun-dev-export-${date}.tar"`,
+      "X-Export-Files": files.join(", "),
+    },
+  });
+});
+
+// Bun.glob — auto-discover diagram files
+// Ref: node_modules/bun-types/docs/runtime/glob.mdx
+const diagramsListHandler = withMiddleware<"">(async (): Promise<Response> => {
+  const { Glob } = await import("bun");
+  const glob = new Glob("**/*.mmd");
+  const diagrams: string[] = [];
+  for await (const file of glob.scan("./docs")) {
+    diagrams.push(file);
+  }
+  // Also scan for .mermaid files
+  const glob2 = new Glob("**/*.mermaid");
+  for await (const file of glob2.scan("./docs")) {
+    diagrams.push(file);
+  }
+  return json({ diagrams, count: diagrams.length });
+});
+
+// Bun.YAML/TOML/JSON5 — multi-format config parser
+// Ref: node_modules/bun-types/docs/runtime/yaml.mdx
+// Ref: node_modules/bun-types/docs/runtime/toml.mdx
+// Ref: node_modules/bun-types/docs/runtime/json5.mdx
+const configHandler = withMiddleware<"">(async (req: BunRequest<"">): Promise<Response> => {
+  const url = new URL(req.url);
+  const format = url.searchParams.get("format") ?? "all";
+  const result: Record<string, unknown> = {};
+
+  if (format === "all" || format === "toml") {
+    try {
+      const tomlFile = Bun.file("bunfig.toml");
+      if (await tomlFile.exists()) {
+        result.toml = Bun.TOML.parse(await tomlFile.text());
+      }
+    } catch { result.toml = null; }
+  }
+  if (format === "all" || format === "yaml") {
+    try {
+      const yamlFile = Bun.file("docker-compose.yml");
+      if (await yamlFile.exists()) {
+        result.yaml = Bun.YAML.parse(await yamlFile.text());
+      }
+    } catch { result.yaml = null; }
+  }
+  if (format === "all" || format === "json5") {
+    try {
+      const json5File = Bun.file("tsconfig.json5");
+      if (await json5File.exists()) {
+        result.json5 = Bun.JSON5.parse(await json5File.text());
+      }
+    } catch { result.json5 = null; }
+  }
+  if (format === "all" || format === "json") {
+    try {
+      const pkgFile = Bun.file("package.json");
+      if (await pkgFile.exists()) {
+        result.json = await pkgFile.json();
+      }
+    } catch { result.json = null; }
+  }
+
+  return json({ format, config: result, bunVersion: Bun.version });
+});
+
+// Bun.shell — safe admin commands
+// Ref: node_modules/bun-types/docs/runtime/shell.mdx
+const adminShellHandler = withCsrf<"/api/admin/shell">(async (req: BunRequest<"/api/admin/shell">): Promise<Response> => {
+  // JUSTIFIED: req.json() returns unknown; narrowing to the admin command shape
+  const body = await req.json() as { command: string };
+  const allowedCommands = ["vacuum", "status", "workers"];
+  if (!allowedCommands.includes(body.command)) {
+    return json({ error: `command must be one of: ${allowedCommands.join(", ")}` }, 400);
+  }
+  const { $ } = await import("bun");
+  try {
+    let output = "";
+    if (body.command === "vacuum") {
+      // Vacuum the SQLite database to reclaim space
+      output = await $`echo "VACUUM;" | bun -e "import {Database} from 'bun:sqlite'; const db = new Database(process.env.DB_PATH ?? './data/platform.db'); db.exec('VACUUM'); console.log('VACUUM complete')"`.text();
+    } else if (body.command === "status") {
+      output = await $`bun -e "console.log(JSON.stringify({uptime: process.uptime(), version: Bun.version, pid: process.pid}, null, 2))"`.text();
+    } else if (body.command === "workers") {
+      const pool = getPoolStatus();
+      output = JSON.stringify(pool, null, 2);
+    }
+    await audit({ action: "admin_command", resource: body.command, details: "shell exec" });
+    return json({ command: body.command, output });
+  } catch (err) {
+    return json({ error: "command failed", details: String(err) }, 500);
+  }
+});
+
+// Dynamic feature toggle — update feature flags at runtime without restart
+// Ref: src/features/registry.ts
+const featureToggleHandler = withCsrf<"/api/features/toggle">(async (req: BunRequest<"/api/features/toggle">): Promise<Response> => {
+  // JUSTIFIED: req.json() returns unknown; narrowing to the toggle body shape
+  const body = await req.json() as { key: string; enabled: boolean };
+  const { toggleFeature } = await import("./features/registry");
+  const result = toggleFeature(body.key, body.enabled);
+  if (!result.ok) {
+    return json({ error: result.error }, 400);
+  }
+  await audit({ action: "feature_toggle", resource: body.key, details: `enabled=${body.enabled}` });
+  return json({ ok: true, key: body.key, enabled: body.enabled, active: result.active });
+});
+
 // R5: Dev dashboard — simple HTML page showing server status.
 // Will be replaced with React + HTML imports dashboard (OPEN_TASKS F1).
 // D6: Dashboard is dev-only — auto-disabled in production unless explicitly enabled.
@@ -866,6 +1102,22 @@ const dashboardHandler = withMiddleware((): Response => {
     .copy-btn { cursor: pointer; font-size: 0.75rem; color: var(--info); }
     .copy-btn:hover { color: var(--accent); }
     footer { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border); color: var(--fg-dim); font-size: 0.75rem; text-align: center; }
+    /* Dark/light mode — respects OS preference */
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #ffffff;
+        --bg-card: #f5f5f5;
+        --bg-nav: #e8e8e8;
+        --fg: #1a1a1a;
+        --fg-dim: #666666;
+        --accent: #0066cc;
+        --accent-dim: #004499;
+        --warn: #cc7700;
+        --err: #cc0000;
+        --info: #0066aa;
+        --border: #dddddd;
+      }
+    }
   </style>
 </head>
 <body>
@@ -1067,7 +1319,16 @@ const dashboardHandler = withMiddleware((): Response => {
     <li><a href="/sw.js">/sw.js</a> — service worker</li>
     <li><a href="/api/pwa/validate">/api/pwa/validate</a> — PWA installability validation</li>
     <li><a href="/api/pwa/compare">/api/pwa/compare</a> — BUN-DEV vs bun.com manifest comparison</li>
+    <li><a href="/api/openapi.json">/api/openapi.json</a> — OpenAPI 3.1 spec (auto-generated)</li>
+    <li><a href="/api/semver">/api/semver</a> — Bun.semver version negotiation</li>
+    <li><a href="/api/health-log">/api/health-log</a> — cron health check history</li>
+    <li><a href="/api/diagrams">/api/diagrams</a> — auto-discovered diagram files (Bun.glob)</li>
+    <li><a href="/api/config">/api/config</a> — multi-format config parser (YAML/TOML/JSON5)</li>
     <li><code>POST /api/markdown</code> — render markdown to HTML</li>
+    <li><code>POST /api/features/toggle</code> — toggle feature flag at runtime (auth+CSRF)</li>
+    <li><code>POST /api/admin/shell</code> — safe admin commands: vacuum, status, workers (auth+CSRF)</li>
+    <li><code>GET /api/export/bundle.tar</code> — tar bundle of all JSONL exports (Bun.Archive)</li>
+    <li><code>GET /api/audit/stream</code> — SSE real-time audit log stream</li>
   </ul>
 
   <footer>BUN-DEV — Bun Automation Platform | Powered by Bun v${Bun.version}</footer>
@@ -1402,15 +1663,18 @@ const dashboardHandler = withMiddleware((): Response => {
   let response = new Response(html, { headers: { "Content-Type": "text/html" } });
 
   // HTMLRewriter: dynamically inject theme-color meta, feature-flag script,
-  // and a data-rewritten attribute into the dashboard HTML.
-  // Ref: https://bun.com/docs/runtime/htmlrewriter
-  // Ref: https://bun.com/docs/runtime/color — Bun.color normalizes the input
+  // CSP nonce attributes, and a data-rewritten attribute into the dashboard HTML.
+  // Ref: node_modules/bun-types/docs/runtime/html-rewriter.mdx
+  // Ref: node_modules/bun-types/docs/runtime/color.mdx — Bun.color normalizes the input
   if (ENABLE_HTML_REWRITER) {
     const activeFlags = listFeatures()
       .filter((f) => f.active)
       .map((f) => `'${f.key}': true`)
       .join(",");
-    const flagScript = `<script>window.__FEATURE_FLAGS__ = {${activeFlags}};</script>`;
+    // Generate per-request CSP nonce using Bun.CryptoHasher
+    // Ref: node_modules/bun-types/docs/runtime/hashing.mdx
+    const nonce = Bun.CryptoHasher.hash("sha256", crypto.randomUUID() + process.uptime(), "hex").slice(0, 32);
+    const flagScript = `<script nonce="${nonce}">window.__FEATURE_FLAGS__ = {${activeFlags}};</script>`;
     // Use Bun.color to normalize the theme color to a CSS-compatible hex string.
     // In production, use black; in development, use the Dracula green (#50fa7b).
     const rawThemeColor = NODE_ENV === "production" ? "#000000" : "#50fa7b";
@@ -1423,8 +1687,16 @@ const dashboardHandler = withMiddleware((): Response => {
             `<meta name="theme-color" content="${themeColor}">`,
             { html: true },
           );
-          // Inject feature flags as a client-side global
+          // Inject feature flags as a client-side global (with CSP nonce)
           el.append(flagScript, { html: true });
+        },
+      })
+      .on("script", {
+        element(el) {
+          // Add nonce to all existing <script> tags for CSP compliance
+          if (!el.getAttribute("nonce")) {
+            el.setAttribute("nonce", nonce);
+          }
         },
       })
       .on("body", {
@@ -1433,6 +1705,11 @@ const dashboardHandler = withMiddleware((): Response => {
         },
       })
       .transform(response);
+    // Add Content-Security-Policy header with nonce
+    const csp = `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; manifest-src 'self';`;
+    const headers = new Headers(response.headers);
+    headers.set("Content-Security-Policy", csp);
+    response = new Response(response.body, { status: response.status, headers });
   }
 
   return response;
@@ -1498,6 +1775,11 @@ const routes: Record<string, unknown> = {
   "/features": { GET: featuresHandler },
   "/api/color": { GET: colorHandler },
   "/api/env": { GET: envHandler },
+  "/api/health-log": { GET: healthLogHandler },
+  "/api/openapi.json": { GET: openApiHandler },
+  "/api/semver": { GET: semverHandler },
+  "/api/diagrams": { GET: diagramsListHandler },
+  "/api/config": { GET: configHandler },
 
   // Auth-required routes
   "/tasks": { GET: listTasksHandler },
@@ -1509,6 +1791,10 @@ const routes: Record<string, unknown> = {
   "/screenshot/:id": { GET: getScreenshotHandler },
   "/audit": { GET: auditHandler },
   "/api/audit.jsonl": { GET: auditJsonlHandler },
+  "/api/audit/stream": { GET: auditStreamHandler },
+  "/api/export/bundle.tar": { GET: exportBundleHandler },
+  "/api/admin/shell": { POST: adminShellHandler },  // also requires CSRF
+  "/api/features/toggle": { POST: featureToggleHandler },  // also requires CSRF
 };
 
 // Sitemap feature flag — enable the route and mark active when requested
@@ -1980,6 +2266,11 @@ if (ENABLE_WEBSOCKET) {
     server.publish(topic, json);
   });
 }
+
+// --- Cron jobs — scheduled health checks and log rotation ---
+// Ref: node_modules/bun-types/docs/runtime/cron.mdx
+import { registerCronJobs } from "./cron";
+registerCronJobs();
 
 // --- Shutdown --------------------------------------------------------------
 

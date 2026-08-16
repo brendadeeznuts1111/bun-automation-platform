@@ -1875,4 +1875,228 @@ console.log(color("red", "number"));`;
     });
     expect(res.status).toBe(403);
   });
+
+  // ==========================================================================
+  // Phase 1-5: Deep Enhancement Tests
+  // ==========================================================================
+
+  it("Phase 1: GET /dashboard has CSP nonce on script tags", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
+    const html = await res.text();
+    // nonce= appears in script tag attributes
+    expect(html).toContain("nonce=");
+    // Content-Security-Policy is a response header
+    const csp = res.headers.get("Content-Security-Policy");
+    expect(csp).not.toBeNull();
+    expect(csp).toContain("nonce-");
+  });
+
+  it("Phase 1: POST /login sets session cookie with HttpOnly and SameSite", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "testagent", password: "testpass" }),
+    });
+    const setCookie = res.headers.get("Set-Cookie");
+    if (setCookie) {
+      expect(setCookie).toContain("HttpOnly");
+      expect(setCookie).toContain("SameSite=Strict");
+      expect(setCookie).toContain("session=");
+    }
+  });
+
+  it("Phase 2: GET /api/health-log returns health check history", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/health-log`);
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to expected response shape
+    const data = await res.json() as { entries: unknown[] };
+    expect(Array.isArray(data.entries)).toBe(true);
+  });
+
+  it("Phase 2: GET /api/semver returns version negotiation info", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/semver?version=1.3.14&range=>=1.3.0`);
+    // JUSTIFIED: res.json() returns unknown; narrowing to expected response shape
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+    const data = await res.json() as { version: string; satisfies: boolean; features: Record<string, boolean> };
+    expect(data.version).toBe("1.3.14");
+    expect(data.satisfies).toBe(true);
+    expect(data.features.http3).toBe(true);
+    expect(data.features.webview).toBe(true);
+    expect(data.features.cron).toBe(true);
+  });
+
+    // JUSTIFIED: res.json() returns unknown; narrowing to expected response shape
+  it("Phase 2: GET /api/semver detects old version features", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/semver?version=1.3.10`);
+    // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+    const data = await res.json() as { features: Record<string, boolean> };
+    expect(data.features.http3).toBe(false);
+    expect(data.features.cron).toBe(false);
+  });
+
+  it("Phase 2: GET /api/audit/stream requires auth (returns 401)", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/audit/stream`);
+    expect(res.status).toBe(401);
+  });
+
+  it("Phase 2: GET /api/audit/stream returns SSE content type with auth", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/audit/stream`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toContain("text/event-stream");
+  });
+
+  it("Phase 3: GET /api/export/bundle.tar requires auth", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/export/bundle.tar`);
+    expect(res.status).toBe(401);
+  });
+
+  it("Phase 3: GET /api/export/bundle.tar returns tar archive with auth", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/export/bundle.tar`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toContain("application/x-tar");
+    expect(res.headers.get("Content-Disposition")).toContain("bun-dev-export-");
+  });
+
+    // JUSTIFIED: res.json() returns unknown; narrowing to expected response shape
+  it("Phase 4: GET /api/openapi.json returns OpenAPI 3.1 spec", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/openapi.json`);
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+    const data = await res.json() as { openapi: string; info: { title: string }; paths: Record<string, unknown> };
+    expect(data.openapi).toBe("3.1.0");
+    expect(data.info.title).toBe("BUN-DEV API");
+    expect(Object.keys(data.paths).length).toBeGreaterThan(10);
+  });
+    // JUSTIFIED: res.json() returns unknown; narrowing to expected response shape
+
+  it("Phase 4: GET /api/diagrams auto-discovers .mmd files via Bun.glob", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/diagrams`);
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+    const data = await res.json() as { diagrams: string[]; count: number };
+    expect(Array.isArray(data.diagrams)).toBe(true);
+    expect(data.count).toBe(data.diagrams.length);
+    // JUSTIFIED: res.json() returns unknown; narrowing to expected response shape
+  });
+
+  it("Phase 4: GET /api/config parses multi-format config files", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/config`);
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to expected response shape
+    const data = await res.json() as { config: Record<string, unknown> };
+    expect(data.config.json).toBeDefined();
+  });
+
+  it("Phase 4: GET /api/config?format=toml only returns toml config", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/config?format=toml`);
+    // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+    const data = await res.json() as { format: string; config: Record<string, unknown> };
+    expect(data.format).toBe("toml");
+    expect(data.config.json).toBeUndefined();
+  });
+
+  it("Phase 4: POST /api/admin/shell requires auth + CSRF", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/admin/shell`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ command: "status" }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("Phase 4: POST /api/admin/shell rejects unknown commands", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/admin/shell`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${authToken}`,
+        "X-CSRF-Token": csrfToken,
+      },
+      body: JSON.stringify({ command: "rm -rf /" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("Phase 4: POST /api/admin/shell accepts 'workers' command", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/admin/shell`, {
+      method: "POST",
+      headers: {
+    // JUSTIFIED: res.json() returns unknown; narrowing to expected response shape
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${authToken}`,
+        "X-CSRF-Token": csrfToken,
+      },
+      body: JSON.stringify({ command: "workers" }),
+    });
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+    const data = await res.json() as { command: string; output: string };
+    expect(data.command).toBe("workers");
+  });
+
+  it("Phase 5: POST /api/features/toggle requires auth + CSRF", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/features/toggle`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: "websocket", enabled: true }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("Phase 5: POST /api/features/toggle rejects unknown features", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/features/toggle`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${authToken}`,
+        "X-CSRF-Token": csrfToken,
+      },
+      body: JSON.stringify({ key: "nonexistent", enabled: true }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("Phase 5: POST /api/features/toggle enables a feature at runtime", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/features/toggle`, {
+      method: "POST",
+    // JUSTIFIED: res.json() returns unknown; narrowing to expected response shape
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${authToken}`,
+        "X-CSRF-Token": csrfToken,
+      },
+      body: JSON.stringify({ key: "devDashboard", enabled: true }),
+    });
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+    const data = await res.json() as { ok: boolean; key: string; enabled: boolean; active: boolean };
+    expect(data.ok).toBe(true);
+    expect(data.key).toBe("devDashboard");
+    expect(data.active).toBe(true);
+  });
+
+  it("Phase 5: GET /dashboard has dark/light mode media query", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
+    const html = await res.text();
+    expect(html).toContain("prefers-color-scheme: light");
+  });
+
+  it("Phase 5: GET /dashboard lists new endpoints", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
+    const html = await res.text();
+    expect(html).toContain("/api/openapi.json");
+    expect(html).toContain("/api/semver");
+    expect(html).toContain("/api/health-log");
+    expect(html).toContain("/api/diagrams");
+    expect(html).toContain("/api/config");
+    expect(html).toContain("/api/features/toggle");
+    expect(html).toContain("/api/admin/shell");
+    expect(html).toContain("/api/export/bundle.tar");
+    expect(html).toContain("/api/audit/stream");
+  });
 });

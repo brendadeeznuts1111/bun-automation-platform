@@ -45,15 +45,24 @@ export function clearSessionCache(): void {
   sessionCache.clear();
 }
 
-/** Extract and verify a Bearer token from the Authorization header. */
+/** Extract and verify a Bearer token from the Authorization header or session cookie. */
 export function verifyAuth(req: Request): AuthContext | null {
+  // Try Authorization header first (API clients)
   const authHeader = req.headers.get("authorization");
-  if (!authHeader) return null;
-
-  const match = authHeader.match(/^Bearer\s+(.+)$/i);
-  if (!match) return null;
-
-  const token = match[1]!;
+  let token: string | null = null;
+  if (authHeader) {
+    const match = authHeader.match(/^Bearer\s+(.+)$/i);
+    if (match) token = match[1]!;
+  }
+  // Fall back to session cookie (dashboard browser sessions)
+  // Ref: node_modules/bun-types/docs/runtime/cookies.mdx
+  if (!token) {
+    const cookieHeader = req.headers.get("cookie");
+    if (cookieHeader) {
+      const match = cookieHeader.match(/(?:^|;\s*)session=([^;]+)/);
+      if (match) token = match[1]!;
+    }
+  }
   if (!token) return null;
 
   // Check in-memory cache first (M4)

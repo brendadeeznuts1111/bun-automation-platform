@@ -3,6 +3,9 @@
  *
  * Uses the write mutex from the DB layer to serialize inserts.
  * Called from middleware after successful state changes.
+ *
+ * SSE: Emits audit entries to all subscribed SSE listeners for real-time
+ * dashboard streaming via /api/audit/stream.
  */
 
 import { write, read } from "../db";
@@ -14,6 +17,17 @@ export interface AuditEntry {
   resource?: string;
   details?: string;
   ip_address?: string;
+}
+
+// --- SSE emitter for real-time audit streaming ---
+// Ref: node_modules/bun-types/docs/runtime/streams.mdx
+type SSEListener = (entry: AuditEntry & { created_at: string }) => void;
+const sseListeners = new Set<SSEListener>();
+
+/** Subscribe to real-time audit events (for SSE streaming). */
+export function onAuditEvent(listener: SSEListener): () => void {
+  sseListeners.add(listener);
+  return () => sseListeners.delete(listener);
 }
 
 export function audit(entry: AuditEntry): Promise<void> {
@@ -28,6 +42,11 @@ export function audit(entry: AuditEntry): Promise<void> {
       entry.details ?? null,
       entry.ip_address ?? null,
     );
+    // Emit to SSE listeners
+    const created_at = new Date().toISOString().replace("T", " ").slice(0, 19);
+    for (const listener of sseListeners) {
+      try { listener({ ...entry, created_at }); } catch { /* listener gone */ }
+    }
   });
 }
 

@@ -9,10 +9,15 @@
     "start": "bun run src/server.ts",
     "dev": "bun --hot src/server.ts",
     "dev:tls": "ENABLE_TLS=1 ENABLE_HTTP3=1 ENABLE_DEV_DASHBOARD=1 bun --hot src/server.ts",
-    "dev:dashboard": "ENABLE_DEV_DASHBOARD=1 bun --hot src/server.ts",
+    "dev:dashboard": "ENABLE_DEV_DASHBOARD=1 ENABLE_PWA=1 ENABLE_SITEMAP=1 ENABLE_HTML_REWRITER=1 bun --hot src/server.ts",
+    "dev:all": "ENABLE_PWA=1 ENABLE_SITEMAP=1 ENABLE_HTML_REWRITER=1 ENABLE_DEV_DASHBOARD=1 bun --hot src/server.ts",
     "build": "bun build --compile --minify src/server.ts --outfile server",
     "seed": "bun run seed-agent.ts",
-    "test": "bun test"
+    "test": "bun test",
+    "test:parallel": "bun test --parallel --isolate",
+    "test:changed": "bun test --changed",
+    "test:fast": "bun test --parallel=4 --isolate",
+    "cli:dashboard": "bun run src/cli/dashboard.ts"
   },
   "devDependencies": {
     "@types/bun": "^1.3.14",
