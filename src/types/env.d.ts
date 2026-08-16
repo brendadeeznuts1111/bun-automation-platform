@@ -117,5 +117,7 @@ declare module "bun" {
     ENABLE_SITEMAP?: string;
     /** Enable HTMLRewriter injection into HTML responses. Default: off. */
     ENABLE_HTML_REWRITER?: string;
+    /** Enable PWA manifest + icons for installable dashboard app. Default: off. */
+    ENABLE_PWA?: string;
   }
 }

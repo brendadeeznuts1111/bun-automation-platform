@@ -66,6 +66,7 @@ const ENABLE_DEV_DASHBOARD = isFeatureEnabled("devDashboard") ||
 const ENABLE_WEBSOCKET = shouldActivate("websocket");
 const ENABLE_SITEMAP = shouldActivate("sitemap");
 const ENABLE_HTML_REWRITER = shouldActivate("htmlRewriter");
+const ENABLE_PWA = shouldActivate("pwa");
 
 // TLS cert/key — only loaded if ENABLE_TLS is true
 let tlsConfig: { cert: string; key: string } | undefined;
@@ -677,7 +678,7 @@ const envHandler = withMiddleware<"">((req: BunRequest<"">): Response => {
   const safeKeys = [
     "NODE_ENV", "PORT", "HOST", "BUN_VERSION",
     "ENABLE_TLS", "ENABLE_HTTP3", "ENABLE_DEV_DASHBOARD",
-    "ENABLE_WEBSOCKET", "ENABLE_SITEMAP", "ENABLE_HTML_REWRITER",
+    "ENABLE_WEBSOCKET", "ENABLE_SITEMAP", "ENABLE_HTML_REWRITER", "ENABLE_PWA",
     "NO_COLOR", "FORCE_COLOR", "TRUST_PROXY_HEADERS",
   ];
   const env: Record<string, string | undefined> = {};
@@ -704,10 +705,16 @@ const dashboardHandler = withMiddleware((): Response => {
   const features = listFeatures()
     .map((f) => `<tr><td>${f.key}</td><td>${f.status}</td><td>${f.active ? "✅ active" : f.blocked ? "⚠️ blocked" : "❌ off"}</td><td>${f.description}</td></tr>`)
     .join("\n");
+  const pwaLinks = ENABLE_PWA
+    ? `<link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/png" sizes="128x128" href="/icons/icon-128.png">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">`
+    : "";
   const html = `<!DOCTYPE html>
 <html>
 <head>
   <title>Bun Automation Platform — Dashboard</title>
+  ${pwaLinks}
   <style>
     body { font-family: sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
     .nav-bar { display: flex; gap: 0.5rem; align-items: center; padding: 0.5rem 1rem;
@@ -768,6 +775,7 @@ const dashboardHandler = withMiddleware((): Response => {
     <li><code>GET /api/tasks.jsonl</code> — tasks JSONL export</li>
     <li><code>GET /api/sessions.jsonl</code> — sessions JSONL export</li>
     <li><code>GET /api/color?color=red&amp;format=css</code> — color conversion</li>
+    <li><a href="/manifest.json">/manifest.json</a> — PWA manifest (installable Chrome app)</li>
     <li><code>POST /api/markdown</code> — render markdown to HTML</li>
   </ul>
   <script>
@@ -917,6 +925,41 @@ if (ENABLE_SITEMAP) {
 if (ENABLE_HTML_REWRITER) {
   markActive("htmlRewriter");
   console.log("[server] HTMLRewriter enabled — injecting into HTML responses");
+}
+
+// PWA feature flag — serve manifest.json and icons so the dashboard can be
+// installed as a Chrome standalone app.
+// Ref: https://web.dev/articles/add-manifest
+if (ENABLE_PWA) {
+  // Serve the PWA manifest
+  routes["/manifest.json"] = {
+    GET: withMiddleware((): Response => {
+      const manifest = Bun.file("public/manifest.json");
+      return new Response(manifest, {
+        headers: { "Content-Type": "application/manifest+json" },
+      });
+    }),
+  };
+  // Serve PWA icons — /icons/:filename.png
+  routes["/icons/:filename"] = {
+    GET: withMiddleware<"/icons/:filename">(async (req: BunRequest<"/icons/:filename">): Promise<Response> => {
+      const filename = req.params.filename;
+      // Only allow .png files from the public/icons directory
+      if (!filename.endsWith(".png")) {
+        return errorResponse("not found", 404);
+      }
+      const file = Bun.file(`public/icons/${filename}`);
+      const exists = await file.exists();
+      if (!exists) {
+        return errorResponse("icon not found", 404);
+      }
+      return new Response(file, {
+        headers: { "Content-Type": "image/png", "Cache-Control": "public, max-age=86400" },
+      });
+    }),
+  };
+  markActive("pwa");
+  console.log("[server] PWA enabled — manifest at /manifest.json, install from Chrome");
 }
 
 // Markdown rendering chain — always available public API
@@ -1080,6 +1123,11 @@ console.log(`  GET  /api/audit.jsonl — audit log JSONL export (auth required)`
 console.log(`  GET  /protocol       — protocol info (public)`);
 console.log(`  GET  /features       — feature flags + promotion status (public)`);
 console.log(`  GET  /api/color      — color conversion via Bun.color (public)`);
+console.log(`  GET  /api/env        — environment variable inspection (public)`);
+if (ENABLE_PWA) {
+  console.log(`  GET  /manifest.json  — PWA manifest (installable Chrome app)`);
+  console.log(`  GET  /icons/:name    — PWA icons (png)`);
+}
 if (ENABLE_DEV_DASHBOARD) {
   console.log(`  GET  /dashboard      — dev dashboard (public)`);
 }

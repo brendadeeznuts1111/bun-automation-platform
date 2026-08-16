@@ -138,6 +138,16 @@ const FEATURES: Record<string, FeatureFlag> = {
     readyForPromotion: false,
     notes: "HTMLRewriter is a built-in Bun API (like Cloudflare's). Ref: https://bun.com/docs/runtime/htmlrewriter",
   },
+
+  pwa: {
+    key: "pwa",
+    envVar: "ENABLE_PWA",
+    status: "experimental",
+    description: "Serve a PWA manifest and icons so the dashboard can be installed as a Chrome standalone app (BUN-DEV).",
+    dependencies: [],
+    readyForPromotion: false,
+    notes: "Manifest at /manifest.json, icons at /icons/*.png. Install from Chrome > Install App.",
+  },
 };
 
 // --- Runtime state ---------------------------------------------------------

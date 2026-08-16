@@ -33,6 +33,7 @@ describe("Server API Integration", () => {
         WORKER_POOL_SIZE: "1",
         ENABLE_SITEMAP: "1",
         ENABLE_HTML_REWRITER: "1",
+        ENABLE_PWA: "1",
       },
       stdin: "ignore",
       stdout: "pipe",
@@ -1032,6 +1033,85 @@ console.log(color("red", "number"));`;
       expect(text).toContain('<meta name="injected" content="yes">');
       expect(text).toContain('data-transformed="true"');
     });
+  });
+
+  // --- PWA (Progressive Web App) ---
+  // Ref: https://web.dev/articles/add-manifest
+
+  it("GET /manifest.json serves the PWA manifest when ENABLE_PWA=1", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/manifest.json`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toContain("application/manifest+json");
+    // JUSTIFIED: res.json() returns unknown; narrowing to the manifest shape
+    const manifest = (await res.json()) as {
+      name: string;
+      short_name: string;
+      start_url: string;
+      display: string;
+      icons: { src: string; sizes: string; type: string }[];
+    };
+    expect(manifest.name).toBe("BUN-DEV");
+    expect(manifest.short_name).toBe("BUN-DEV");
+    expect(manifest.start_url).toBe("/dashboard");
+    expect(manifest.display).toBe("standalone");
+    expect(manifest.icons.length).toBeGreaterThan(0);
+    // Should have at least a 192 and 512 icon (required for installability)
+    const sizes = manifest.icons.map((i) => i.sizes);
+    expect(sizes).toContain("192x192");
+    expect(sizes).toContain("512x512");
+  });
+
+  it("GET /icons/icon-128.png serves a PNG icon", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/icons/icon-128.png`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toBe("image/png");
+    const buf = await res.arrayBuffer();
+    // PNG magic bytes: 89 50 4E 47
+    const bytes = new Uint8Array(buf);
+    expect(bytes[0]).toBe(0x89);
+    expect(bytes[1]).toBe(0x50);
+    expect(bytes[2]).toBe(0x4e);
+    expect(bytes[3]).toBe(0x47);
+  });
+
+  it("GET /icons/nonexistent.png returns 404", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/icons/nonexistent.png`);
+    expect(res.status).toBe(404);
+  });
+
+  it("GET /icons/icon-128.txt returns 404 (non-png rejected)", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/icons/icon-128.txt`);
+    expect(res.status).toBe(404);
+  });
+
+  it("GET /dashboard includes manifest link when PWA is enabled", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('<link rel="manifest" href="/manifest.json">');
+    expect(html).toContain('<link rel="icon" type="image/png" sizes="128x128" href="/icons/icon-128.png">');
+    expect(html).toContain('<link rel="apple-touch-icon" href="/icons/icon-192.png">');
+  });
+
+  it("GET /features lists pwa as active when ENABLE_PWA=1", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/features`);
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to the features response shape
+    const data = (await res.json()) as { features: { key: string; active: boolean }[] };
+    const pwa = data.features.find((f) => f.key === "pwa");
+    expect(pwa).toBeDefined();
+    expect(pwa!.active).toBe(true);
+  });
+
+  it("manifest.json has correct theme_color matching Bun.color output", async () => {
+    // Ref: https://bun.com/docs/runtime/color
+    // The manifest theme_color should match the dashboard's injected theme-color
+    const res = await fetch(`http://localhost:${TEST_PORT}/manifest.json`);
+    // JUSTIFIED: res.json() returns unknown; narrowing to the manifest shape
+    const manifest = (await res.json()) as { theme_color: string; background_color: string };
+    // theme_color is the Dracula green, background_color is the dark bg
+    expect(manifest.theme_color).toBe("#50fa7b");
+    expect(manifest.background_color).toBe("#1f2020");
   });
 
   // --- Auth ---

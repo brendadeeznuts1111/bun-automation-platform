@@ -1,0 +1,24 @@
+{
+  "name": "BUN-DEV",
+  "short_name": "BUN-DEV",
+  "description": "Bun Automation Platform — Player Health Dashboard",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#1f2020",
+  "theme_color": "#50fa7b",
+  "icons": [
+    { "src": "/icons/icon-16.png", "sizes": "16x16", "type": "image/png" },
+    { "src": "/icons/icon-32.png", "sizes": "32x32", "type": "image/png" },
+    { "src": "/icons/icon-48.png", "sizes": "48x48", "type": "image/png" },
+    { "src": "/icons/icon-64.png", "sizes": "64x64", "type": "image/png" },
+    { "src": "/icons/icon-96.png", "sizes": "96x96", "type": "image/png" },
+    { "src": "/icons/icon-128.png", "sizes": "128x128", "type": "image/png" },
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-256.png", "sizes": "256x256", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/icon-1024.png", "sizes": "1024x1024", "type": "image/png" },
+    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
