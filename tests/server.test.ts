@@ -225,20 +225,39 @@ describe("Server API Integration", () => {
     expect(Array.isArray(data.logs)).toBe(true);
   });
 
-  it("GET /api/audit.jsonl returns audit log as JSONL", async () => {
+  it("GET /api/audit.jsonl returns parseable JSONL via Bun.JSONL.parse", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/audit.jsonl?limit=5`, {
       headers: { Authorization: `Bearer ${authToken}` },
     });
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toContain("application/jsonl");
     const text = await res.text();
-    const lines = text.split("\n").filter(Boolean);
-    expect(lines.length).toBeGreaterThan(0);
-    for (const line of lines) {
-      const obj = JSON.parse(line);
+    // Ref: node_modules/bun-types/docs/runtime/jsonl.mdx
+    const values = Bun.JSONL.parse(text);
+    expect(Array.isArray(values)).toBe(true);
+    expect(values.length).toBeGreaterThan(0);
+    for (const obj of values) {
       expect(obj).toHaveProperty("action");
       expect(obj).toHaveProperty("created_at");
     }
+  });
+
+  it("Bun.JSONL.parseChunk handles partial and complete audit JSONL chunks", () => {
+    // Ref: node_modules/bun-types/docs/runtime/jsonl.mdx#parseChunk
+    const full = '{"action":"login"}\n{"action":"task"}';
+    const bytes = new TextEncoder().encode(full);
+    const result = Bun.JSONL.parseChunk(bytes);
+    expect(result.values.length).toBe(2);
+    expect(result.read).toBe(bytes.length);
+    expect(result.done).toBe(true);
+    expect(result.error).toBeNull();
+
+    const partial = '{"action":"login"}\n{"ac'; // incomplete second line
+    const pBytes = new TextEncoder().encode(partial);
+    const pResult = Bun.JSONL.parseChunk(pBytes);
+    expect(pResult.values.length).toBe(1);
+    expect(pResult.done).toBe(false);
+    expect(pResult.error).toBeNull();
   });
 
   // --- CSRF ---
