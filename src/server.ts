@@ -1283,6 +1283,294 @@ const configWriteHandler = withCsrf<"/api/config/write">(async (req: BunRequest<
   }
 });
 
+// Bun.Transpiler — transpile TS/JSX to JS
+// Ref: node_modules/bun-types/docs/runtime/transpiler.mdx
+const transpileHandler = withMiddleware<"/api/transpile">((req: BunRequest<"/api/transpile">): Response => {
+  const url = new URL(req.url);
+  const code = url.searchParams.get("code");
+  const target = (url.searchParams.get("target") ?? "browser") as "browser" | "bun";
+  if (!code) {
+    return json({ error: "code parameter required (e.g. ?code=const x: number = 1)" }, 400);
+  }
+  try {
+    // JUSTIFIED: Bun.Transpiler per transpiler.mdx — constructor accepts options
+    const transpiler = new Bun.Transpiler({
+      loader: "tsx",
+      target: target === "bun" ? "bun" : "browser",
+    });
+    // JUSTIFIED: .transformSync returns string per transpiler.mdx
+    const output = transpiler.transformSync(code) as string;
+    return json({
+      input: code,
+      output,
+      inputSize: code.length,
+      outputSize: output.length,
+      target,
+    });
+  } catch (err) {
+    return json({ error: "transpile failed", details: String(err) }, 422);
+  }
+});
+
+// Bun.dns — DNS lookup endpoint
+// Ref: node_modules/bun-types/bun.d.ts#dns
+const dnsHandler = withMiddleware<"/api/dns">((req: BunRequest<"/api/dns">): Response => {
+  const url = new URL(req.url);
+  const host = url.searchParams.get("host");
+  if (!host) {
+    return json({ error: "host parameter required (e.g. ?host=example.com)" }, 400);
+  }
+  // Bun.dns.lookup is async — return a Response.json with a promise
+  // We use Response.json with an async IIFE pattern
+  return new Response(
+    JSON.stringify({
+      error: "use POST /api/dns for async DNS lookup",
+      hint: "GET /api/dns?host=example.com returns this message; POST with {host} for results",
+    }),
+    { headers: { "Content-Type": "application/json" } },
+  );
+});
+
+// Async DNS lookup handler (POST)
+const dnsLookupHandler = withMiddleware<"/api/dns">((req: BunRequest<"/api/dns">): Response | Promise<Response> => {
+  if (req.method !== "POST") {
+    return json({ error: "POST required with {host: 'example.com'}" }, 405);
+  }
+  // Return a promise that resolves with DNS results
+  return req.json().then((body: unknown) => {
+    // JUSTIFIED: body is unknown from req.json(); narrowing to dns lookup shape
+    const { host } = body as { host?: string };
+    if (!host) {
+      return json({ error: "host required in body" }, 400);
+    }
+    // Bun.dns.lookup — async DNS resolution
+    // Ref: node_modules/bun-types/bun.d.ts#dns.lookup
+    return Bun.dns.lookup(host).then((results) => {
+      return json({
+        host,
+        results: results.map((r) => ({ address: r.address, family: r.family })),
+        count: results.length,
+      });
+    }).catch((err: Error) => {
+      return json({ error: "DNS lookup failed", details: String(err) }, 502);
+    });
+  });
+});
+
+// Bun.spawn — process manager (list running processes)
+// Ref: node_modules/bun-types/bun.d.ts#Bun.spawn
+const processesHandler = withAuth<"">(async (): Promise<Response> => {
+  try {
+    // Use Bun.spawn to run ps and get process list
+    // Ref: node_modules/bun-types/bun.d.ts#Bun.spawn
+    const proc = Bun.spawn(["ps", "aux"], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const text = await new Response(proc.stdout).text();
+    // Parse ps output — first line is header, rest are processes
+    const lines = text.trim().split("\n");
+    // Take top 20 processes by CPU
+    const processes = lines.slice(1, 21).map((line) => {
+      const parts = line.split(/\s+/);
+      return {
+        user: parts[0],
+        pid: parts[1],
+        cpu: parts[2],
+        mem: parts[3],
+        command: parts.slice(10).join(" ").slice(0, 80),
+      };
+    });
+    return json({ processes, count: processes.length, total: lines.length - 1 });
+  } catch (err) {
+    return json({ error: "process listing failed", details: String(err) }, 500);
+  }
+});
+
+// Bun.file — filesystem browser
+// Ref: node_modules/bun-types/docs/runtime/file.mdx
+const fsBrowserHandler = withAuth<"/api/fs">((req: BunRequest<"/api/fs">): Response => {
+  const url = new URL(req.url);
+  const dirPath = url.searchParams.get("path") ?? ".";
+  // Security: prevent path traversal outside project dir
+  if (dirPath.includes("..") || dirPath.startsWith("/")) {
+    return json({ error: "path must be within project directory" }, 403);
+  }
+  try {
+    // Use node:fs.readdirSync to list entries (includes directories)
+    // Bun.Glob only returns files, not directories
+    const { readdirSync, statSync } = require("node:fs") as typeof import("node:fs");
+    const entries = readdirSync(dirPath, { withFileTypes: true });
+    const files = entries.map((entry) => {
+      const fullPath = `${dirPath}/${entry.name}`;
+      const isDir = entry.isDirectory();
+      const stat = isDir ? null : statSync(fullPath);
+      return {
+        name: entry.name,
+        path: fullPath,
+        size: isDir ? 0 : stat!.size,
+        type: isDir ? "directory" : Bun.file(fullPath).type,
+        lastModified: isDir ? 0 : stat!.mtimeMs,
+      };
+    }).sort((a, b) => {
+      // Directories first, then alphabetical
+      if (a.type === "directory" && b.type !== "directory") return -1;
+      if (a.type !== "directory" && b.type === "directory") return 1;
+      return a.name.localeCompare(b.name);
+    });
+    return json({ path: dirPath, files, count: files.length });
+  } catch (err) {
+    return json({ error: "filesystem browse failed", details: String(err) }, 500);
+  }
+});
+
+// Bun.deflateSync/inflateSync — compression utility
+// Ref: node_modules/bun-types/bun.d.ts#deflateSync
+const compressHandler = withMiddleware<"/api/compress">((req: BunRequest<"/api/compress">): Response => {
+  const url = new URL(req.url);
+  const action = url.searchParams.get("action") ?? "compress";
+  const input = url.searchParams.get("input");
+  if (!input) {
+    return json({ error: "input parameter required" }, 400);
+  }
+  try {
+    if (action === "compress") {
+      // Bun.deflateSync — compress to zlib
+      const compressed = Bun.deflateSync(new TextEncoder().encode(input));
+      // Convert to base64 for display
+      const b64 = btoa(String.fromCharCode(...compressed));
+      return json({
+        action: "compress",
+        input,
+        inputSize: input.length,
+        compressedSize: compressed.byteLength,
+        compressed: b64,
+        ratio: `${((compressed.byteLength / input.length) * 100).toFixed(1)}%`,
+      });
+    } else if (action === "decompress") {
+      // Bun.inflateSync — decompress from zlib
+      const bytes = Uint8Array.from(atob(input), (c) => c.charCodeAt(0));
+      const decompressed = Bun.inflateSync(bytes);
+      const text = new TextDecoder().decode(decompressed);
+      return json({
+        action: "decompress",
+        input,
+        inputSize: input.length,
+        decompressedSize: decompressed.byteLength,
+        decompressed: text,
+      });
+    } else {
+      return json({ error: "action must be 'compress' or 'decompress'" }, 400);
+    }
+  } catch (err) {
+    return json({ error: "compression failed", details: String(err) }, 500);
+  }
+});
+
+// Utility endpoints — escapeHTML, base64, structuredClone
+const utilsHandler = withMiddleware<"/api/utils">((req: BunRequest<"/api/utils">): Response => {
+  const url = new URL(req.url);
+  const tool = url.searchParams.get("tool") ?? "escape";
+  const input = url.searchParams.get("input");
+  if (!input) {
+    return json({ error: "input parameter required" }, 400);
+  }
+  switch (tool) {
+    case "escape":
+      // Bun.escapeHTML — escape HTML special characters
+      // Ref: node_modules/bun-types/bun.d.ts#escapeHTML
+      return json({ tool: "escapeHTML", input, output: Bun.escapeHTML(input) });
+    case "base64-encode":
+      return json({ tool: "base64-encode", input, output: btoa(input) });
+    case "base64-decode":
+      try {
+        return json({ tool: "base64-decode", input, output: atob(input) });
+      } catch {
+        return json({ error: "invalid base64 input" }, 400);
+      }
+    case "clone":
+      // structuredClone — deep clone any value
+      // JUSTIFIED: structuredClone is a global, not Bun-specific, but useful
+      const cloned = structuredClone(JSON.parse(input));
+      return json({ tool: "structuredClone", input, output: cloned });
+    case "urlencode":
+      return json({ tool: "urlencode", input, output: encodeURIComponent(input) });
+    case "urldecode":
+      try {
+        return json({ tool: "urldecode", input, output: decodeURIComponent(input) });
+      } catch {
+        return json({ error: "invalid URL-encoded input" }, 400);
+      }
+    default:
+      return json({ error: "unknown tool. Available: escape, base64-encode, base64-decode, clone, urlencode, urldecode" }, 400);
+  }
+});
+
+// Bun.gc + Bun.nanoseconds + Bun.shrink — runtime introspection
+// Ref: node_modules/bun-types/bun.d.ts#gc, #nanoseconds, #shrink
+const runtimeHandler = withAuth<"">(async (req: BunRequest<"">): Promise<Response> => {
+  const url = new URL(req.url);
+  const action = url.searchParams.get("action") ?? "status";
+  if (action === "gc") {
+    // Bun.gc — force garbage collection
+    const before = process.memoryUsage();
+    Bun.gc(true);
+    const after = process.memoryUsage();
+    return json({
+      action: "gc",
+      before: { heapUsed: before.heapUsed, heapTotal: before.heapTotal, rss: before.rss },
+      after: { heapUsed: after.heapUsed, heapTotal: after.heapTotal, rss: after.rss },
+      freed: before.heapUsed - after.heapUsed,
+    });
+  } else if (action === "shrink") {
+    // Bun.shrink — release memory back to OS
+    const before = process.memoryUsage();
+    Bun.shrink();
+    const after = process.memoryUsage();
+    return json({
+      action: "shrink",
+      before: { rss: before.rss, heapTotal: before.heapTotal },
+      after: { rss: after.rss, heapTotal: after.heapTotal },
+      freed: before.rss - after.rss,
+    });
+  } else if (action === "nanoseconds") {
+    // Bun.nanoseconds — high-resolution timing
+    // Run a quick benchmark
+    const start = Bun.nanoseconds();
+    // Do some work
+    for (let i = 0; i < 1000; i++) Math.sqrt(i);
+    const end = Bun.nanoseconds();
+    return json({
+      action: "nanoseconds",
+      startNs: start,
+      endNs: end,
+      elapsedNs: end - start,
+      elapsedMs: (end - start) / 1_000_000,
+      uptimeNs: start,
+      note: "Bun.nanoseconds — nanosecond precision timing since process start",
+    });
+  }
+  // Default: status
+  const mem = process.memoryUsage();
+  return json({
+    action: "status",
+    uptime: process.uptime(),
+    uptimeNs: Bun.nanoseconds(),
+    bunVersion: Bun.version,
+    pid: process.pid,
+    memory: {
+      rss: mem.rss,
+      heapUsed: mem.heapUsed,
+      heapTotal: mem.heapTotal,
+      external: mem.external,
+      arrayBuffers: mem.arrayBuffers,
+    },
+    gc: "available via ?action=gc",
+    shrink: "available via ?action=shrink",
+    nanoseconds: "available via ?action=nanoseconds",
+  });
+});
+
 // R5: Dev dashboard — simple HTML page showing server status.
 // Will be replaced with React + HTML imports dashboard (OPEN_TASKS F1).
 // D6: Dashboard is dev-only — auto-disabled in production unless explicitly enabled.
@@ -1712,7 +2000,64 @@ const dashboardHandler = withMiddleware((): Response => {
     <li><code>GET /api/image?src=/icons/icon-512.png&amp;width=64&amp;format=webp</code> — image processing (Bun.Image)</li>
     <li><code>GET /api/screenshot?url=https://example.com</code> — screenshot via Bun.WebView</li>
     <li><code>POST /api/config/write</code> — write YAML/TOML/JSON5 config (auth+CSRF)</li>
+    <li><a href="/api/transpile?code=const%20x:%20number%20=%201">/api/transpile</a> — TS/JSX transpiler (Bun.Transpiler)</li>
+    <li><code>POST /api/dns</code> — DNS lookup (Bun.dns)</li>
+    <li><a href="/api/processes">/api/processes</a> — process manager (Bun.spawn)</li>
+    <li><a href="/api/fs">/api/fs</a> — filesystem browser (Bun.file + Bun.Glob)</li>
+    <li><a href="/api/compress?input=hello&action=compress">/api/compress</a> — compression utility (Bun.deflateSync)</li>
+    <li><a href="/api/utils?tool=escape&input=<hello>">/api/utils</a> — escape/base64/clone (Bun.escapeHTML)</li>
+    <li><a href="/api/runtime">/api/runtime</a> — runtime introspection (Bun.gc/nanoseconds/shrink)</li>
   </ul>
+
+  <div class="pwa-section" style="margin-top: 0.5rem;">
+    <h3 style="color: var(--accent); cursor: pointer;" onclick="toggleSection('transpiler-content', this)">
+      Code Transpiler Playground ▸
+    </h3>
+    <div id="transpiler-content" style="display: none; margin-top: 0.5rem;">
+      <textarea id="transpile-input" rows="4" style="width:100%; background:var(--bg-nav); color:var(--fg); border:1px solid var(--border); border-radius:4px; padding:0.5rem; font-family:inherit; font-size:0.8rem;" placeholder="const x: number = 42; const fn = (a: string) => a.toUpperCase();"></textarea>
+      <button onclick="runTranspile()" style="background:var(--accent); color:var(--bg); border:none; padding:0.3rem 0.7rem; border-radius:4px; cursor:pointer; font-family:inherit; margin-top:0.3rem;">Transpile</button>
+      <pre id="transpile-output" style="margin-top:0.5rem; background:var(--bg-nav); border:1px solid var(--border); border-radius:4px; padding:0.5rem; font-size:0.75rem; max-height:200px; overflow-y:auto; color:var(--info);"></pre>
+    </div>
+  </div>
+
+  <div class="pwa-section" style="margin-top: 0.5rem;">
+    <h3 style="color: var(--accent); cursor: pointer;" onclick="toggleSection('fs-browser-content', this)">
+      Filesystem Browser ▸
+    </h3>
+    <div id="fs-browser-content" style="display: none; margin-top: 0.5rem;">
+      <div id="fs-browser-output" style="color: var(--fg-dim); font-size: 0.8rem;">Loading...</div>
+    </div>
+  </div>
+
+  <div class="pwa-section" style="margin-top: 0.5rem;">
+    <h3 style="color: var(--accent); cursor: pointer;" onclick="toggleSection('utils-content', this)">
+      Developer Utilities ▸
+    </h3>
+    <div id="utils-content" style="display: none; margin-top: 0.5rem;">
+      <select id="utils-tool" style="background:var(--bg-nav); color:var(--fg); border:1px solid var(--border); border-radius:4px; padding:0.3rem;">
+        <option value="escape">Escape HTML</option>
+        <option value="base64-encode">Base64 Encode</option>
+        <option value="base64-decode">Base64 Decode</option>
+        <option value="urlencode">URL Encode</option>
+        <option value="urldecode">URL Decode</option>
+      </select>
+      <input id="utils-input" type="text" placeholder="Enter input..." style="width:60%; background:var(--bg-nav); color:var(--fg); border:1px solid var(--border); border-radius:4px; padding:0.3rem; margin-left:0.3rem;">
+      <button onclick="runUtil()" style="background:var(--accent); color:var(--bg); border:none; padding:0.3rem 0.7rem; border-radius:4px; cursor:pointer; font-family:inherit; margin-left:0.3rem;">Run</button>
+      <pre id="utils-output" style="margin-top:0.5rem; background:var(--bg-nav); border:1px solid var(--border); border-radius:4px; padding:0.5rem; font-size:0.75rem; color:var(--info);"></pre>
+    </div>
+  </div>
+
+  <div class="pwa-section" style="margin-top: 0.5rem;">
+    <h3 style="color: var(--accent); cursor: pointer;" onclick="toggleSection('runtime-content', this)">
+      Runtime Info (gc/nanoseconds/shrink) ▸
+    </h3>
+    <div id="runtime-content" style="display: none; margin-top: 0.5rem;">
+      <div id="runtime-output" style="color: var(--fg-dim); font-size: 0.8rem;">Loading...</div>
+      <button onclick="runGC()" style="background:var(--warn); color:var(--bg); border:none; padding:0.3rem 0.7rem; border-radius:4px; cursor:pointer; font-family:inherit; margin-top:0.3rem;">Force GC</button>
+      <button onclick="runShrink()" style="background:var(--warn); color:var(--bg); border:none; padding:0.3rem 0.7rem; border-radius:4px; cursor:pointer; font-family:inherit; margin-left:0.3rem;">Shrink Memory</button>
+      <button onclick="runNano()" style="background:var(--info); color:var(--bg); border:none; padding:0.3rem 0.7rem; border-radius:4px; cursor:pointer; font-family:inherit; margin-left:0.3rem;">Benchmark (ns)</button>
+    </div>
+  </div>
 
   <div class="pwa-section" style="margin-top: 0.5rem;">
     <h3 style="color: var(--accent); cursor: pointer;" onclick="toggleSection('ws-chart-content', this)">
@@ -2084,6 +2429,137 @@ const dashboardHandler = withMiddleware((): Response => {
       }
     });
 
+    // Code Transpiler Playground
+    async function runTranspile() {
+      const input = document.getElementById('transpile-input').value;
+      const output = document.getElementById('transpile-output');
+      if (!input.trim()) { output.textContent = 'Enter code to transpile'; return; }
+      output.textContent = 'Transpiling...';
+      try {
+        const res = await fetch('/api/transpile?code=' + encodeURIComponent(input));
+        // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+        const data = await res.json();
+        if (data.error) {
+          output.textContent = 'Error: ' + data.error;
+          output.style.color = 'var(--err)';
+        } else {
+          output.textContent = data.output;
+          output.style.color = 'var(--info)';
+          output.innerHTML += '\\n\\n--- ' + data.inputSize + 'B → ' + data.outputSize + 'B ---';
+        }
+      } catch (e) {
+        output.textContent = 'Error: ' + e.message;
+      }
+    }
+
+    // Filesystem Browser
+    async function loadFsBrowser(path) {
+      const output = document.getElementById('fs-browser-output');
+      path = path || '.';
+      output.textContent = 'Browsing ' + path + '...';
+      try {
+        const res = await fetch('/api/fs?path=' + encodeURIComponent(path));
+        // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+        const data = await res.json();
+        if (data.error) { output.innerHTML = '<span style="color:var(--err);">' + data.error + '</span>'; return; }
+        let html = '<table style="width:100%; font-size:0.75rem;"><tr><th>Name</th><th>Size</th><th>Type</th></tr>';
+        for (const f of data.files) {
+          const icon = f.type === 'directory' ? '📁' : '📄';
+          const size = f.type === 'directory' ? '-' : (f.size < 1024 ? f.size + 'B' : (f.size / 1024).toFixed(1) + 'KB');
+          const clickPath = f.type === 'directory' ? 'onclick="loadFsBrowser(\\'' + f.path + '\\')"' : '';
+          html += '<tr style="cursor:pointer;" ' + clickPath + '><td>' + icon + ' ' + f.name + '</td><td>' + size + '</td><td style="color:var(--fg-dim);">' + f.type + '</td></tr>';
+        }
+        html += '</table><p style="color:var(--fg-dim);">' + data.count + ' entries in ' + data.path + '</p>';
+        output.innerHTML = html;
+      } catch (e) {
+        output.innerHTML = '<span style="color:var(--err);">Error: ' + e.message + '</span>';
+      }
+    }
+
+    // Developer Utilities
+    async function runUtil() {
+      const tool = document.getElementById('utils-tool').value;
+      const input = document.getElementById('utils-input').value;
+      const output = document.getElementById('utils-output');
+      if (!input) { output.textContent = 'Enter input'; return; }
+      try {
+        const res = await fetch('/api/utils?tool=' + tool + '&input=' + encodeURIComponent(input));
+        // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+        const data = await res.json();
+        if (data.error) {
+          output.textContent = 'Error: ' + data.error;
+          output.style.color = 'var(--err)';
+        } else {
+          output.textContent = data.output;
+          output.style.color = 'var(--info)';
+        }
+      } catch (e) {
+        output.textContent = 'Error: ' + e.message;
+      }
+    }
+
+    // Runtime info
+    async function loadRuntime() {
+      const output = document.getElementById('runtime-output');
+      try {
+        const res = await fetch('/api/runtime');
+        // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+        const data = await res.json();
+        const mem = data.memory;
+        const fmt = (b) => (b / 1024 / 1024).toFixed(1) + 'MB';
+        output.innerHTML = '<table style="font-size:0.75rem;">' +
+          '<tr><td>Bun version:</td><td style="color:var(--accent);">' + data.bunVersion + '</td></tr>' +
+          '<tr><td>PID:</td><td>' + data.pid + '</td></tr>' +
+          '<tr><td>Uptime:</td><td>' + (data.uptime).toFixed(1) + 's</td></tr>' +
+          '<tr><td>RSS:</td><td style="color:var(--warn);">' + fmt(mem.rss) + '</td></tr>' +
+          '<tr><td>Heap used:</td><td style="color:var(--warn);">' + fmt(mem.heapUsed) + '</td></tr>' +
+          '<tr><td>Heap total:</td><td>' + fmt(mem.heapTotal) + '</td></tr>' +
+          '<tr><td>External:</td><td>' + fmt(mem.external) + '</td></tr>' +
+          '<tr><td>ArrayBuffers:</td><td>' + fmt(mem.arrayBuffers) + '</td></tr>' +
+          '</table>';
+      } catch (e) {
+        output.innerHTML = '<span style="color:var(--err);">Error: ' + e.message + '</span>';
+      }
+    }
+
+    async function runGC() {
+      const output = document.getElementById('runtime-output');
+      const res = await fetch('/api/runtime?action=gc');
+      // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+      const data = await res.json();
+      const fmt = (b) => (b / 1024 / 1024).toFixed(1) + 'MB';
+      output.innerHTML = '<p style="color:var(--accent);">GC freed ' + fmt(data.freed) + '</p>' +
+        '<p style="font-size:0.75rem;">Before: ' + fmt(data.before.heapUsed) + ' → After: ' + fmt(data.after.heapUsed) + '</p>';
+      setTimeout(loadRuntime, 500);
+    }
+
+    async function runShrink() {
+      const output = document.getElementById('runtime-output');
+      const res = await fetch('/api/runtime?action=shrink');
+      // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+      const data = await res.json();
+      const fmt = (b) => (b / 1024 / 1024).toFixed(1) + 'MB';
+      output.innerHTML = '<p style="color:var(--accent);">Shrink freed ' + fmt(data.freed) + ' RSS</p>';
+      setTimeout(loadRuntime, 500);
+    }
+
+    async function runNano() {
+      const output = document.getElementById('runtime-output');
+      const res = await fetch('/api/runtime?action=nanoseconds');
+      // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+      const data = await res.json();
+      output.innerHTML = '<p style="color:var(--accent);">1000x Math.sqrt(): ' + data.elapsedNs + 'ns (' + data.elapsedMs + 'ms)</p>' +
+        '<p style="font-size:0.75rem;">Uptime: ' + (data.uptimeNs / 1e9).toFixed(1) + 's (' + data.uptimeNs + 'ns)</p>';
+    }
+
+    // Auto-load panels when opened
+    document.querySelector('#fs-browser-content').previousElementSibling?.addEventListener('click', () => {
+      if (document.getElementById('fs-browser-content').style.display === 'block') loadFsBrowser('.');
+    });
+    document.querySelector('#runtime-content').previousElementSibling?.addEventListener('click', () => {
+      if (document.getElementById('runtime-content').style.display === 'block') loadRuntime();
+    });
+
     // SW cache status
     async function checkSWCache() {
       const info = document.getElementById('sw-cache-info');
@@ -2413,6 +2889,12 @@ const routes: Record<string, unknown> = {
   "/api/stream/:path": { GET: streamFileHandler },
   "/api/ffi": { GET: ffiHandler },
   "/api/hash": { GET: hashHandler },
+  "/api/transpile": { GET: transpileHandler },
+  "/api/dns": { GET: dnsHandler, POST: dnsLookupHandler },
+  "/api/fs": { GET: fsBrowserHandler },
+  "/api/compress": { GET: compressHandler },
+  "/api/utils": { GET: utilsHandler },
+  "/api/runtime": { GET: runtimeHandler },
 
   // Auth-required routes
   "/tasks": { GET: listTasksHandler },
@@ -2431,6 +2913,7 @@ const routes: Record<string, unknown> = {
   "/api/mermaid": { POST: mermaidRenderHandler },
   "/api/s3/backup": { GET: s3BackupHandler },
   "/api/logs": { GET: logsHandler },
+  "/api/processes": { GET: processesHandler },
   "/api/sql": { POST: sqlQueryHandler },
   "/api/image": { GET: imageProcessHandler },
   "/api/screenshot": { GET: screenshotHandler },

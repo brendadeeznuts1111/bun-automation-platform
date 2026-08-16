@@ -2449,4 +2449,240 @@ console.log(color("red", "number"));`;
     expect(html).toContain("/api/screenshot");
     expect(html).toContain("/api/config/write");
   });
+
+  // --- Even Deeper: Transpiler, DNS, FS, Compress, Utils, Runtime ---
+
+  it("GET /api/transpile transpiles TypeScript to JavaScript", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/transpile?code=${encodeURIComponent("const x: number = 42;")}`);
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+    const data = await res.json() as { input: string; output: string; inputSize: number; outputSize: number };
+    expect(data.input).toContain("const x: number = 42;");
+    expect(data.output).toContain("const x");
+    expect(data.output).not.toContain(": number");
+  });
+
+  it("GET /api/transpile rejects empty code", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/transpile`);
+    expect(res.status).toBe(400);
+  });
+
+  it("GET /api/transpile transpiles JSX", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/transpile?code=${encodeURIComponent("const el = <div>hello</div>;")}`);
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+    const data = await res.json() as { output: string };
+    // JSX should be transformed to function calls (jsx or createElement)
+    expect(data.output.length).toBeGreaterThan(0);
+    expect(data.output).toMatch(/jsx|createElement|h\(/);
+  });
+
+  it("GET /api/dns returns info message for GET", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/dns?host=example.com`);
+    expect(res.status).toBe(200);
+  });
+
+  it("POST /api/dns resolves a hostname", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/dns`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ host: "localhost" }),
+    });
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+    const data = await res.json() as { host: string; results: { address: string; family: number }[]; count: number };
+    expect(data.host).toBe("localhost");
+    expect(data.count).toBeGreaterThan(0);
+    expect(data.results[0]?.address).toBeDefined();
+  });
+
+  it("POST /api/dns rejects missing host", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/dns`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("GET /api/processes requires auth", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/processes`);
+    expect(res.status).toBe(401);
+  });
+
+  it("GET /api/processes lists running processes with auth", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/processes`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+    const data = await res.json() as { processes: { pid: string; command: string }[]; count: number; total: number };
+    expect(data.count).toBeGreaterThan(0);
+    expect(data.processes[0]?.pid).toBeDefined();
+  });
+
+  it("GET /api/fs requires auth", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/fs`);
+    expect(res.status).toBe(401);
+  });
+
+  it("GET /api/fs lists files in current directory", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/fs?path=.`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+    const data = await res.json() as { path: string; files: { name: string; type: string }[]; count: number };
+    expect(data.count).toBeGreaterThan(0);
+    const names = data.files.map((f) => f.name);
+    expect(names).toContain("package.json");
+    expect(names).toContain("src");
+  });
+
+  it("GET /api/compress compresses text", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/compress?input=${encodeURIComponent("hello world ".repeat(20))}&action=compress`);
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+    const data = await res.json() as { action: string; inputSize: number; compressedSize: number; ratio: string };
+    expect(data.action).toBe("compress");
+    expect(data.compressedSize).toBeLessThan(data.inputSize);
+    expect(data.ratio).toMatch(/%/);
+  });
+
+  it("GET /api/compress rejects empty input", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/compress`);
+    expect(res.status).toBe(400);
+  });
+
+  it("GET /api/utils escapes HTML", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/utils?tool=escape&input=${encodeURIComponent("<script>alert(1)</script>")}`);
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+    const data = await res.json() as { tool: string; input: string; output: string };
+    expect(data.output).toContain("&lt;script&gt;");
+    expect(data.output).not.toContain("<script>");
+  });
+
+  it("GET /api/utils base64 encodes", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/utils?tool=base64-encode&input=hello`);
+    // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+    const data = await res.json() as { output: string };
+    expect(data.output).toBe(btoa("hello"));
+  });
+
+  it("GET /api/utils base64 decodes", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/utils?tool=base64-decode&input=${encodeURIComponent(btoa("hello"))}`);
+    // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+    const data = await res.json() as { output: string };
+    expect(data.output).toBe("hello");
+  });
+
+  it("GET /api/utils URL encodes", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/utils?tool=urlencode&input=${encodeURIComponent("hello world?foo=bar")}`);
+    // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+    const data = await res.json() as { output: string };
+    expect(data.output).toBe(encodeURIComponent("hello world?foo=bar"));
+  });
+
+  it("GET /api/utils rejects unknown tool", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/utils?tool=nonexistent&input=test`);
+    expect(res.status).toBe(400);
+  });
+
+  it("GET /api/runtime requires auth", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/runtime`);
+    expect(res.status).toBe(401);
+  });
+
+  it("GET /api/runtime returns runtime status with auth", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/runtime`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+    const data = await res.json() as { action: string; uptime: number; bunVersion: string; pid: number; memory: { rss: number } };
+    expect(data.action).toBe("status");
+    expect(data.uptime).toBeGreaterThan(0);
+    expect(data.bunVersion).toBeDefined();
+    expect(data.memory.rss).toBeGreaterThan(0);
+  });
+
+  it("GET /api/runtime?action=gc forces garbage collection", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/runtime?action=gc`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+    const data = await res.json() as { action: string; before: { heapUsed: number }; after: { heapUsed: number } };
+    expect(data.action).toBe("gc");
+    expect(data.before.heapUsed).toBeDefined();
+    expect(data.after.heapUsed).toBeDefined();
+  });
+
+  it("GET /api/runtime?action=shrink releases memory", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/runtime?action=shrink`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+    const data = await res.json() as { action: string; before: { rss: number }; after: { rss: number } };
+    expect(data.action).toBe("shrink");
+  });
+
+  it("GET /api/runtime?action=nanoseconds returns high-res timing", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/runtime?action=nanoseconds`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+    const data = await res.json() as { action: string; startNs: number; endNs: number; elapsedNs: number };
+    expect(data.action).toBe("nanoseconds");
+    expect(data.elapsedNs).toBeGreaterThan(0);
+    expect(data.endNs).toBeGreaterThan(data.startNs);
+  });
+
+  it("GET /dashboard has transpiler playground", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
+    const html = await res.text();
+    expect(html).toContain("transpile-input");
+    expect(html).toContain("runTranspile()");
+    expect(html).toContain("Code Transpiler Playground");
+  });
+
+  it("GET /dashboard has filesystem browser", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
+    const html = await res.text();
+    expect(html).toContain("fs-browser-content");
+    expect(html).toContain("loadFsBrowser");
+    expect(html).toContain("Filesystem Browser");
+  });
+
+  it("GET /dashboard has developer utilities panel", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
+    const html = await res.text();
+    expect(html).toContain("utils-content");
+    expect(html).toContain("runUtil()");
+    expect(html).toContain("Developer Utilities");
+  });
+
+  it("GET /dashboard has runtime info panel", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
+    const html = await res.text();
+    expect(html).toContain("runtime-content");
+    expect(html).toContain("runGC()");
+    expect(html).toContain("runShrink()");
+    expect(html).toContain("runNano()");
+  });
+
+  it("GET /dashboard lists all newest endpoints", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
+    const html = await res.text();
+    expect(html).toContain("/api/transpile");
+    expect(html).toContain("/api/dns");
+    expect(html).toContain("/api/processes");
+    expect(html).toContain("/api/fs");
+    expect(html).toContain("/api/compress");
+    expect(html).toContain("/api/utils");
+    expect(html).toContain("/api/runtime");
+  });
 });
