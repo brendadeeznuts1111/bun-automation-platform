@@ -113,5 +113,9 @@ declare module "bun" {
     ENABLE_DEV_DASHBOARD?: string;
     /** Enable WebSocket endpoints (/ws/task/:id, /ws/control/:id). Default: off. */
     ENABLE_WEBSOCKET?: string;
+    /** Enable /sitemap.xml endpoint. Default: off. */
+    ENABLE_SITEMAP?: string;
+    /** Enable HTMLRewriter injection into HTML responses. Default: off. */
+    ENABLE_HTML_REWRITER?: string;
   }
 }

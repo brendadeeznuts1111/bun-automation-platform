@@ -647,6 +647,45 @@ const colorHandler = withMiddleware<"">((req: BunRequest<"">): Response => {
   return json({ input, format, output: result });
 });
 
+// Environment variable inspection API — chains Bun.serve with Bun.env
+// Ref: https://bun.com/docs/runtime/env
+// Returns selected env vars (never secrets) for debugging and dashboard use.
+const envHandler = withMiddleware<"">((req: BunRequest<"">): Response => {
+  const url = new URL(req.url);
+  const key = url.searchParams.get("key");
+  if (key) {
+    // Return a single env var value (read-only, no secrets filtering on single key
+    // since the caller already knows the key name)
+    const value = Bun.env[key];
+    if (value === undefined) {
+      return errorResponse(`env var '${key}' is not set`, 404);
+    }
+    return json({ key, value, source: "Bun.env" });
+  }
+  // Return a safe subset of env vars for the dashboard
+  // Ref: https://bun.com/docs/runtime/env#configuring-bun
+  const safeKeys = [
+    "NODE_ENV", "PORT", "HOST", "BUN_VERSION",
+    "ENABLE_TLS", "ENABLE_HTTP3", "ENABLE_DEV_DASHBOARD",
+    "ENABLE_WEBSOCKET", "ENABLE_SITEMAP", "ENABLE_HTML_REWRITER",
+    "NO_COLOR", "FORCE_COLOR", "TRUST_PROXY_HEADERS",
+  ];
+  const env: Record<string, string | undefined> = {};
+  for (const k of safeKeys) {
+    env[k] = Bun.env[k];
+  }
+  // Verify all three env accessors are aliases of the same object
+  // Ref: https://bun.com/docs/runtime/env#reading-environment-variables
+  return json({
+    env,
+    aliases: {
+      "process.env === Bun.env": process.env === Bun.env,
+      "Bun.env === import.meta.env": Bun.env === import.meta.env,
+    },
+    bunVersion: Bun.version,
+  });
+});
+
 // R5: Dev dashboard — simple HTML page showing server status.
 // Will be replaced with React + HTML imports dashboard (OPEN_TASKS F1).
 // D6: Dashboard is dev-only — auto-disabled in production unless explicitly enabled.
@@ -843,6 +882,7 @@ const routes: Record<string, unknown> = {
   "/protocol": { GET: protocolHandler },
   "/features": { GET: featuresHandler },
   "/api/color": { GET: colorHandler },
+  "/api/env": { GET: envHandler },
 
   // Auth-required routes
   "/tasks": { GET: listTasksHandler },

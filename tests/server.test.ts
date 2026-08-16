@@ -197,6 +197,130 @@ describe("Server API Integration", () => {
     expect(res.status).toBe(400);
   });
 
+  // Ref: https://bun.com/docs/runtime/env
+  it("GET /api/env returns safe subset of environment variables", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/env`);
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to the env response shape
+    const data = (await res.json()) as {
+      env: Record<string, string | undefined>;
+      aliases: Record<string, boolean>;
+      bunVersion: string;
+    };
+    expect(data.env).toHaveProperty("NODE_ENV");
+    expect(data.env).toHaveProperty("PORT");
+    expect(data.env).toHaveProperty("ENABLE_SITEMAP");
+    expect(data.env).toHaveProperty("ENABLE_HTML_REWRITER");
+    // Should NOT expose secrets like CSRF_SECRET or DB_PATH
+    expect(data.env).not.toHaveProperty("CSRF_SECRET");
+    expect(data.env).not.toHaveProperty("DB_PATH");
+    // Verify env accessor aliases
+    // Ref: https://bun.com/docs/runtime/env#reading-environment-variables
+    expect(data.aliases["process.env === Bun.env"]).toBe(true);
+    expect(data.aliases["Bun.env === import.meta.env"]).toBe(true);
+    expect(data.bunVersion).toBe(Bun.version);
+  });
+
+  it("GET /api/env?key=NODE_ENV returns a single env var", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/env?key=NODE_ENV`);
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to the env response shape
+    const data = (await res.json()) as { key: string; value: string; source: string };
+    expect(data.key).toBe("NODE_ENV");
+    expect(data.value).toBe("development");
+    expect(data.source).toBe("Bun.env");
+  });
+
+  it("GET /api/env?key=NONEXISTENT returns 404", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/env?key=NONEXISTENT_VAR_12345`);
+    expect(res.status).toBe(404);
+  });
+
+  it("Bun.env, process.env, and import.meta.env are all aliases of the same object", () => {
+    // Ref: https://bun.com/docs/runtime/env#reading-environment-variables
+    expect(process.env).toBe(Bun.env);
+    expect(Bun.env).toBe(import.meta.env);
+    // Mutating one mutates all
+    process.env.BUN_ALIAS_TEST = "hello";
+    expect(Bun.env.BUN_ALIAS_TEST).toBe("hello");
+    expect(import.meta.env.BUN_ALIAS_TEST).toBe("hello");
+    delete process.env.BUN_ALIAS_TEST;
+  });
+
+  it("process.env can be set programmatically", () => {
+    // Ref: https://bun.com/docs/runtime/env#setting-environment-variables
+    process.env.BUN_SET_TEST = "testvalue";
+    expect(Bun.env.BUN_SET_TEST).toBe("testvalue");
+    expect(import.meta.env.BUN_SET_TEST).toBe("testvalue");
+    delete process.env.BUN_SET_TEST;
+  });
+
+  it("TypeScript interface merging types env vars as string", () => {
+    // Ref: https://bun.com/docs/runtime/env#typescript
+    // The Env interface in src/types/env.d.ts augments Bun's types.
+    // PORT is declared as `string | undefined` in the augmented interface.
+    const port = process.env.PORT;
+    // JUSTIFIED: typeof check narrows string | undefined to string for the test
+    if (typeof port === "string") {
+      expect(typeof port).toBe("string");
+    }
+    // ENABLE_SITEMAP is declared in the augmented interface
+    // The test process itself doesn't have it set (only the server subprocess does),
+    // so we set it here to verify the typed accessor works
+    process.env.ENABLE_SITEMAP = "1";
+    const sitemap = Bun.env.ENABLE_SITEMAP;
+    expect(sitemap).toBe("1");
+    delete process.env.ENABLE_SITEMAP;
+  });
+
+  it("Bun --env-file supports variable expansion and escaping", async () => {
+    // Ref: https://bun.com/docs/runtime/env#expansion
+    // Write a temp .env file with expansion and escaped $
+    const envContent = `BUN_EXPAND_BASE=hello
+BUN_EXPAND_DERIVED=hello$BUN_EXPAND_BASE
+BUN_EXPAND_ESCAPED=hello\\$BUN_EXPAND_BASE`;
+    const tmpEnv = `/tmp/test-expand-${Date.now()}.env`;
+    await Bun.write(tmpEnv, envContent);
+
+    const proc = Bun.spawn({
+      cmd: ["bun", "--env-file", tmpEnv, "-e",
+        "console.log(JSON.stringify({derived: process.env.BUN_EXPAND_DERIVED, escaped: process.env.BUN_EXPAND_ESCAPED}))"],
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const output = await new Response(proc.stdout).text();
+    await proc.exited;
+    // JUSTIFIED: output is a JSON string from our console.log; narrowing to the shape
+    const parsed = JSON.parse(output.trim()) as { derived: string; escaped: string };
+    // Expansion: $BUN_EXPAND_BASE should be replaced with "hello"
+    expect(parsed.derived).toBe("hellohello");
+    // Escaped: \$ should keep the literal $ character
+    expect(parsed.escaped).toBe("hello$BUN_EXPAND_BASE");
+  });
+
+  it("Bun --env-file supports quoted values (single, double, backtick)", async () => {
+    // Ref: https://bun.com/docs/runtime/env#quotation-marks
+    const envContent = `BUN_QUOTE_SINGLE='single_value'
+BUN_QUOTE_DOUBLE="double_value"
+BUN_QUOTE_BACKTICK=\`backtick_value\``;
+    const tmpEnv = `/tmp/test-quotes-${Date.now()}.env`;
+    await Bun.write(tmpEnv, envContent);
+
+    const proc = Bun.spawn({
+      cmd: ["bun", "--env-file", tmpEnv, "-e",
+        "console.log(JSON.stringify({s: process.env.BUN_QUOTE_SINGLE, d: process.env.BUN_QUOTE_DOUBLE, b: process.env.BUN_QUOTE_BACKTICK}))"],
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const output = await new Response(proc.stdout).text();
+    await proc.exited;
+    // JUSTIFIED: output is a JSON string from our console.log; narrowing to the shape
+    const parsed = JSON.parse(output.trim()) as { s: string; d: string; b: string };
+    expect(parsed.s).toBe("single_value");
+    expect(parsed.d).toBe("double_value");
+    expect(parsed.b).toBe("backtick_value");
+  });
+
   // Ref: https://bun.com/docs/runtime/color#flexible-input
   it("Bun.color accepts all flexible input types and normalizes to css", () => {
     // Ref: https://bun.com/docs/runtime/color#flexible-input
