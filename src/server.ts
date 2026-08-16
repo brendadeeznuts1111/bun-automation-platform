@@ -30,9 +30,19 @@ import { setWSPublisher } from "./workers/pool";
 
 // --- Config ----------------------------------------------------------------
 
-const PORT = parseInt(process.env.PORT ?? "3000", 10);
-const HOST = process.env.HOST ?? "0.0.0.0";
-const NODE_ENV = process.env.NODE_ENV ?? "development";
+// Ref: https://bun.com/docs/runtime/env#typescript-integration
+// Helper for validated env access — throws if a required var is missing.
+function getEnv(key: string, fallback?: string): string {
+  const value = Bun.env[key];
+  if (value === undefined && fallback === undefined) {
+    throw new Error(`Missing required environment variable: ${key}`);
+  }
+  return value ?? fallback!;
+}
+
+const PORT = parseInt(getEnv("PORT", "3000"), 10);
+const HOST = getEnv("HOST", "0.0.0.0");
+const NODE_ENV = getEnv("NODE_ENV", "development");
 
 // --- Feature flags ---------------------------------------------------------
 // R3: Conditionally enable TLS, HTTP/3, and dev dashboard behind flags.
