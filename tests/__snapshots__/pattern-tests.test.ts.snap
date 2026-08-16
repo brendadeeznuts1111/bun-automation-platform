@@ -1,0 +1,36 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`Snapshot testing complex object snapshot 1`] = `
+{
+  "email": "john@example.com",
+  "id": 1,
+  "name": "John Doe",
+  "tags": [
+    "developer",
+    "javascript",
+    "bun",
+  ],
+}
+`;
+
+exports[`Snapshot testing snapshot with property matchers 1`] = `
+{
+  "createdAt": Any<String>,
+  "id": Any<Number>,
+  "name": "John",
+}
+`;
+
+exports[`Snapshot testing number snapshot 1`] = `42`;
+
+exports[`Snapshot testing array snapshot 1`] = `
+[
+  2,
+  4,
+  6,
+  8,
+  10,
+]
+`;
+
+exports[`Snapshot testing string snapshot 1`] = `"foo"`;
