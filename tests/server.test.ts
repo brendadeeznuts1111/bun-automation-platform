@@ -1196,6 +1196,137 @@ console.log(color("red", "number"));`;
     expect(res.status).toBe(404);
   });
 
+  // --- PWA manifest comparison + validation ---
+  // Ref: https://web.dev/articles/install-criteria
+
+  it("GET /api/pwa/compare returns BUN-DEV vs bun.com comparison", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/pwa/compare`);
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to the comparison shape
+    const data = (await res.json()) as {
+      summary: {
+        totalFields: number; matchingFields: number; differingFields: number;
+        ourIconCount: number; theirIconCount: number;
+        ourInstallable: boolean; theirInstallable: boolean;
+        ourScore: number; theirScore: number;
+      };
+      fields: { field: string; ours: string; theirs: string; match: boolean }[];
+      icons: { size: string; ours: boolean; theirs: boolean }[];
+      validation: {
+        ours: { label: string; installable: boolean; score: number; errors: string[]; warnings: string[] };
+        theirs: { label: string; installable: boolean; score: number; errors: string[]; warnings: string[] };
+      };
+    };
+    // Summary
+    expect(data.summary.totalFields).toBeGreaterThan(0);
+    expect(data.summary.ourInstallable).toBe(true);
+    expect(data.summary.theirInstallable).toBe(true);
+    expect(data.summary.ourScore).toBeGreaterThanOrEqual(80);
+    expect(data.summary.theirScore).toBeGreaterThanOrEqual(80);
+    // Fields comparison
+    expect(data.fields.length).toBeGreaterThan(5);
+    const nameField = data.fields.find((f) => f.field === "name");
+    expect(nameField).toBeDefined();
+    expect(nameField!.ours).toContain("BUN-DEV");
+    expect(nameField!.theirs).toContain("Bun");
+    expect(nameField!.match).toBe(false);
+    // Icons comparison
+    expect(data.icons.length).toBeGreaterThan(5);
+    const icon192 = data.icons.find((i) => i.size === "192x192");
+    expect(icon192).toBeDefined();
+    expect(icon192!.ours).toBe(true);
+    expect(icon192!.theirs).toBe(true);
+    // Validation
+    expect(data.validation.ours.label).toBe("BUN-DEV");
+    expect(data.validation.theirs.label).toBe("bun.com");
+    expect(data.validation.ours.errors.length).toBe(0);
+    expect(data.validation.theirs.errors.length).toBe(0);
+  });
+
+  it("GET /api/pwa/compare shows BUN-DEV has maskable icon but bun.com does not", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/pwa/compare`);
+    // JUSTIFIED: res.json() returns unknown; narrowing to the comparison shape
+    const data = (await res.json()) as {
+      validation: {
+        ours: { checks: { check: string; pass: boolean }[] };
+        theirs: { checks: { check: string; pass: boolean }[] };
+      };
+    };
+    const ourMaskable = data.validation.ours.checks.find((c) => c.check === "Has maskable icon");
+    const theirMaskable = data.validation.theirs.checks.find((c) => c.check === "Has maskable icon");
+    expect(ourMaskable).toBeDefined();
+    expect(ourMaskable!.pass).toBe(true);
+    expect(theirMaskable).toBeDefined();
+    expect(theirMaskable!.pass).toBe(false);
+  });
+
+  it("GET /api/pwa/validate returns BUN-DEV installability validation", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/pwa/validate`);
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to the validation shape
+    const data = (await res.json()) as {
+      manifest: string; installable: boolean; score: number;
+      errors: string[]; warnings: string[];
+      checks: { category: string; check: string; pass: boolean; severity: string; detail: string }[];
+    };
+    expect(data.manifest).toBe("BUN-DEV");
+    expect(data.installable).toBe(true);
+    expect(data.score).toBeGreaterThanOrEqual(80);
+    expect(data.errors.length).toBe(0);
+    // Required checks
+    const requiredChecks = data.checks.filter((c) => c.category === "required");
+    expect(requiredChecks.length).toBeGreaterThan(0);
+    for (const c of requiredChecks) {
+      expect(c.pass).toBe(true);
+    }
+    // Should have maskable icon check
+    const maskable = data.checks.find((c) => c.check === "maskable icon");
+    expect(maskable).toBeDefined();
+    expect(maskable!.pass).toBe(true);
+  });
+
+  it("GET /api/pwa/validate has all required fields passing", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/pwa/validate`);
+    // JUSTIFIED: res.json() returns unknown; narrowing to the validation shape
+    const data = (await res.json()) as {
+      checks: { category: string; check: string; pass: boolean; severity: string }[];
+    };
+    const required = data.checks.filter((c) => c.category === "required");
+    for (const c of required) {
+      expect(c.pass).toBe(true);
+    }
+  });
+
+  it("GET /api/pwa/validate includes service worker check", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/pwa/validate`);
+    // JUSTIFIED: res.json() returns unknown; narrowing to the validation shape
+    const data = (await res.json()) as {
+      checks: { check: string; pass: boolean; detail: string }[];
+    };
+    const swCheck = data.checks.find((c) => c.check === "service worker");
+    expect(swCheck).toBeDefined();
+    expect(swCheck!.pass).toBe(true);
+    expect(swCheck!.detail).toBe("/sw.js");
+  });
+
+  it("dashboard includes links to compare and validate endpoints", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
+    const html = await res.text();
+    expect(html).toContain("/api/pwa/compare");
+    expect(html).toContain("/api/pwa/validate");
+    expect(html).toContain("loadPWACompare()");
+    expect(html).toContain("loadPWAValidate()");
+  });
+
+  it("dashboard has collapsible comparison and validation panels", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
+    const html = await res.text();
+    expect(html).toContain('id="pwa-compare-panel"');
+    expect(html).toContain('id="pwa-compare-content"');
+    expect(html).toContain('id="pwa-validate-panel"');
+    expect(html).toContain('id="pwa-validate-content"');
+  });
+
   // --- Auth ---
 
   it("POST /login rejects invalid credentials and audits failure", async () => {

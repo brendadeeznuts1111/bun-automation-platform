@@ -892,8 +892,28 @@ const dashboardHandler = withMiddleware((): Response => {
       <a href="/manifest.json">manifest.json</a>
       <a href="/sw.js">sw.js</a>
       <a href="/icons/icon-512.png">icon (512px)</a>
+      <a href="/api/pwa/validate">validate</a>
+      <a href="/api/pwa/compare">vs bun.com</a>
       <a href="/bun-com/manifest.json">bun.com manifest</a>
       <a href="/bun-com/icons/icon-512x512.png">bun.com icon</a>
+    </div>
+  </div>
+
+  <div class="pwa-section" id="pwa-compare-panel" style="margin-top: 0.5rem;">
+    <h3 style="color: var(--accent); cursor: pointer;" onclick="loadPWACompare()">
+      Manifest Comparison: BUN-DEV vs bun.com ▸
+    </h3>
+    <div id="pwa-compare-content" style="display: none; margin-top: 0.5rem;">
+      <p style="color: var(--fg-dim); font-size: 0.8rem;">Loading comparison...</p>
+    </div>
+  </div>
+
+  <div class="pwa-section" id="pwa-validate-panel" style="margin-top: 0.5rem;">
+    <h3 style="color: var(--accent); cursor: pointer;" onclick="loadPWAValidate()">
+      Installability Validation ▸
+    </h3>
+    <div id="pwa-validate-content" style="display: none; margin-top: 0.5rem;">
+      <p style="color: var(--fg-dim); font-size: 0.8rem;">Loading validation...</p>
     </div>
   </div>
   ` : ""}
@@ -913,6 +933,8 @@ const dashboardHandler = withMiddleware((): Response => {
     <li><code>GET /api/env</code> — environment variable inspection</li>
     <li><a href="/manifest.json">/manifest.json</a> — PWA manifest</li>
     <li><a href="/sw.js">/sw.js</a> — service worker</li>
+    <li><a href="/api/pwa/validate">/api/pwa/validate</a> — PWA installability validation</li>
+    <li><a href="/api/pwa/compare">/api/pwa/compare</a> — BUN-DEV vs bun.com manifest comparison</li>
     <li><code>POST /api/markdown</code> — render markdown to HTML</li>
   </ul>
 
@@ -947,6 +969,101 @@ const dashboardHandler = withMiddleware((): Response => {
       const s = uptimeStart % 60;
       document.getElementById('uptime').textContent = m > 0 ? m + 'm ' + s + 's' : s + 's';
     }, 1000);
+
+    // PWA manifest comparison panel
+    async function loadPWACompare() {
+      const content = document.getElementById('pwa-compare-content');
+      const h3 = document.querySelector('#pwa-compare-panel h3');
+      if (content.style.display === 'none') {
+        content.style.display = 'block';
+        h3.textContent = 'Manifest Comparison: BUN-DEV vs bun.com ▾';
+        content.innerHTML = '<p style="color: var(--fg-dim); font-size: 0.8rem;">Loading...</p>';
+        try {
+          const res = await fetch('/api/pwa/compare');
+          const data = await res.json();
+          const s = data.summary;
+          let html = '<table><tr><th>Metric</th><th>BUN-DEV</th><th>bun.com</th></tr>';
+          html += '<tr><td>Installable</td><td>' + (s.ourInstallable ? '✅ Yes' : '❌ No') + '</td><td>' + (s.theirInstallable ? '✅ Yes' : '❌ No') + '</td></tr>';
+          html += '<tr><td>Score</td><td>' + s.ourScore + '%</td><td>' + s.theirScore + '%</td></tr>';
+          html += '<tr><td>Icon count</td><td>' + s.ourIconCount + '</td><td>' + s.theirIconCount + '</td></tr>';
+          html += '<tr><td>Matching fields</td><td colspan="2">' + s.matchingFields + '/' + s.totalFields + '</td></tr>';
+          html += '</table>';
+
+          html += '<h4 style="color:var(--info); margin: 0.75rem 0 0.25rem; font-size: 0.85rem;">Field Comparison</h4>';
+          html += '<table><tr><th>Field</th><th>BUN-DEV</th><th>bun.com</th><th>Match</th></tr>';
+          data.fields.forEach(f => {
+            html += '<tr><td>' + f.field + '</td><td style="font-size:0.8rem;">' + f.ours + '</td><td style="font-size:0.8rem;">' + f.theirs + '</td><td>' + (f.match ? '✅' : '⚠️') + '</td></tr>';
+          });
+          html += '</table>';
+
+          html += '<h4 style="color:var(--info); margin: 0.75rem 0 0.25rem; font-size: 0.85rem;">Icon Sizes</h4>';
+          html += '<table><tr><th>Size</th><th>BUN-DEV</th><th>bun.com</th></tr>';
+          data.icons.forEach(i => {
+            html += '<tr><td>' + i.size + '</td><td>' + (i.ours ? '✅' : '—') + '</td><td>' + (i.theirs ? '✅' : '—') + '</td></tr>';
+          });
+          html += '</table>';
+
+          // Validation details
+          const v = data.validation;
+          html += '<h4 style="color:var(--info); margin: 0.75rem 0 0.25rem; font-size: 0.85rem;">BUN-DEV Validation (' + v.ours.score + '%)</h4>';
+          html += '<table><tr><th>Check</th><th>Pass</th></tr>';
+          v.ours.checks.forEach(c => {
+            html += '<tr><td>' + c.check + '</td><td>' + (c.pass ? '✅' : '❌') + '</td></tr>';
+          });
+          if (v.ours.errors.length) html += '<tr><td colspan="2" style="color:var(--err);">Errors: ' + v.ours.errors.join(', ') + '</td></tr>';
+          if (v.ours.warnings.length) html += '<tr><td colspan="2" style="color:var(--warn);">Warnings: ' + v.ours.warnings.join(', ') + '</td></tr>';
+          html += '</table>';
+
+          html += '<h4 style="color:var(--info); margin: 0.75rem 0 0.25rem; font-size: 0.85rem;">bun.com Validation (' + v.theirs.score + '%)</h4>';
+          html += '<table><tr><th>Check</th><th>Pass</th></tr>';
+          v.theirs.checks.forEach(c => {
+            html += '<tr><td>' + c.check + '</td><td>' + (c.pass ? '✅' : '❌') + '</td></tr>';
+          });
+          if (v.theirs.errors.length) html += '<tr><td colspan="2" style="color:var(--err);">Errors: ' + v.theirs.errors.join(', ') + '</td></tr>';
+          if (v.theirs.warnings.length) html += '<tr><td colspan="2" style="color:var(--warn);">Warnings: ' + v.theirs.warnings.join(', ') + '</td></tr>';
+          html += '</table>';
+
+          content.innerHTML = html;
+        } catch (e) {
+          content.innerHTML = '<p style="color:var(--err); font-size: 0.8rem;">Error: ' + e.message + '</p>';
+        }
+      } else {
+        content.style.display = 'none';
+        h3.textContent = 'Manifest Comparison: BUN-DEV vs bun.com ▸';
+      }
+    }
+
+    // PWA validation panel
+    async function loadPWAValidate() {
+      const content = document.getElementById('pwa-validate-content');
+      const h3 = document.querySelector('#pwa-validate-panel h3');
+      if (content.style.display === 'none') {
+        content.style.display = 'block';
+        h3.textContent = 'Installability Validation ▾';
+        content.innerHTML = '<p style="color: var(--fg-dim); font-size: 0.8rem;">Loading...</p>';
+        try {
+          const res = await fetch('/api/pwa/validate');
+          const data = await res.json();
+          let html = '<div style="margin-bottom: 0.5rem;">';
+          html += '<span style="font-size: 1.2rem; color: ' + (data.installable ? 'var(--accent)' : 'var(--err)') + ';">';
+          html += data.installable ? '✅ Installable' : '❌ Not Installable';
+          html += '</span> <span style="color: var(--fg-dim); font-size: 0.85rem;">(' + data.score + '% score)</span>';
+          html += '</div>';
+          html += '<table><tr><th>Category</th><th>Check</th><th>Pass</th><th>Detail</th></tr>';
+          data.checks.forEach(c => {
+            const color = c.pass ? 'var(--accent)' : c.severity === 'error' ? 'var(--err)' : c.severity === 'warning' ? 'var(--warn)' : 'var(--fg-dim)';
+            html += '<tr><td style="font-size:0.75rem; color:var(--fg-dim);">' + c.category + '</td><td>' + c.check + '</td><td style="color:' + color + ';">' + (c.pass ? '✅' : '❌') + '</td><td style="font-size:0.8rem; color:var(--fg-dim);">' + c.detail + '</td></tr>';
+          });
+          html += '</table>';
+          content.innerHTML = html;
+        } catch (e) {
+          content.innerHTML = '<p style="color:var(--err); font-size: 0.8rem;">Error: ' + e.message + '</p>';
+        }
+      } else {
+        content.style.display = 'none';
+        h3.textContent = 'Installability Validation ▸';
+      }
+    }
   </script>
   ${ENABLE_PWA ? `<script>
     // PWA install prompt
@@ -1185,6 +1302,255 @@ if (ENABLE_PWA) {
       },
     ),
   };
+
+  // PWA manifest comparison — diffs BUN-DEV manifest against the downloaded
+  // bun.com manifest, field by field, and validates both against Chrome's
+  // installability criteria.
+  // Ref: https://web.dev/articles/install-criteria
+  routes["/api/pwa/compare"] = {
+    GET: withMiddleware(async (): Promise<Response> => {
+      const ours = await Bun.file("public/manifest.json").json();
+      const theirs = await Bun.file("public/bun-com/manifest.json").json();
+
+      // --- Field-by-field comparison ---
+      type Manifest = {
+        name?: string; short_name?: string; description?: string;
+        start_url?: string; scope?: string; display?: string;
+        orientation?: string; theme_color?: string; background_color?: string;
+        icons?: { src: string; sizes: string; type: string; purpose?: string }[];
+      };
+      // JUSTIFIED: Bun.file().json() returns Promise<unknown>; narrowing to manifest shape
+      const o = ours as Manifest; // JUSTIFIED: see above
+      const t = theirs as Manifest; // JUSTIFIED: see above
+
+      const fields: { field: string; ours: string; theirs: string; match: boolean }[] = [];
+      const compareField = (field: keyof Manifest): void => {
+        const ov = JSON.stringify(o[field] ?? null);
+        const tv = JSON.stringify(t[field] ?? null);
+        fields.push({ field, ours: ov, theirs: tv, match: ov === tv });
+      };
+      compareField("name");
+      compareField("short_name");
+      compareField("description");
+      compareField("start_url");
+      compareField("scope");
+      compareField("display");
+      compareField("orientation");
+      compareField("theme_color");
+      compareField("background_color");
+
+      // --- Icon comparison ---
+      const ourIcons = (o.icons ?? []).map((i) => i.sizes);
+      const theirIcons = (t.icons ?? []).map((i) => i.sizes);
+      const allSizes = [...new Set([...ourIcons, ...theirIcons])].sort();
+      const iconComparison = allSizes.map((size) => ({
+        size,
+        ours: ourIcons.includes(size),
+        theirs: theirIcons.includes(size),
+      }));
+
+      // --- Installability validation (Chrome criteria) ---
+      // Ref: https://web.dev/articles/install-criteria
+      const validate = (manifest: Manifest, label: string) => {
+        const errors: string[] = [];
+        const warnings: string[] = [];
+        const checks: { check: string; pass: boolean }[] = [];
+
+        // Required: name or short_name
+        const hasName = !!(manifest.name || manifest.short_name);
+        checks.push({ check: "Has name or short_name", pass: hasName });
+        if (!hasName) errors.push("Missing name and short_name");
+
+        // Required: icons with at least 192x192 and 512x512
+        const icons = manifest.icons ?? [];
+        const has192 = icons.some((i) => i.sizes === "192x192");
+        const has512 = icons.some((i) => i.sizes === "512x512");
+        checks.push({ check: "Has 192x192 icon", pass: has192 });
+        checks.push({ check: "Has 512x512 icon", pass: has512 });
+        if (!has192) errors.push("Missing 192x192 icon");
+        if (!has512) errors.push("Missing 512x512 icon");
+
+        // Required: manifest
+        checks.push({ check: "Manifest is valid JSON", pass: true });
+
+        // Recommended: start_url
+        const hasStartUrl = !!manifest.start_url;
+        checks.push({ check: "Has start_url", pass: hasStartUrl });
+        if (!hasStartUrl) errors.push("Missing start_url");
+
+        // Recommended: display mode
+        const hasDisplay = !!manifest.display;
+        checks.push({ check: "Has display mode", pass: hasDisplay });
+        if (!hasDisplay) warnings.push("No display mode specified");
+
+        // Recommended: theme_color
+        const hasTheme = !!manifest.theme_color;
+        checks.push({ check: "Has theme_color", pass: hasTheme });
+        if (!hasTheme) warnings.push("No theme_color specified");
+
+        // Recommended: background_color
+        const hasBg = !!manifest.background_color;
+        checks.push({ check: "Has background_color", pass: hasBg });
+        if (!hasBg) warnings.push("No background_color specified");
+
+        // Recommended: maskable icon (Android adaptive icon)
+        const hasMaskable = icons.some((i) => i.purpose === "maskable");
+        checks.push({ check: "Has maskable icon", pass: hasMaskable });
+        if (!hasMaskable) warnings.push("No maskable icon (Android adaptive icons)");
+
+        // Recommended: short_name (for home screen)
+        const hasShortName = !!manifest.short_name;
+        checks.push({ check: "Has short_name", pass: hasShortName });
+        if (!hasShortName) warnings.push("No short_name (needed for home screen)");
+
+        // Service worker check (we know we have one)
+        checks.push({ check: "Has service worker (/sw.js)", pass: true });
+
+        return {
+          label,
+          checks,
+          errors,
+          warnings,
+          installable: errors.length === 0,
+          score: Math.round((checks.filter((c) => c.pass).length / checks.length) * 100),
+        };
+      };
+
+      const ourValidation = validate(o, "BUN-DEV");
+      const theirValidation = validate(t, "bun.com");
+
+      // --- Summary ---
+      const matchingFields = fields.filter((f) => f.match).length;
+      const summary = {
+        totalFields: fields.length,
+        matchingFields,
+        differingFields: fields.length - matchingFields,
+        ourIconCount: ourIcons.length,
+        theirIconCount: theirIcons.length,
+        ourInstallable: ourValidation.installable,
+        theirInstallable: theirValidation.installable,
+        ourScore: ourValidation.score,
+        theirScore: theirValidation.score,
+      };
+
+      return Response.json({
+        summary,
+        fields,
+        icons: iconComparison,
+        validation: { ours: ourValidation, theirs: theirValidation },
+      }, {
+        headers: { "Cache-Control": "no-cache" },
+      });
+    }),
+  };
+
+  // PWA manifest validation — validates our manifest against Chrome criteria
+  routes["/api/pwa/validate"] = {
+    GET: withMiddleware(async (): Promise<Response> => {
+      const manifest = await Bun.file("public/manifest.json").json();
+      const swExists = await Bun.file("public/sw.js").exists();
+
+      type M = {
+        name?: string; short_name?: string; description?: string;
+        start_url?: string; scope?: string; display?: string;
+        orientation?: string; theme_color?: string; background_color?: string;
+        icons?: { src: string; sizes: string; type: string; purpose?: string }[];
+      };
+      // JUSTIFIED: Bun.file().json() returns Promise<unknown>; narrowing to manifest shape
+      const m = manifest as M; // JUSTIFIED: see above
+      const icons = m.icons ?? [];
+
+      const checks: {
+        category: string; check: string; pass: boolean; severity: string;
+        detail: string;
+      }[] = [];
+
+      // --- Required fields ---
+      checks.push({
+        category: "required", check: "name", pass: !!m.name,
+        severity: "error", detail: m.name ? `"${m.name}"` : "missing",
+      });
+      checks.push({
+        category: "required", check: "short_name", pass: !!m.short_name,
+        severity: "error", detail: m.short_name ? `"${m.short_name}"` : "missing",
+      });
+      checks.push({
+        category: "required", check: "start_url", pass: !!m.start_url,
+        severity: "error", detail: m.start_url ?? "missing",
+      });
+      checks.push({
+        category: "required", check: "icons[192x192]", pass: icons.some((i) => i.sizes === "192x192"),
+        severity: "error", detail: icons.find((i) => i.sizes === "192x192")?.src ?? "missing",
+      });
+      checks.push({
+        category: "required", check: "icons[512x512]", pass: icons.some((i) => i.sizes === "512x512"),
+        severity: "error", detail: icons.find((i) => i.sizes === "512x512")?.src ?? "missing",
+      });
+      checks.push({
+        category: "required", check: "service worker", pass: swExists,
+        severity: "error", detail: swExists ? "/sw.js" : "missing",
+      });
+
+      // --- Recommended fields ---
+      checks.push({
+        category: "recommended", check: "display", pass: !!m.display,
+        severity: "warning", detail: m.display ?? "missing",
+      });
+      checks.push({
+        category: "recommended", check: "theme_color", pass: !!m.theme_color,
+        severity: "warning", detail: m.theme_color ?? "missing",
+      });
+      checks.push({
+        category: "recommended", check: "background_color", pass: !!m.background_color,
+        severity: "warning", detail: m.background_color ?? "missing",
+      });
+      checks.push({
+        category: "recommended", check: "scope", pass: !!m.scope,
+        severity: "warning", detail: m.scope ?? "missing",
+      });
+      checks.push({
+        category: "recommended", check: "orientation", pass: !!m.orientation,
+        severity: "warning", detail: m.orientation ?? "missing",
+      });
+      checks.push({
+        category: "recommended", check: "description", pass: !!m.description,
+        severity: "info", detail: m.description ?? "missing",
+      });
+
+      // --- Icon quality ---
+      checks.push({
+        category: "icon-quality", check: "maskable icon", pass: icons.some((i) => i.purpose === "maskable"),
+        severity: "warning", detail: icons.find((i) => i.purpose === "maskable")?.src ?? "missing",
+      });
+      checks.push({
+        category: "icon-quality", check: "icon count >= 3", pass: icons.length >= 3,
+        severity: "info", detail: `${icons.length} icons`,
+      });
+      checks.push({
+        category: "icon-quality", check: "has 1024x1024", pass: icons.some((i) => i.sizes === "1024x1024"),
+        severity: "info", detail: icons.find((i) => i.sizes === "1024x1024")?.src ?? "missing",
+      });
+      checks.push({
+        category: "icon-quality", check: "has SVG icon", pass: icons.some((i) => i.type === "image/svg+xml"),
+        severity: "info", detail: icons.find((i) => i.type === "image/svg+xml")?.src ?? "missing",
+      });
+
+      const errors = checks.filter((c) => c.severity === "error" && !c.pass);
+      const warnings = checks.filter((c) => c.severity === "warning" && !c.pass);
+      const passCount = checks.filter((c) => c.pass).length;
+
+      return Response.json({
+        manifest: "BUN-DEV",
+        installable: errors.length === 0,
+        score: Math.round((passCount / checks.length) * 100),
+        errors: errors.map((c) => c.check),
+        warnings: warnings.map((c) => c.check),
+        checks,
+      }, {
+        headers: { "Cache-Control": "no-cache" },
+      });
+    }),
+  };
   // Serve PWA icons — /icons/:filename.png
   routes["/icons/:filename"] = {
     GET: withMiddleware<"/icons/:filename">(async (req: BunRequest<"/icons/:filename">): Promise<Response> => {
@@ -1372,6 +1738,9 @@ console.log(`  GET  /api/env        — environment variable inspection (public)
 if (ENABLE_PWA) {
   console.log(`  GET  /manifest.json  — PWA manifest (installable Chrome app)`);
   console.log(`  GET  /icons/:name    — PWA icons (png)`);
+  console.log(`  GET  /sw.js          — service worker`);
+  console.log(`  GET  /api/pwa/validate — PWA installability check`);
+  console.log(`  GET  /api/pwa/compare  — BUN-DEV vs bun.com manifest diff`);
 }
 if (ENABLE_DEV_DASHBOARD) {
   console.log(`  GET  /dashboard      — dev dashboard (public)`);
