@@ -84,6 +84,7 @@ describe("reactVersion option threshold", () => {
     [1, "Symbol(react.element)"],
   ])("reactVersion %f → Symbol(react.element)", (version, expected) => {
     // JUSTIFIED: cast to unknown then to ReactOptions — testing runtime threshold
+    // JUSTIFIED: narrowing for property access in test assertion
     const opts = { reactVersion: version } as unknown as Parameters<typeof Bun.markdown.react>[2];
     const el = react("# Test", undefined, opts);
     expect(String(el.$$typeof)).toBe(expected);
@@ -97,6 +98,7 @@ describe("reactVersion option threshold", () => {
     [100, "Symbol(react.transitional.element)"],
   ])("reactVersion %f → Symbol(react.transitional.element)", (version, expected) => {
     // JUSTIFIED: cast to unknown then to ReactOptions — testing runtime threshold
+    // JUSTIFIED: narrowing for property access in test assertion
     const opts = { reactVersion: version } as unknown as Parameters<typeof Bun.markdown.react>[2];
     const el = react("# Test", undefined, opts);
     expect(String(el.$$typeof)).toBe(expected);
@@ -104,9 +106,11 @@ describe("reactVersion option threshold", () => {
 
   it("threshold is exactly 19: < 19 → element, >= 19 → transitional", () => {
     // JUSTIFIED: 18.999 and 19.001 are not in the 18|19 type union — testing runtime threshold
+    // JUSTIFIED: narrowing for property access in test assertion
     const below = react("# T", undefined, { reactVersion: 18.999 } as unknown as Parameters<typeof Bun.markdown.react>[2]);
     const at = react("# T", undefined, { reactVersion: 19 });
     // JUSTIFIED: 19.001 not in 18|19 type union — testing above-threshold
+    // JUSTIFIED: narrowing for property access in test assertion
     const above = react("# T", undefined, { reactVersion: 19.001 } as unknown as Parameters<typeof Bun.markdown.react>[2]);
     expect(String(below.$$typeof)).toBe("Symbol(react.element)");
     expect(String(at.$$typeof)).toBe("Symbol(react.transitional.element)");
@@ -122,6 +126,7 @@ describe("reactVersion non-number → default (transitional)", () => {
     [undefined, "undefined"],
   ])("reactVersion %s (%s) → transitional (non-number falls back to default)", (version) => {
     // JUSTIFIED: cast to unknown then to ReactOptions — testing non-number runtime behavior
+    // JUSTIFIED: narrowing for property access in test assertion
     const opts = { reactVersion: version } as unknown as Parameters<typeof Bun.markdown.react>[2];
     const el = react("# Test", undefined, opts);
     expect(String(el.$$typeof)).toBe("Symbol(react.transitional.element)");
@@ -309,8 +314,10 @@ describe("Element object properties", () => {
 
   it("no _owner field (React internal)", () => {
     // JUSTIFIED: ReactEl doesn't include _owner; extending to check React internal field
+    // JUSTIFIED: narrowing for property access in test assertion
     const el19 = react("# Test") as unknown as ReactEl & { _owner?: unknown };
     // JUSTIFIED: same cast for React 18 variant
+    // JUSTIFIED: narrowing for property access in test assertion
     const el18 = react("# Test", undefined, { reactVersion: 18 }) as unknown as ReactEl & { _owner?: unknown };
     expect(el19._owner).toBeUndefined();
     expect(el18._owner).toBeUndefined();
@@ -318,8 +325,10 @@ describe("Element object properties", () => {
 
   it("no _store field (React internal)", () => {
     // JUSTIFIED: ReactEl doesn't include _store; extending to check React internal field
+    // JUSTIFIED: narrowing for property access in test assertion
     const el19 = react("# Test") as unknown as ReactEl & { _store?: unknown };
     // JUSTIFIED: same cast for React 18 variant
+    // JUSTIFIED: narrowing for property access in test assertion
     const el18 = react("# Test", undefined, { reactVersion: 18 }) as unknown as ReactEl & { _store?: unknown };
     expect(el19._store).toBeUndefined();
     expect(el18._store).toBeUndefined();
@@ -376,6 +385,7 @@ describe("Custom component $$typeof normalization", () => {
   it("React 19 tree: custom component element gets transitional.element $$typeof", () => {
     const tree = react("# Test", { h1: customComp as never });
     // JUSTIFIED: children is an array; first element is the h1 custom component
+    // JUSTIFIED: narrowing for property access in test assertion
     const h1 = (tree.props.children as unknown[])[0] as unknown as CustomEl;
     expect(String(h1.$$typeof)).toBe("Symbol(react.transitional.element)");
     expect(typeof h1.type).toBe("function");
@@ -385,6 +395,7 @@ describe("Custom component $$typeof normalization", () => {
   it("React 18 tree: custom component element gets react.element $$typeof", () => {
     const tree = react("# Test", { h1: customComp as never }, { reactVersion: 18 });
     // JUSTIFIED: children is an array; first element is the h1 custom component
+    // JUSTIFIED: narrowing for property access in test assertion
     const h1 = (tree.props.children as unknown[])[0] as unknown as CustomEl;
     expect(String(h1.$$typeof)).toBe("Symbol(react.element)");
     expect(typeof h1.type).toBe("function");
@@ -396,6 +407,7 @@ describe("Custom component $$typeof normalization", () => {
     const trackingComp = (_props: { children?: unknown }) => { called = true; return null; };
     const tree = react("# Test", { h1: trackingComp as never });
     // JUSTIFIED: children is an array; first element is the custom component element
+    // JUSTIFIED: narrowing for property access in test assertion
     const h1 = (tree.props.children as unknown[])[0] as unknown as CustomEl;
     expect(called).toBe(false);
     expect(h1.type).toBe(trackingComp);
@@ -405,8 +417,10 @@ describe("Custom component $$typeof normalization", () => {
     const tree19 = react("# Test", { h1: customComp as never });
     const tree18 = react("# Test", { h1: customComp as never }, { reactVersion: 18 });
     // JUSTIFIED: children is an array; first element is the custom component element
+    // JUSTIFIED: narrowing for property access in test assertion
     const h1_19 = (tree19.props.children as unknown[])[0] as unknown as CustomEl;
     // JUSTIFIED: same array access for React 18 tree
+    // JUSTIFIED: narrowing for property access in test assertion
     const h1_18 = (tree18.props.children as unknown[])[0] as unknown as CustomEl;
     expect(h1_19.$$typeof).toBe(tree19.$$typeof);
     expect(h1_18.$$typeof).toBe(tree18.$$typeof);
@@ -577,6 +591,7 @@ describe("Element types and props (comprehensive)", () => {
     const tree = react("# H1\n## H2\n### H3\n#### H4\n##### H5\n###### H6");
     const children = tree.props.children as unknown[];
     // JUSTIFIED: narrowing children array elements to El for type checking
+    // JUSTIFIED: narrowing for property access in test assertion
     const types = children.map(c => (c as unknown as El).type);
     expect(types).toEqual(["h1", "h2", "h3", "h4", "h5", "h6"]);
   });
@@ -585,6 +600,7 @@ describe("Element types and props (comprehensive)", () => {
     const tree = react("**bold**");
     const p = firstChild(tree);
     // JUSTIFIED: narrowing p.children array to first element
+    // JUSTIFIED: narrowing for property access in test assertion
     const strong = (p.props.children as unknown[])[0] as unknown as El;
     expect(strong.type).toBe("strong");
   });
@@ -593,6 +609,7 @@ describe("Element types and props (comprehensive)", () => {
     const tree = react("*italic*");
     const p = firstChild(tree);
     // JUSTIFIED: narrowing p.children array to first element
+    // JUSTIFIED: narrowing for property access in test assertion
     const em = (p.props.children as unknown[])[0] as unknown as El;
     expect(em.type).toBe("em");
   });
@@ -601,6 +618,7 @@ describe("Element types and props (comprehensive)", () => {
     const tree = react("`code`");
     const p = firstChild(tree);
     // JUSTIFIED: narrowing p.children array to first element
+    // JUSTIFIED: narrowing for property access in test assertion
     const code = (p.props.children as unknown[])[0] as unknown as El;
     expect(code.type).toBe("code");
   });
@@ -609,6 +627,7 @@ describe("Element types and props (comprehensive)", () => {
     const tree = react("[text](https://x.com)");
     const p = firstChild(tree);
     // JUSTIFIED: narrowing p.children array to first element
+    // JUSTIFIED: narrowing for property access in test assertion
     const a = (p.props.children as unknown[])[0] as unknown as El;
     expect(a.type).toBe("a");
     expect(a.props.href).toBe("https://x.com");
@@ -618,6 +637,7 @@ describe("Element types and props (comprehensive)", () => {
     const tree = react("![alt text](https://x.com/i.png)");
     const p = firstChild(tree);
     // JUSTIFIED: narrowing p.children array to first element
+    // JUSTIFIED: narrowing for property access in test assertion
     const img = (p.props.children as unknown[])[0] as unknown as El;
     expect(img.type).toBe("img");
     expect(img.props.src).toBe("https://x.com/i.png");
@@ -631,8 +651,10 @@ describe("Element types and props (comprehensive)", () => {
     const items = ul.props.children as unknown[];
     expect(items.length).toBe(2);
     // JUSTIFIED: narrowing li elements for type checking
+    // JUSTIFIED: narrowing for property access in test assertion
     expect((items[0] as unknown as El).type).toBe("li");
     // JUSTIFIED: narrowing unknown array element to El for type check
+    // JUSTIFIED: narrowing for property access in test assertion
     expect((items[1] as unknown as El).type).toBe("li");
   });
 
@@ -648,8 +670,10 @@ describe("Element types and props (comprehensive)", () => {
     const ul = firstChild(tree);
     const items = ul.props.children as unknown[];
     // JUSTIFIED: narrowing li elements for checked prop checking
+    // JUSTIFIED: narrowing for property access in test assertion
     expect((items[0] as unknown as El).props.checked).toBe(false);
     // JUSTIFIED: narrowing unknown array element to El for props check
+    // JUSTIFIED: narrowing for property access in test assertion
     expect((items[1] as unknown as El).props.checked).toBe(true);
   });
 
@@ -658,6 +682,7 @@ describe("Element types and props (comprehensive)", () => {
     const bq = firstChild(tree);
     expect(bq.type).toBe("blockquote");
     // JUSTIFIED: narrowing blockquote children for p element check
+    // JUSTIFIED: narrowing for property access in test assertion
     const p = (bq.props.children as unknown[])[0] as unknown as El;
     expect(p.type).toBe("p");
   });
@@ -687,8 +712,10 @@ describe("Element types and props (comprehensive)", () => {
     const table = firstChild(tree);
     expect(table.type).toBe("table");
     // JUSTIFIED: narrowing table children for thead/tbody check
+    // JUSTIFIED: narrowing for property access in test assertion
     const thead = (table.props.children as unknown[])[0] as unknown as El;
     // JUSTIFIED: narrowing table children to El for tbody check
+    // JUSTIFIED: narrowing for property access in test assertion
     const tbody = (table.props.children as unknown[])[1] as unknown as El;
     expect(thead.type).toBe("thead");
     expect(tbody.type).toBe("tbody");
@@ -699,12 +726,14 @@ describe("Element types and props (comprehensive)", () => {
     const ul = firstChild(tree);
     const items = ul.props.children as unknown[];
     // JUSTIFIED: narrowing first li for nested ul check
+    // JUSTIFIED: narrowing for property access in test assertion
     const li0 = items[0] as unknown as El;
     expect(li0.type).toBe("li");
     // li0 children should contain text "a" and a nested ul
     const li0Children = li0.props.children as unknown[];
     // Find the nested ul among li0's children
     // JUSTIFIED: narrowing unknown child to El for type comparison in find
+    // JUSTIFIED: narrowing for property access in test assertion
     const nestedUl = li0Children.find((c: unknown) => (c as unknown as El)?.type === "ul");
     expect(nestedUl).toBeDefined();
   });
@@ -713,8 +742,10 @@ describe("Element types and props (comprehensive)", () => {
 describe("headings.ids option with react()", () => {
   it("headings.ids: true → h1 gets id prop", () => {
     // JUSTIFIED: headings option type not in react's third arg type — testing runtime
+    // JUSTIFIED: narrowing for property access in test assertion
     const tree = react("# Hello World", undefined, { headings: { ids: true } } as unknown as Parameters<typeof Bun.markdown.react>[2]);
     // JUSTIFIED: narrowing children array to first element for id prop check
+    // JUSTIFIED: narrowing for property access in test assertion
     const h1 = (tree.props.children as unknown[])[0] as unknown as { type: unknown; props: { id?: string; children?: unknown } };
     expect(h1.props.id).toBe("hello-world");
   });
@@ -722,6 +753,7 @@ describe("headings.ids option with react()", () => {
   it("default (no headings.ids) → h1 has no id prop", () => {
     const tree = react("# Hello World");
     // JUSTIFIED: narrowing children array to first element for id prop check
+    // JUSTIFIED: narrowing for property access in test assertion
     const h1 = (tree.props.children as unknown[])[0] as unknown as { type: unknown; props: { id?: string; children?: unknown } };
     expect(h1.props.id).toBeUndefined();
   });
@@ -731,14 +763,17 @@ describe("allowDangerousHtml option with react()", () => {
   it("default: raw HTML → html element wrapper", () => {
     const tree = react("<div>raw</div>");
     // JUSTIFIED: narrowing children array to first element for type check
+    // JUSTIFIED: narrowing for property access in test assertion
     const child = (tree.props.children as unknown[])[0] as unknown as { type: unknown; props: Record<string, unknown> };
     expect(String(child.type)).toBe("html");
   });
 
   it("noHtmlBlocks: true → HTML wrapped in p", () => {
     // JUSTIFIED: noHtmlBlocks option type — testing runtime behavior
+    // JUSTIFIED: narrowing for property access in test assertion
     const tree = react("<div>raw</div>", undefined, { noHtmlBlocks: true } as unknown as Parameters<typeof Bun.markdown.react>[2]);
     // JUSTIFIED: narrowing children array to first element for type check
+    // JUSTIFIED: narrowing for property access in test assertion
     const p = (tree.props.children as unknown[])[0] as unknown as { type: unknown; props: Record<string, unknown> };
     expect(p.type).toBe("p");
   });
@@ -763,8 +798,10 @@ describe("Edge cases: input types", () => {
   it("Uint8Array input works", () => {
     const buf = new TextEncoder().encode("# Hello");
     // JUSTIFIED: Uint8Array is accepted at runtime but not in type signature
+    // JUSTIFIED: narrowing for property access in test assertion
     const tree = Bun.markdown.react(buf as unknown as string) as unknown as ReactEl;
     // JUSTIFIED: narrowing children array to first element for type check
+    // JUSTIFIED: narrowing for property access in test assertion
     const h1 = (tree.props.children as unknown[])[0] as unknown as { type: unknown };
     expect(h1.type).toBe("h1");
   });
@@ -772,8 +809,10 @@ describe("Edge cases: input types", () => {
   it("ArrayBuffer input works", () => {
     const buf = new TextEncoder().encode("# Hello");
     // JUSTIFIED: ArrayBuffer is accepted at runtime but not in type signature
+    // JUSTIFIED: narrowing for property access in test assertion
     const tree = Bun.markdown.react(buf.buffer as unknown as string) as unknown as ReactEl;
     // JUSTIFIED: narrowing children array to first element for type check
+    // JUSTIFIED: narrowing for property access in test assertion
     const h1 = (tree.props.children as unknown[])[0] as unknown as { type: unknown };
     expect(h1.type).toBe("h1");
   });
@@ -783,6 +822,7 @@ describe("Edge cases: malformed markdown", () => {
   it("7+ hashes → paragraph (not heading)", () => {
     const tree = react("####### H7");
     // JUSTIFIED: narrowing children array to first element for type check
+    // JUSTIFIED: narrowing for property access in test assertion
     const child = (tree.props.children as unknown[])[0] as unknown as { type: unknown };
     expect(child.type).toBe("p");
   });
@@ -790,6 +830,7 @@ describe("Edge cases: malformed markdown", () => {
   it("malformed table (no separator row) → paragraph", () => {
     const tree = react("| Col |\n| no separator |\n| val |");
     // JUSTIFIED: narrowing children array to first element for type check
+    // JUSTIFIED: narrowing for property access in test assertion
     const child = (tree.props.children as unknown[])[0] as unknown as { type: unknown };
     expect(child.type).toBe("p");
   });
@@ -797,6 +838,7 @@ describe("Edge cases: malformed markdown", () => {
   it("unclosed code block → pre element (auto-closed)", () => {
     const tree = react("```\ncode without end");
     // JUSTIFIED: narrowing children array to first element for type check
+    // JUSTIFIED: narrowing for property access in test assertion
     const child = (tree.props.children as unknown[])[0] as unknown as { type: unknown };
     expect(child.type).toBe("pre");
   });
@@ -817,6 +859,7 @@ describe("Edge cases: unicode and special content", () => {
   it("CJK content renders correctly", () => {
     const tree = react("# 日本語\n\nこんにちは世界");
     // JUSTIFIED: narrowing children array to first element for type/props check
+    // JUSTIFIED: narrowing for property access in test assertion
     const h1 = (tree.props.children as unknown[])[0] as unknown as { type: unknown; props: { children?: unknown } };
     expect(h1.type).toBe("h1");
     const children = h1.props.children as unknown[];
@@ -826,6 +869,7 @@ describe("Edge cases: unicode and special content", () => {
   it("emoji content renders correctly", () => {
     const tree = react("# 🎉 Title\n\nHello 👋");
     // JUSTIFIED: narrowing children array to first element for type/props check
+    // JUSTIFIED: narrowing for property access in test assertion
     const h1 = (tree.props.children as unknown[])[0] as unknown as { type: unknown; props: { children?: unknown } };
     expect(h1.type).toBe("h1");
     const children = h1.props.children as unknown[];
@@ -836,10 +880,13 @@ describe("Edge cases: unicode and special content", () => {
     const tree = react("# Title\r\n\r\nParagraph\r\n\r\n- item\r\n- item");
     const children = tree.props.children as unknown[];
     // JUSTIFIED: narrowing children for type checking
+    // JUSTIFIED: narrowing for property access in test assertion
     expect((children[0] as unknown as { type: unknown }).type).toBe("h1");
     // JUSTIFIED: narrowing children array element for type check
+    // JUSTIFIED: narrowing for property access in test assertion
     expect((children[1] as unknown as { type: unknown }).type).toBe("p");
     // JUSTIFIED: narrowing children array element for type check
+    // JUSTIFIED: narrowing for property access in test assertion
     expect((children[2] as unknown as { type: unknown }).type).toBe("ul");
   });
 });
@@ -848,8 +895,10 @@ describe("GFM extensions in react()", () => {
   it("strikethrough → del element", () => {
     const tree = react("~~deleted~~");
     // JUSTIFIED: narrowing children array to first element for type/props check
+    // JUSTIFIED: narrowing for property access in test assertion
     const p = (tree.props.children as unknown[])[0] as unknown as { type: unknown; props: { children?: unknown } };
     // JUSTIFIED: narrowing p.children array to first element
+    // JUSTIFIED: narrowing for property access in test assertion
     const del = (p.props.children as unknown[])[0] as unknown as { type: unknown };
     expect(del.type).toBe("del");
   });
@@ -857,6 +906,7 @@ describe("GFM extensions in react()", () => {
   it("autolink URL → plain text (not autolinked by default in react)", () => {
     const tree = react("Visit https://bun.com");
     // JUSTIFIED: narrowing children array to first element for type/props check
+    // JUSTIFIED: narrowing for property access in test assertion
     const p = (tree.props.children as unknown[])[0] as unknown as { type: unknown; props: { children?: unknown } };
     expect(p.type).toBe("p");
     // URL is plain text, not an <a> element
@@ -867,10 +917,12 @@ describe("GFM extensions in react()", () => {
   it("footnote-like syntax → a element with href", () => {
     const tree = react("Text[^1]\n\n[^1]: footnote");
     // JUSTIFIED: narrowing children array to first element for type/props check
+    // JUSTIFIED: narrowing for property access in test assertion
     const p = (tree.props.children as unknown[])[0] as unknown as { type: unknown; props: { children?: unknown } };
     const children = p.props.children as unknown[];
     // Find the <a> element among children
     // JUSTIFIED: narrowing child to check for a element type
+    // JUSTIFIED: narrowing for property access in test assertion
     const aEl = children.find((c: unknown) => (c as unknown as { type?: unknown })?.type === "a");
     expect(aEl).toBeDefined();
   });
@@ -916,6 +968,7 @@ describe("Key field: all elements have key=null", () => {
   it("list items all have key=null (no auto-keying by Bun)", () => {
     const tree = react("- a\n- b\n- c");
     // JUSTIFIED: narrowing root children to first element (ul)
+    // JUSTIFIED: narrowing for property access in test assertion
     const ul = (tree.props.children as unknown[])[0] as unknown as KeyEl;
     const items = ul.props.children as unknown[];
     // JUSTIFIED: narrowing li elements for key check
@@ -928,6 +981,7 @@ describe("Key field: all elements have key=null", () => {
   it("table cells all have key=null", () => {
     const tree = react("| H1 | H2 |\n|----|----|\n| 1 | 2 |");
     // JUSTIFIED: narrowing root children to first element (table)
+    // JUSTIFIED: narrowing for property access in test assertion
     const table = (tree.props.children as unknown[])[0] as unknown as KeyEl;
     const allKeys = collectAllKeys(table);
     for (const { key } of allKeys) {
@@ -940,6 +994,7 @@ describe("Key field: all elements have key=null", () => {
     const comp = (props: { children?: unknown }) => ({ type: "div", props: { children: props.children } });
     const tree = react("# Test", { h1: comp as never });
     // JUSTIFIED: narrowing children array to first element
+    // JUSTIFIED: narrowing for property access in test assertion
     const h1 = (tree.props.children as unknown[])[0] as unknown as KeyEl;
     expect(h1.key).toBeNull();
   });
@@ -967,6 +1022,7 @@ describe("React.Children.toArray auto-keys", () => {
     const React = require("react");
     const tree = react("- a\n- b\n- c");
     // JUSTIFIED: narrowing root children to first element (ul)
+    // JUSTIFIED: narrowing for property access in test assertion
     const ul = (tree.props.children as unknown[])[0] as unknown as { props: { children: unknown[] } };
     const arr = React.Children.toArray(ul.props.children);
     expect(arr.length).toBe(3);
@@ -979,7 +1035,368 @@ describe("React.Children.toArray auto-keys", () => {
     const React = require("react");
     const tree = react("- a\n- b", undefined, { reactVersion: 18 });
     // JUSTIFIED: narrowing root children to first element (ul)
+    // JUSTIFIED: narrowing for property access in test assertion
     const ul = (tree.props.children as unknown[])[0] as unknown as { props: { children: unknown[] } };
     expect(() => React.Children.toArray(ul.props.children)).toThrow();
+  });
+});
+
+describe("ref field: all elements have ref=null", () => {
+  // JUSTIFIED: narrowing to access ref field for all elements
+  type RefEl = { $$typeof?: symbol; type: unknown; ref: unknown; props: { children?: unknown } };
+
+  function collectRefs(el: unknown, results: { type: string; ref: unknown }[] = []): { type: string; ref: unknown }[] {
+    if (!el || typeof el !== "object") return results;
+    // JUSTIFIED: narrowing unknown to RefEl for ref inspection
+    const e = el as RefEl;
+    if (e.$$typeof) {
+      const type = typeof e.type === "function" ? "fn" : String(e.type).replace("Symbol(react.", "").replace(")", "");
+      results.push({ type, ref: e.ref });
+    }
+    const children = e.props?.children;
+    if (Array.isArray(children)) for (const c of children) collectRefs(c, results);
+    else if (children && typeof children === "object") collectRefs(children, results);
+    return results;
+  }
+
+  it("root element ref is null", () => {
+    const tree = react("# Test");
+    expect(tree.ref).toBeNull();
+  });
+
+  it("all elements in complex tree have ref=null", () => {
+    const md = "# H1\n\n[link](https://x.com)\n\n![img](https://x.com/i.png)\n\n- a\n- b\n\n> quote\n\n```\ncode\n```\n\n---\n\n| H1 | H2 |\n|----|----|\n| 1 | 2 |";
+    const tree = react(md);
+    const refs = collectRefs(tree);
+    expect(refs.length).toBeGreaterThan(5);
+    for (const { ref } of refs) expect(ref).toBeNull();
+  });
+
+  it("React 18 and 19 both assign ref=null", () => {
+    const tree19 = react("# Test");
+    const tree18 = react("# Test", undefined, { reactVersion: 18 });
+    expect(tree19.ref).toBeNull();
+    expect(tree18.ref).toBeNull();
+  });
+});
+
+describe("Props: comprehensive per-element-type", () => {
+  // JUSTIFIED: narrowing to access props for verification
+  type PropsEl = { type: unknown; props: Record<string, unknown> & { children?: unknown } };
+
+  function firstChild(el: ReactEl): PropsEl {
+    // JUSTIFIED: narrowing children array to first element
+    return (el.props.children as unknown[])[0] as unknown as PropsEl;
+  }
+
+  it("fragment has no props (only children)", () => {
+    const tree = react("# Test");
+    const propKeys = Object.keys(tree.props).filter(k => k !== "children");
+    expect(propKeys).toEqual([]);
+  });
+
+  it("h1-h6 have no props (only children)", () => {
+    const tree = react("# H1\n## H2");
+    const children = tree.props.children as unknown[];
+    // JUSTIFIED: narrowing children for props check
+    // JUSTIFIED: narrowing for property access in test assertion
+    const h1 = children[0] as unknown as PropsEl;
+    // JUSTIFIED: narrowing for property access in test assertion
+    const h2 = children[1] as unknown as PropsEl;
+    const h1Props = Object.keys(h1.props).filter(k => k !== "children");
+    const h2Props = Object.keys(h2.props).filter(k => k !== "children");
+    expect(h1Props).toEqual([]);
+    expect(h2Props).toEqual([]);
+  });
+
+  it("p has no props (only children)", () => {
+    const tree = react("hello");
+    const p = firstChild(tree);
+    const propKeys = Object.keys(p.props).filter(k => k !== "children");
+    expect(propKeys).toEqual([]);
+  });
+
+  it("strong, em, code have no props (only children)", () => {
+    const tree = react("**bold** *italic* `code`");
+    const p = firstChild(tree);
+    const children = p.props.children as unknown[];
+    // JUSTIFIED: narrowing children for props check
+    for (const child of children) {
+      if (typeof child === "object" && child !== null) {
+        // JUSTIFIED: narrowing unknown child to PropsEl for props check
+        const propKeys = Object.keys((child as PropsEl).props).filter(k => k !== "children");
+        expect(propKeys).toEqual([]);
+      }
+    }
+  });
+
+  it("a has href prop (and optional title)", () => {
+    const tree = react("[text](https://x.com)");
+    const p = firstChild(tree);
+    // JUSTIFIED: narrowing p.children to first element
+    // JUSTIFIED: narrowing for property access in test assertion
+    const a = (p.props.children as unknown[])[0] as unknown as PropsEl;
+    expect(a.props.href).toBe("https://x.com");
+  });
+
+  it("a with title → title prop", () => {
+    const tree = react('[text](https://x.com "title here")');
+    const p = firstChild(tree);
+    // JUSTIFIED: narrowing p.children to first element
+    // JUSTIFIED: narrowing for property access in test assertion
+    const a = (p.props.children as unknown[])[0] as unknown as PropsEl;
+    expect(a.props.href).toBe("https://x.com");
+    expect(a.props.title).toBe("title here");
+  });
+
+  it("img has src and alt props (and optional title)", () => {
+    const tree = react("![alt text](https://x.com/i.png)");
+    const p = firstChild(tree);
+    // JUSTIFIED: narrowing p.children to first element
+    // JUSTIFIED: narrowing for property access in test assertion
+    const img = (p.props.children as unknown[])[0] as unknown as PropsEl;
+    expect(img.props.src).toBe("https://x.com/i.png");
+    expect(img.props.alt).toBe("alt text");
+  });
+
+  it("img with title → title prop", () => {
+    const tree = react('![alt](https://x.com/i.png "title")');
+    const p = firstChild(tree);
+    // JUSTIFIED: narrowing p.children to first element
+    // JUSTIFIED: narrowing for property access in test assertion
+    const img = (p.props.children as unknown[])[0] as unknown as PropsEl;
+    expect(img.props.title).toBe("title");
+  });
+
+  it("ol has start prop", () => {
+    const tree = react("1. first\n2. second");
+    const ol = firstChild(tree);
+    expect(ol.props.start).toBe(1);
+  });
+
+  it("ul has no props", () => {
+    const tree = react("- a\n- b");
+    const ul = firstChild(tree);
+    const propKeys = Object.keys(ul.props).filter(k => k !== "children");
+    expect(propKeys).toEqual([]);
+  });
+
+  it("task list li has checked prop", () => {
+    const tree = react("- [x] done");
+    const ul = firstChild(tree);
+    // JUSTIFIED: narrowing ul.children to first element
+    // JUSTIFIED: narrowing for property access in test assertion
+    const li = (ul.props.children as unknown[])[0] as unknown as PropsEl;
+    expect(li.props.checked).toBe(true);
+  });
+
+  it("non-task li has no checked prop", () => {
+    const tree = react("- regular item");
+    const ul = firstChild(tree);
+    // JUSTIFIED: narrowing ul.children to first element
+    // JUSTIFIED: narrowing for property access in test assertion
+    const li = (ul.props.children as unknown[])[0] as unknown as PropsEl;
+    expect(li.props.checked).toBeUndefined();
+  });
+
+  it("pre has language prop (when specified)", () => {
+    const tree = react("```js\ncode\n```");
+    const pre = firstChild(tree);
+    expect(pre.props.language).toBe("js");
+  });
+
+  it("pre has language=undefined (when not specified)", () => {
+    const tree = react("```\ncode\n```");
+    const pre = firstChild(tree);
+    expect(pre.props.language).toBeUndefined();
+  });
+
+  it("blockquote has no props", () => {
+    const tree = react("> quote");
+    const bq = firstChild(tree);
+    const propKeys = Object.keys(bq.props).filter(k => k !== "children");
+    expect(propKeys).toEqual([]);
+  });
+
+  it("hr has no props (empty props object)", () => {
+    const tree = react("---");
+    const hr = firstChild(tree);
+    const propKeys = Object.keys(hr.props).filter(k => k !== "children");
+    expect(propKeys).toEqual([]);
+  });
+
+  it("table, thead, tbody, tr, th, td have no props", () => {
+    const tree = react("| H1 | H2 |\n|----|----|\n| 1 | 2 |");
+    const table = firstChild(tree);
+    // JUSTIFIED: narrowing table children for thead/tbody check
+    // JUSTIFIED: narrowing for property access in test assertion
+    const thead = (table.props.children as unknown[])[0] as unknown as PropsEl;
+    // JUSTIFIED: narrowing for property access in test assertion
+    const tbody = (table.props.children as unknown[])[1] as unknown as PropsEl;
+    // JUSTIFIED: narrowing thead children for tr check
+    // JUSTIFIED: narrowing for property access in test assertion
+    const tr = (thead.props.children as unknown[])[0] as unknown as PropsEl;
+    // JUSTIFIED: narrowing tr children for th check
+    // JUSTIFIED: narrowing for property access in test assertion
+    const th = (tr.props.children as unknown[])[0] as unknown as PropsEl;
+
+    for (const [, el] of [["table", table], ["thead", thead], ["tbody", tbody], ["tr", tr], ["th", th]] as [string, PropsEl][]) {
+      const propKeys = Object.keys(el.props).filter(k => k !== "children");
+      expect(propKeys).toEqual([]);
+    }
+  });
+});
+
+describe("Text nodes: string children", () => {
+  it("text nodes are plain strings (not elements)", () => {
+    const tree = react("# Hello");
+    // JUSTIFIED: narrowing for property access in test assertion
+    const h1 = (tree.props.children as unknown[])[0] as unknown as { props: { children: unknown[] } };
+    const first = h1.props.children[0];
+    expect(typeof first).toBe("string");
+    expect(first).toBe("Hello");
+  });
+
+  it("whitespace between inline elements is preserved as string children", () => {
+    const tree = react("**bold** *italic*");
+    // JUSTIFIED: narrowing for property access in test assertion
+    const p = (tree.props.children as unknown[])[0] as unknown as { props: { children: unknown[] } };
+    const children = p.props.children;
+    // [strong, " ", em]
+    expect(children.length).toBe(3);
+    expect(typeof children[1]).toBe("string");
+    expect(children[1]).toBe(" ");
+  });
+
+  it("trailing newline in code block is preserved as string child", () => {
+    const tree = react("```\ncode\n```");
+    // JUSTIFIED: narrowing for property access in test assertion
+    const pre = (tree.props.children as unknown[])[0] as unknown as { props: { children: unknown[] } };
+    const children = pre.props.children;
+    expect(children.length).toBe(2);
+    expect(children[0]).toBe("code");
+    expect(children[1]).toBe("\n");
+  });
+
+  it("multi-line code block: each line and newline is separate string child", () => {
+    const tree = react("```\nline1\nline2\nline3\n```");
+    // JUSTIFIED: narrowing for property access in test assertion
+    const pre = (tree.props.children as unknown[])[0] as unknown as { props: { children: unknown[] } };
+    const children = pre.props.children;
+    // ["line1", "\n", "line2", "\n", "line3", "\n"]
+    expect(children.length).toBe(6);
+    expect(children[0]).toBe("line1");
+    expect(children[1]).toBe("\n");
+    expect(children[2]).toBe("line2");
+  });
+
+  it("multiple spaces in text are preserved", () => {
+    const tree = react("Hello   world");
+    // JUSTIFIED: narrowing for property access in test assertion
+    const p = (tree.props.children as unknown[])[0] as unknown as { props: { children: unknown[] } };
+    // Single text node with spaces preserved
+    expect(p.props.children.length).toBe(1);
+    expect(p.props.children[0]).toBe("Hello   world");
+  });
+});
+
+describe("Hard line breaks: br element", () => {
+  it("soft break (\\n) → no br element", () => {
+    const tree = react("line1\nline2");
+    // JUSTIFIED: narrowing for property access in test assertion
+    const p = (tree.props.children as unknown[])[0] as unknown as { props: { children: unknown[] } };
+    // JUSTIFIED: narrowing unknown child to check for br type
+    const hasBr = p.props.children.some((c: unknown) => (c as { type?: unknown })?.type === "br");
+    expect(hasBr).toBe(false);
+  });
+
+  it("hard break (2 trailing spaces + \\n) → br element", () => {
+    const tree = react("line1  \nline2");
+    // JUSTIFIED: narrowing for property access in test assertion
+    const p = (tree.props.children as unknown[])[0] as unknown as { props: { children: unknown[] } };
+    // JUSTIFIED: narrowing unknown child to check for br type
+    const hasBr = p.props.children.some((c: unknown) => (c as { type?: unknown })?.type === "br");
+    expect(hasBr).toBe(true);
+  });
+
+  it("hard break (backslash + \\n) → br element", () => {
+    const tree = react("line1\\\nline2");
+    // JUSTIFIED: narrowing for property access in test assertion
+    const p = (tree.props.children as unknown[])[0] as unknown as { props: { children: unknown[] } };
+    // JUSTIFIED: narrowing unknown child to check for br type
+    const hasBr = p.props.children.some((c: unknown) => (c as { type?: unknown })?.type === "br");
+    expect(hasBr).toBe(true);
+  });
+
+  it("br element has empty props (no children)", () => {
+    const tree = react("line1  \nline2");
+    // JUSTIFIED: narrowing for property access in test assertion
+    const p = (tree.props.children as unknown[])[0] as unknown as { props: { children: unknown[] } };
+    // JUSTIFIED: narrowing to find br element
+    // JUSTIFIED: narrowing for property access in test assertion
+    const br = p.props.children.find((c: unknown) => (c as { type?: unknown })?.type === "br") as unknown as { type: string; props: Record<string, unknown> };
+    expect(br.props.children).toBeUndefined();
+    const propKeys = Object.keys(br.props);
+    expect(propKeys).toEqual([]);
+  });
+
+  it("br element has key=null and ref=null", () => {
+    const tree = react("line1  \nline2");
+    // JUSTIFIED: narrowing for property access in test assertion
+    const p = (tree.props.children as unknown[])[0] as unknown as { props: { children: unknown[] } };
+    // JUSTIFIED: narrowing to find br element
+    // JUSTIFIED: narrowing for property access in test assertion
+    const br = p.props.children.find((c: unknown) => (c as { type?: unknown })?.type === "br") as unknown as { key: unknown; ref: unknown };
+    expect(br.key).toBeNull();
+    expect(br.ref).toBeNull();
+  });
+});
+
+describe("Link and image edge cases", () => {
+  it("auto-link <url> → a element with href", () => {
+    const tree = react("<https://bun.com>");
+    // JUSTIFIED: narrowing for property access in test assertion
+    const p = (tree.props.children as unknown[])[0] as unknown as { props: { children: unknown[] } };
+    // JUSTIFIED: narrowing to find a element
+    // JUSTIFIED: narrowing for property access in test assertion
+    const a = p.props.children.find((c: unknown) => (c as { type?: unknown })?.type === "a") as unknown as { type: string; props: { href?: string } };
+    expect(a).toBeDefined();
+    expect(a.props.href).toBe("https://bun.com");
+  });
+
+  it("empty link text → a element with empty children", () => {
+    const tree = react("[](https://x.com)");
+    // JUSTIFIED: narrowing for property access in test assertion
+    const p = (tree.props.children as unknown[])[0] as unknown as { props: { children: unknown[] } };
+    // JUSTIFIED: narrowing to find a element
+    // JUSTIFIED: narrowing for property access in test assertion
+    const a = p.props.children.find((c: unknown) => (c as { type?: unknown })?.type === "a") as unknown as { type: string; props: { href?: string; children?: unknown[] } };
+    expect(a).toBeDefined();
+    expect(a.props.href).toBe("https://x.com");
+  });
+
+  it("reference link [text][ref] → a element with href from definition", () => {
+    const tree = react("[text][ref]\n\n[ref]: https://x.com");
+    // JUSTIFIED: narrowing for property access in test assertion
+    const p = (tree.props.children as unknown[])[0] as unknown as { props: { children: unknown[] } };
+    // JUSTIFIED: narrowing to find a element
+    // JUSTIFIED: narrowing for property access in test assertion
+    const a = p.props.children.find((c: unknown) => (c as { type?: unknown })?.type === "a") as unknown as { type: string; props: { href?: string } };
+    expect(a).toBeDefined();
+    expect(a.props.href).toBe("https://x.com");
+  });
+
+  it("nested formatting: bold containing italic → strong>em", () => {
+    const tree = react("**bold *italic* bold**");
+    // JUSTIFIED: narrowing for property access in test assertion
+    const p = (tree.props.children as unknown[])[0] as unknown as { props: { children: unknown[] } };
+    // JUSTIFIED: narrowing to find strong element
+    // JUSTIFIED: narrowing for property access in test assertion
+    const strong = p.props.children.find((c: unknown) => (c as { type?: unknown })?.type === "strong") as unknown as { type: string; props: { children: unknown[] } };
+    expect(strong).toBeDefined();
+    // strong should contain an em element
+    // JUSTIFIED: narrowing unknown child to check for em type
+    const em = strong.props.children.find((c: unknown) => (c as { type?: unknown })?.type === "em");
+    expect(em).toBeDefined();
   });
 });
