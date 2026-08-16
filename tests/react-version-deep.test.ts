@@ -1979,3 +1979,103 @@ describe("Tags, lists, and meta-as-props", () => {
     expect(img.props.title).toBe("title");
   });
 });
+
+describe("React 18 vs 19 cross-verification across all features", () => {
+  // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
+  function reactWithOpts(md: string, opts: Record<string, unknown>): ReactEl {
+    // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
+    return react(md, undefined, opts as unknown as ReactOpts);
+  }
+
+  function replacer(_k: string, v: unknown): unknown {
+    return typeof v === "symbol" ? String(v) : v;
+  }
+
+  function normalizedJSON(el: ReactEl): string {
+    return JSON.stringify(el, replacer)
+      .replace(/react\.transitional\.element/g, "REACT_SYMBOL")
+      .replace(/react\.element/g, "REACT_SYMBOL")
+      .replace(/react\.fragment/g, "FRAGMENT_SYMBOL");
+  }
+
+  it("headings with ids", () => {
+    const md = "# Hello World";
+    const opts = { headings: { ids: true } };
+    const t19 = reactWithOpts(md, opts);
+    const t18 = reactWithOpts(md, { ...opts, reactVersion: 18 });
+    expect(String(t18.$$typeof)).toBe("Symbol(react.element)");
+    expect(normalizedJSON(t18)).toBe(normalizedJSON(t19));
+  });
+
+  it("tables with alignment", () => {
+    const md = "| H |\n|--:|\n| a |";
+    const t19 = reactWithOpts(md, {});
+    const t18 = reactWithOpts(md, { reactVersion: 18 });
+    expect(String(t18.$$typeof)).toBe("Symbol(react.element)");
+    expect(normalizedJSON(t18)).toBe(normalizedJSON(t19));
+  });
+
+  it("task lists", () => {
+    const md = "- [x] done\n- [ ] todo";
+    const t19 = reactWithOpts(md, {});
+    const t18 = reactWithOpts(md, { reactVersion: 18 });
+    expect(String(t18.$$typeof)).toBe("Symbol(react.element)");
+    expect(normalizedJSON(t18)).toBe(normalizedJSON(t19));
+  });
+
+  it("autolinks", () => {
+    const md = "Visit https://x.com";
+    const t19 = reactWithOpts(md, { autolinks: true });
+    const t18 = reactWithOpts(md, { autolinks: true, reactVersion: 18 });
+    expect(String(t18.$$typeof)).toBe("Symbol(react.element)");
+    expect(normalizedJSON(t18)).toBe(normalizedJSON(t19));
+  });
+
+  it("strikethrough", () => {
+    const md = "~~deleted~~";
+    const t19 = reactWithOpts(md, {});
+    const t18 = reactWithOpts(md, { reactVersion: 18 });
+    expect(String(t18.$$typeof)).toBe("Symbol(react.element)");
+    expect(normalizedJSON(t18)).toBe(normalizedJSON(t19));
+  });
+
+  it("wikiLinks", () => {
+    const md = "[[Wiki Link]]";
+    const t19 = reactWithOpts(md, { wikiLinks: true });
+    const t18 = reactWithOpts(md, { wikiLinks: true, reactVersion: 18 });
+    expect(String(t18.$$typeof)).toBe("Symbol(react.element)");
+    expect(normalizedJSON(t18)).toBe(normalizedJSON(t19));
+  });
+
+  it("nested lists", () => {
+    const md = "- a\n  - b\n- c";
+    const t19 = reactWithOpts(md, {});
+    const t18 = reactWithOpts(md, { reactVersion: 18 });
+    expect(String(t18.$$typeof)).toBe("Symbol(react.element)");
+    expect(normalizedJSON(t18)).toBe(normalizedJSON(t19));
+  });
+
+  it("noHtmlBlocks", () => {
+    const md = '<div class="foo">block</div>';
+    const t19 = reactWithOpts(md, { noHtmlBlocks: true });
+    const t18 = reactWithOpts(md, { noHtmlBlocks: true, reactVersion: 18 });
+    expect(String(t18.$$typeof)).toBe("Symbol(react.element)");
+    expect(normalizedJSON(t18)).toBe(normalizedJSON(t19));
+  });
+
+  it("raw HTML with attributes", () => {
+    const md = '<div class="foo" id="bar" data-x="1">text</div>';
+    const t19 = reactWithOpts(md, {});
+    const t18 = reactWithOpts(md, { reactVersion: 18 });
+    expect(String(t18.$$typeof)).toBe("Symbol(react.element)");
+    expect(normalizedJSON(t18)).toBe(normalizedJSON(t19));
+  });
+
+  it("indented code blocks disabled", () => {
+    const md = "     code";
+    const t19 = reactWithOpts(md, { noIndentedCodeBlocks: true });
+    const t18 = reactWithOpts(md, { noIndentedCodeBlocks: true, reactVersion: 18 });
+    expect(String(t18.$$typeof)).toBe("Symbol(react.element)");
+    expect(normalizedJSON(t18)).toBe(normalizedJSON(t19));
+  });
+});
