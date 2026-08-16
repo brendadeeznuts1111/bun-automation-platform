@@ -1114,6 +1114,66 @@ console.log(color("red", "number"));`;
     expect(manifest.background_color).toBe("#1f2020");
   });
 
+  it("GET /sw.js serves the service worker", async () => {
+    // Ref: https://web.dev/articles/install-criteria
+    // Chrome requires a service worker for PWA installability
+    const res = await fetch(`http://localhost:${TEST_PORT}/sw.js`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toContain("application/javascript");
+    expect(res.headers.get("Service-Worker-Allowed")).toBe("/");
+    const js = await res.text();
+    expect(js).toContain("install");
+    expect(js).toContain("fetch");
+    expect(js).toContain("caches");
+  });
+
+  it("dashboard includes service worker registration script when PWA is enabled", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
+    const html = await res.text();
+    expect(html).toContain("navigator.serviceWorker.register('/sw.js'");
+  });
+
+  // --- bun.com PWA snapshot ---
+
+  it("GET /bun-com/manifest.json serves the original bun.com manifest", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/bun-com/manifest.json`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toContain("application/manifest+json");
+    // JUSTIFIED: res.json() returns unknown; narrowing to the manifest shape
+    const manifest = (await res.json()) as { name: string; short_name: string; display: string };
+    expect(manifest.name).toBe("Bun");
+    expect(manifest.short_name).toBe("Bun");
+    expect(manifest.display).toBe("minimal-ui");
+  });
+
+  it("GET /bun-com/icons/icon-512x512.png serves the original Bun icon", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/bun-com/icons/icon-512x512.png`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toBe("image/png");
+    const buf = await res.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    expect(bytes[0]).toBe(0x89); // PNG magic
+  });
+
+  it("GET /bun-com/icons/logo.svg serves the Bun SVG logo", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/bun-com/icons/logo.svg`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toBe("image/svg+xml");
+    const svg = await res.text();
+    expect(svg).toContain("<svg");
+  });
+
+  it("GET /bun-com/icons/favicon.ico serves the Bun favicon", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/bun-com/icons/favicon.ico`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toBe("image/x-icon");
+  });
+
+  it("GET /bun-com/icons/nonexistent.png returns 404", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/bun-com/icons/nonexistent.png`);
+    expect(res.status).toBe(404);
+  });
+
   // --- Auth ---
 
   it("POST /login rejects invalid credentials and audits failure", async () => {

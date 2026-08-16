@@ -800,6 +800,15 @@ const dashboardHandler = withMiddleware((): Response => {
       }
     }
   </script>
+  ${ENABLE_PWA ? `<script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(function(reg) {
+        console.log('[PWA] service worker registered', reg.scope);
+      }).catch(function(err) {
+        console.warn('[PWA] service worker registration failed', err);
+      });
+    }
+  </script>` : ""}
 </body>
 </html>`;
   let response = new Response(html, { headers: { "Content-Type": "text/html" } });
@@ -939,6 +948,45 @@ if (ENABLE_PWA) {
         headers: { "Content-Type": "application/manifest+json" },
       });
     }),
+  };
+  // Serve the service worker — required by Chrome for PWA installability
+  // Ref: https://web.dev/articles/install-criteria
+  routes["/sw.js"] = {
+    GET: withMiddleware((): Response => {
+      const sw = Bun.file("public/sw.js");
+      return new Response(sw, {
+        headers: { "Content-Type": "application/javascript", "Service-Worker-Allowed": "/" },
+      });
+    }),
+  };
+  // Serve the original bun.com PWA manifest and icons (downloaded snapshot)
+  // so users can compare or reinstall the upstream Bun docs PWA locally.
+  routes["/bun-com/manifest.json"] = {
+    GET: withMiddleware((): Response => {
+      const manifest = Bun.file("public/bun-com/manifest.json");
+      return new Response(manifest, {
+        headers: { "Content-Type": "application/manifest+json" },
+      });
+    }),
+  };
+  routes["/bun-com/icons/:filename"] = {
+    GET: withMiddleware<"/bun-com/icons/:filename">(
+      async (req: BunRequest<"/bun-com/icons/:filename">): Promise<Response> => {
+        const filename = req.params.filename;
+        const file = Bun.file(`public/bun-com/icons/${filename}`);
+        const exists = await file.exists();
+        if (!exists) {
+          return errorResponse("icon not found", 404);
+        }
+        // Infer content type from extension
+        const ext = filename.endsWith(".svg") ? "image/svg+xml"
+          : filename.endsWith(".ico") ? "image/x-icon"
+          : "image/png";
+        return new Response(file, {
+          headers: { "Content-Type": ext, "Cache-Control": "public, max-age=86400" },
+        });
+      },
+    ),
   };
   // Serve PWA icons — /icons/:filename.png
   routes["/icons/:filename"] = {
