@@ -1400,3 +1400,205 @@ describe("Link and image edge cases", () => {
     expect(em).toBeDefined();
   });
 });
+
+describe("Custom component props: what React passes during rendering", () => {
+  // JUSTIFIED: custom components capture props during React render — using require() dynamically
+  // because React is installed via package.json
+  const React = require("react");
+  const { renderToString } = require("react-dom/server");
+
+  it("a component receives href, title, children", () => {
+    let capturedProps: Record<string, any> | null = null;
+    const components = {
+      a: (props: Record<string, unknown>) => {
+        capturedProps = props;
+        return React.createElement("a", { href: props.href, title: props.title }, props.children);
+      },
+    };
+    const tree = react('[text](https://x.com "title here")', { a: components.a as never });
+    renderToString(tree);
+    expect(capturedProps).not.toBeNull();
+    expect(capturedProps!["href"]).toBe("https://x.com");
+    expect(capturedProps!["title"]).toBe("title here");
+    expect(capturedProps!["children"]).toEqual(["text"]);
+  });
+
+  it("img component receives src, alt, title", () => {
+    let capturedProps: Record<string, any> | null = null;
+    const components = {
+      img: (props: Record<string, unknown>) => {
+        capturedProps = props;
+        return React.createElement("img", { src: props.src, alt: props.alt, title: props.title });
+      },
+    };
+    const tree = react('![alt](https://x.com/i.png "title")', { img: components.img as never });
+    renderToString(tree);
+    expect(capturedProps).not.toBeNull();
+    expect(capturedProps!["src"]).toBe("https://x.com/i.png");
+    expect(capturedProps!["alt"]).toBe("alt");
+    expect(capturedProps!["title"]).toBe("title");
+  });
+
+  it("li task component receives checked + children", () => {
+    let capturedProps: Record<string, any> | null = null;
+    const components = {
+      li: (props: Record<string, unknown>) => {
+        capturedProps = props;
+        return React.createElement("li", { checked: props.checked }, props.children);
+      },
+    };
+    const tree = react("- [x] done", { li: components.li as never });
+    renderToString(tree);
+    expect(capturedProps).not.toBeNull();
+    expect(capturedProps!["checked"]).toBe(true);
+    expect(capturedProps!["children"]).toEqual(["done"]);
+  });
+
+  it("pre component receives language + children", () => {
+    let capturedProps: Record<string, any> | null = null;
+    const components = {
+      pre: (props: Record<string, unknown>) => {
+        capturedProps = props;
+        return React.createElement("pre", { "data-language": props.language }, props.children);
+      },
+    };
+    const tree = react("```js\ncode\n```", { pre: components.pre as never });
+    renderToString(tree);
+    expect(capturedProps).not.toBeNull();
+    expect(capturedProps!["language"]).toBe("js");
+    expect(capturedProps!["children"]).toEqual(["code", "\n"]);
+  });
+
+  it("h1 component receives only children (no id without headings.ids)", () => {
+    let capturedProps: Record<string, any> | null = null;
+    const components = {
+      h1: (props: Record<string, unknown>) => {
+        capturedProps = props;
+        return React.createElement("h1", null, props.children);
+      },
+    };
+    const tree = react("# Hello", { h1: components.h1 as never });
+    renderToString(tree);
+    expect(capturedProps).not.toBeNull();
+    expect(capturedProps!["children"]).toEqual(["Hello"]);
+    expect(capturedProps!["id"]).toBeUndefined();
+  });
+
+  it("h1 component receives id with headings.ids: true", () => {
+    let capturedProps: Record<string, any> | null = null;
+    const components = {
+      h1: (props: Record<string, unknown>) => {
+        capturedProps = props;
+        return React.createElement("h1", { id: props.id }, props.children);
+      },
+    };
+    // JUSTIFIED: headings option not in type signature — testing runtime
+    const tree = react("# Hello World", { h1: components.h1 as never } as unknown, { headings: { ids: true } } as unknown as Parameters<typeof Bun.markdown.react>[2]);
+    renderToString(tree);
+    expect(capturedProps).not.toBeNull();
+    expect(capturedProps!["id"]).toBe("hello-world");
+  });
+
+  it("props object is extensible (not frozen)", () => {
+    let capturedProps: Record<string, any> | null = null;
+    const components = {
+      a: (props: Record<string, unknown>) => {
+        capturedProps = props;
+        // JUSTIFIED: props is Record<string, any> — adding new prop to test extensibility
+        (props as Record<string, unknown>).newProp = "test";
+        // JUSTIFIED: props is Record<string, any> — deleting prop to test extensibility
+        delete (props as Record<string, unknown>).href;
+        return React.createElement("a", { href: props.href }, props.children);
+      },
+    };
+    const tree = react("[text](https://x.com)", { a: components.a as never });
+    renderToString(tree);
+    expect(capturedProps).not.toBeNull();
+    expect(Object.isFrozen(capturedProps)).toBe(false);
+    expect(Object.isSealed(capturedProps)).toBe(false);
+    expect(Object.isExtensible(capturedProps)).toBe(true);
+    expect(capturedProps!["newProp"]).toBe("test");
+    expect(capturedProps!["href"]).toBeUndefined();
+  });
+
+  it("children is always an array (even single child)", () => {
+    let capturedChildren: unknown = null;
+    const components = {
+      a: (props: Record<string, unknown>) => {
+        capturedChildren = props.children;
+        return React.createElement("a", { href: props.href }, props.children);
+      },
+    };
+    const tree = react("[text](https://x.com)", { a: components.a as never });
+    renderToString(tree);
+    expect(Array.isArray(capturedChildren)).toBe(true);
+    expect((capturedChildren as unknown[]).length).toBe(1);
+    expect((capturedChildren as unknown[])[0]).toBe("text");
+  });
+
+  it("image inside link: a children contains img element", () => {
+    let capturedAChildren: unknown[] | null = null;
+    let capturedImg: Record<string, unknown> | null = null;
+    const components = {
+      a: (props: Record<string, unknown>) => {
+        capturedAChildren = props.children as unknown[];
+        return React.createElement("a", { href: props.href }, props.children);
+      },
+      img: (props: Record<string, unknown>) => {
+        capturedImg = props;
+        return React.createElement("img", { src: props.src, alt: props.alt });
+      },
+    };
+    const tree = react("[![alt](https://x.com/i.png)](https://x.com)", { a: components.a as never, img: components.img as never });
+    renderToString(tree);
+    expect(capturedAChildren).not.toBeNull();
+    expect(Array.isArray(capturedAChildren)).toBe(true);
+    expect(capturedAChildren).not.toBeNull();
+    expect(capturedAChildren!.length).toBe(1);
+    // JUSTIFIED: narrowing captured array element to check $$typeof
+    expect((capturedAChildren![0] as { $$typeof?: symbol }).$$typeof).toBeDefined();
+    expect(capturedImg).not.toBeNull();
+    expect(capturedImg!["src"]).toBe("https://x.com/i.png");
+  });
+
+  it("custom component can return a string", () => {
+    const components = {
+      h1: () => "custom string",
+    };
+    const tree = react("# Hello", { h1: components.h1 as never });
+    const html = renderToString(tree);
+    expect(html).toContain("custom string");
+  });
+
+  it("custom component can return an array of strings", () => {
+    const components = {
+      h1: () => ["A", "B", "C"],
+    };
+    const tree = react("# Hello", { h1: components.h1 as never });
+    const html = renderToString(tree);
+    expect(html).toContain("A");
+    expect(html).toContain("B");
+    expect(html).toContain("C");
+  });
+
+  it("all built-in markdown tags can be customized", () => {
+    const types = ["h1", "h2", "h3", "h4", "h5", "h6", "p", "strong", "em", "code", "a", "img", "ul", "ol", "li", "blockquote", "pre", "hr", "table", "thead", "tbody", "tr", "th", "td"];
+    const md = "# H1\n## H2\n### H3\n#### H4\n##### H5\n###### H6\n\n**strong** *em* `code`\n\n[link](https://x.com)\n\n![img](https://x.com/i.png)\n\n- li\n\n1. ol\n\n> quote\n\n```\ncode\n```\n\n---\n\n| H | H |\n|----|----|\n| 1 | 2 |";
+
+    const capturedTypes = new Set<string>();
+    const components: Record<string, (props: Record<string, unknown>) => any> = {};
+    for (const t of types) {
+      components[t] = (props: Record<string, unknown>) => {
+        capturedTypes.add(t);
+        return React.createElement(t, null, props.children);
+      };
+    }
+
+    const tree = react(md, components as never);
+    renderToString(tree);
+
+    for (const t of types) {
+      expect(capturedTypes.has(t)).toBe(true);
+    }
+  });
+});
