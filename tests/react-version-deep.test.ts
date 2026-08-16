@@ -28,6 +28,7 @@ const REF_REACT_18 = "REF-REACT-18" as const;
 
 // Ref: node_modules/bun-types/docs/runtime/markdown.mdx#react-18-and-older
 type ReactOpts = Parameters<typeof Bun.markdown.react>[2];
+type HtmlOpts = Parameters<typeof Bun.markdown.html>[1];
 
 const md = "# Hello **world**\n\n- item 1\n- item 2\n\n| Col1 | Col2 |\n|------|------|\n| a | b |";
 
@@ -2158,5 +2159,69 @@ describe("tagFilter deep dive: 5 dangerous tags (Bun v1.3.14 gap)", () => {
     expect(html).toContain("ok");
     expect(html).toContain("<script>");
     expect(html).toContain("bad");
+  });
+});
+
+describe("html() vs react() rendering differences", () => {
+  const { renderToString } = require("react-dom/server");
+
+  it("tagFilter: true escapes <script> in html() output, react() tree keeps raw string", () => {
+    const md = "<script>alert(1)</script>";
+    // JUSTIFIED: parser options not in HtmlOptions type — casting to test runtime
+    const htmlOut = Bun.markdown.html(md, { tagFilter: true } as unknown as HtmlOpts);
+    // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
+    const t = react(md, undefined, { tagFilter: true } as unknown as ReactOpts);
+    const r = (_k: string, v: unknown) => (typeof v === "symbol" ? String(v) : v);
+    const treeJson = JSON.stringify(t, r);
+    expect(htmlOut).toContain("&lt;script>");
+    expect(treeJson).toContain("<script>alert(1)</script>");
+    expect(htmlOut).not.toContain("<script>alert(1)</script>");
+  });
+
+  it("noHtmlBlocks: true wraps <div> in <p> in both html() and react()", () => {
+    const md = '<div class="foo">block</div>';
+    // JUSTIFIED: parser options not in HtmlOptions type — casting to test runtime
+    const htmlOut = Bun.markdown.html(md, { noHtmlBlocks: true } as unknown as HtmlOpts);
+    // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
+    const t = react(md, undefined, { noHtmlBlocks: true } as unknown as ReactOpts);
+    const reactOut = renderToString(t);
+    expect(htmlOut).toContain("<p>");
+    expect(htmlOut).toContain('<div class="foo">');
+    expect(reactOut).toContain("<p>");
+    expect(reactOut).toContain("class=");
+    expect(reactOut).toContain("foo");
+  });
+
+  it("noHtmlSpans: true escapes <span> in both html() and react()", () => {
+    const md = 'text <span class="x">span</span> more';
+    // JUSTIFIED: parser options not in HtmlOptions type — casting to test runtime
+    const htmlOut = Bun.markdown.html(md, { noHtmlSpans: true } as unknown as HtmlOpts);
+    // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
+    const t = react(md, undefined, { noHtmlSpans: true } as unknown as ReactOpts);
+    const reactOut = renderToString(t);
+    expect(htmlOut).toContain("&lt;span");
+    expect(reactOut).toContain("&lt;span");
+  });
+
+  it("autolinks: true produces <a> in both html() and react()", () => {
+    const md = "Visit https://x.com";
+    // JUSTIFIED: parser options not in HtmlOptions type — casting to test runtime
+    const htmlOut = Bun.markdown.html(md, { autolinks: true } as unknown as HtmlOpts);
+    // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
+    const t = react(md, undefined, { autolinks: true } as unknown as ReactOpts);
+    const reactOut = renderToString(t);
+    expect(htmlOut).toContain('<a href="https://x.com">');
+    expect(reactOut).toContain('<a href="https://x.com"');
+  });
+
+  it("headings with ids: true adds id in both html() and react()", () => {
+    const md = "# Hello World";
+    // JUSTIFIED: parser options not in HtmlOptions type — casting to test runtime
+    const htmlOut = Bun.markdown.html(md, { headings: { ids: true } } as unknown as HtmlOpts);
+    // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
+    const t = react(md, undefined, { headings: { ids: true } } as unknown as ReactOpts);
+    const reactOut = renderToString(t);
+    expect(htmlOut).toContain('<h1 id="hello-world">');
+    expect(reactOut).toContain('id="hello-world"');
   });
 });

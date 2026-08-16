@@ -12,13 +12,13 @@
 
 | Metric | Value |
 |--------|-------|
-| Tests in audit file | 216 |
+| Tests in audit file | 221 |
 | Failures | 0 |
-| `expect()` calls | 508 |
-| Repo total tests | 2228 |
+| `expect()` calls | 522 |
+| Repo total tests | 2233 |
 | Typecheck | clean |
 
-This deep audit verifies `Bun.markdown.react()` output across React 18 and React 19 symbol formats. All 211 tests pass.
+This deep audit verifies `Bun.markdown.react()` output across React 18 and React 19 symbol formats. All 221 tests pass.
 
 ## What was tested
 
@@ -53,6 +53,7 @@ This deep audit verifies `Bun.markdown.react()` output across React 18 and React
 | SSR `renderToString` | 22 | All element types render correctly with React 19 |
 | Tags, lists, and meta | 16 | `start`, `checked`, `align`, `href`, `src`, `title`, `id`, `language` |
 | tagFilter deep dive | 5 | `<script>`, `<style>`, `<iframe>` not escaped in v1.3.14 |
+| html() vs react() | 5 | tagFilter, noHtmlBlocks, noHtmlSpans, autolinks, headings |
 | React 18 vs 19 cross-check | 10 | Structure identical across 10 features, only `$$typeof` differs |
 
 ## Critical findings
@@ -78,7 +79,7 @@ Raw HTML blocks (e.g. `<div class="foo">text</div>`) are wrapped in a custom `<h
 
 ### 4. `tagFilter: true` does not filter
 
-The `tagFilter` parser option does not escape or disallow `<script>`, `<style>`, `<iframe>`, or `<div>` content in Bun 1.3.14. The dangerous tags remain as raw strings inside custom `<html>` elements. This is a documented gap.
+The `tagFilter` parser option works in `Bun.markdown.html()` (escapes `<` to `&lt;`) but does **not** change the `Bun.markdown.react()` element tree — dangerous tags remain raw strings in the tree. `renderToString()` still escapes the raw HTML before the browser, so the final SSR output is safe. This is an API consistency gap.
 
 ### 5. Parser options that do not change output
 
