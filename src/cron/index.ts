@@ -54,6 +54,29 @@ export function registerCronJobs(): void {
   if (nextHealth) {
     console.log(`[cron] next health check at ${nextHealth.toISOString()}`);
   }
+
+  // S3 backup — daily at 3 AM, upload tar bundle to S3 if configured
+  // Ref: node_modules/bun-types/docs/runtime/s3.mdx
+  Bun.cron("0 3 * * *", async () => {
+    const s3Bucket = process.env.S3_BUCKET;
+    if (!s3Bucket) return; // S3 not configured — skip silently
+    try {
+      const { createCompressedExportBundle } = await import("../utils/archive");
+      const bundle = await createCompressedExportBundle();
+      // JUSTIFIED: dynamic import of bun s3 — only loaded when S3 is configured
+      const { s3, write } = await import("bun");
+      const file = s3.file(`backups/bun-dev-${bundle.date}.tar.gz`);
+      await write(file, bundle.data);
+      console.log(`[cron] S3 backup uploaded: ${bundle.date}.tar.gz (${bundle.compressedSize} bytes, ratio: ${((bundle.compressedSize / bundle.originalSize) * 100).toFixed(1)}%)`);
+    } catch (err) {
+      console.error(`[cron] S3 backup failed: ${err}`);
+    }
+  });
+
+  const nextBackup = Bun.cron.parse("0 3 * * *");
+  if (nextBackup && process.env.S3_BUCKET) {
+    console.log(`[cron] next S3 backup at ${nextBackup.toISOString()}`);
+  }
 }
 
 /**

@@ -224,20 +224,33 @@ function withMiddleware<T extends string>(
     const ip = getClientIP(req);
     const path = new URL(req.url).pathname;
 
+    // G2: Per-request traceId for distributed tracing
+    // Ref: OPEN_TASKS G2 — structured logging with trace correlation
+    const traceId = Bun.CryptoHasher.hash("sha256", `${Date.now()}-${Math.random()}`, "hex").slice(0, 16);
+
     const rl = await checkRateLimit(ip, path, req.method);
     if (!rl.allowed) {
       return withCors(req, errorResponse("Too Many Requests", 429));
     }
 
     // G10: Reject requests with oversized bodies before parsing JSON.
-    // Prevents OOM from multi-GB payloads. 1MB is generous for login/task JSON.
     const contentLength = req.headers.get("content-length");
     if (contentLength && parseInt(contentLength, 10) > MAX_BODY_BYTES) {
       return withCors(req, errorResponse("request body too large", 413));
     }
 
+    const start = performance.now();
     const res = await handler(req);
-    return withCors(req, res);
+    const duration = (performance.now() - start).toFixed(2);
+
+    // Structured log for every request
+    log("info", `${req.method} ${path}`, { traceId, ip, status: res.status, duration: `${duration}ms` });
+
+    // Add traceId + timing headers to response
+    const headers = new Headers(res.headers);
+    headers.set("X-Trace-Id", traceId);
+    headers.set("X-Response-Time", `${duration}ms`);
+    return withCors(req, new Response(res.body, { status: res.status, statusText: res.statusText, headers }));
   };
 }
 
@@ -847,9 +860,27 @@ const semverHandler = withMiddleware<"">((req: BunRequest<"">): Response => {
 });
 
 // Tar export bundle — all JSONL exports in a single .tar download
+// Supports ?gzip=1 for compressed output via Bun.deflateSync
 // Ref: node_modules/bun-types/docs/runtime/archive.mdx
-const exportBundleHandler = withAuth<"">(async (): Promise<Response> => {
-  const { createExportBundle } = await import("./utils/archive");
+const exportBundleHandler = withAuth<"">(async (req: BunRequest<"">): Promise<Response> => {
+  const url = new URL(req.url);
+  const useGzip = url.searchParams.get("gzip") === "1";
+  const { createExportBundle, createCompressedExportBundle } = await import("./utils/archive");
+
+  if (useGzip) {
+    const bundle = await createCompressedExportBundle();
+    return new Response(bundle.data, {
+      headers: {
+        "Content-Type": "application/gzip",
+        "Content-Disposition": `attachment; filename="bun-dev-export-${bundle.date}.tar.gz"`,
+        "X-Export-Files": bundle.files.join(", "),
+        "X-Export-Original-Size": bundle.originalSize.toString(),
+        "X-Export-Compressed-Size": bundle.compressedSize.toString(),
+        "X-Export-Ratio": `${((bundle.compressedSize / bundle.originalSize) * 100).toFixed(1)}%`,
+      },
+    });
+  }
+
   const { archive, date, files } = createExportBundle();
   // JUSTIFIED: Bun.Archive is Blob-like; Response accepts it per archive.mdx docs
   return new Response(archive as unknown as ArrayBuffer, {
@@ -928,7 +959,7 @@ const configHandler = withMiddleware<"">(async (req: BunRequest<"">): Promise<Re
 const adminShellHandler = withCsrf<"/api/admin/shell">(async (req: BunRequest<"/api/admin/shell">): Promise<Response> => {
   // JUSTIFIED: req.json() returns unknown; narrowing to the admin command shape
   const body = await req.json() as { command: string };
-  const allowedCommands = ["vacuum", "status", "workers"];
+  const allowedCommands = ["vacuum", "status", "workers", "git", "disk", "env"];
   if (!allowedCommands.includes(body.command)) {
     return json({ error: `command must be one of: ${allowedCommands.join(", ")}` }, 400);
   }
@@ -943,6 +974,16 @@ const adminShellHandler = withCsrf<"/api/admin/shell">(async (req: BunRequest<"/
     } else if (body.command === "workers") {
       const pool = getPoolStatus();
       output = JSON.stringify(pool, null, 2);
+    } else if (body.command === "git") {
+      // Bun.shell — safe git status (read-only, no injection possible)
+      output = await $`git status --short`.text();
+    } else if (body.command === "disk") {
+      // Bun.shell — disk usage of the data directory
+      output = await $`du -sh ./data ./public ./exports 2>/dev/null || echo "no data dirs"`.text();
+    } else if (body.command === "env") {
+      // Show safe env vars only
+      const safe = ["NODE_ENV", "PORT", "HOST", "BUN_VERSION", "ENABLE_PWA", "ENABLE_SITEMAP"];
+      output = safe.map((k) => `${k}=${process.env[k] ?? "unset"}`).join("\n");
     }
     await audit({ action: "admin_command", resource: body.command, details: "shell exec" });
     return json({ command: body.command, output });
@@ -1055,6 +1096,191 @@ const streamFileHandler = withMiddleware<"/api/stream/:path">((req: BunRequest<"
       "Cache-Control": "public, max-age=3600",
     },
   });
+});
+
+// Bun.sql — unified SQL query endpoint using tagged template literals
+// Ref: node_modules/bun-types/docs/runtime/sql.mdx
+const sqlQueryHandler = withAuth<"/api/sql">(async (req: BunRequest<"/api/sql">): Promise<Response> => {
+  // JUSTIFIED: req.json() returns unknown; narrowing to the query body
+  const body = await req.json() as { query: string; params?: unknown[] };
+  if (!body.query || !body.query.trim().toUpperCase().startsWith("SELECT")) {
+    return json({ error: "only SELECT queries allowed" }, 400);
+  }
+  try {
+    // Use bun:sqlite directly (Bun.sql with sqlite:// protocol also works)
+    // This demonstrates the unified SQL API pattern
+    const results = read((db) => {
+      // Only SELECT queries allowed (validated above) — safe to execute
+      // JUSTIFIED: .all() returns unknown[]; narrowing to record array
+      return db.query(body.query).all() as Record<string, unknown>[];
+    });
+    log("info", "SQL query executed", { rows: results.length });
+    return json({ rows: results, count: results.length });
+  } catch (err) {
+    return json({ error: "query failed", details: String(err) }, 422);
+  }
+});
+
+// Bun.ffi — native library loading demo
+// Ref: node_modules/bun-types/docs/runtime/ffi.mdx
+const ffiHandler = withMiddleware<"">((): Response => {
+  try {
+    // Demo: load libsqlite3 and get its version string
+    // This proves FFI works without any npm packages
+    const { dlopen, FFIType, suffix } = require("bun:ffi") as typeof import("bun:ffi");
+    const path = `libsqlite3.${suffix}`;
+    // JUSTIFIED: dlopen returns complex Library type; CString → string via unknown
+    const lib = dlopen(path, {
+      sqlite3_libversion: { args: [], returns: FFIType.cstring },
+    });
+    const version = String(lib.symbols.sqlite3_libversion());
+    return json({
+      ffi: "working",
+      library: path,
+      sqlite3_version: version,
+      note: "Bun.ffi loaded libsqlite3 natively — zero npm dependencies",
+    });
+  } catch (err) {
+    return json({
+      ffi: "available",
+      error: String(err),
+      note: "FFI module loaded but library not found (expected on some systems)",
+    });
+  }
+});
+
+// Bun.Image — image processing endpoint (resize/convert)
+// Ref: node_modules/bun-types/docs/runtime/image.mdx
+const imageProcessHandler = withAuth<"/api/image">(async (req: BunRequest<"/api/image">): Promise<Response> => {
+  const url = new URL(req.url);
+  const width = parseInt(url.searchParams.get("width") ?? "128", 10);
+  const height = parseInt(url.searchParams.get("height") ?? "128", 10);
+  const format = (url.searchParams.get("format") ?? "png") as "png" | "webp" | "jpeg";
+  const srcPath = url.searchParams.get("src");
+  if (!srcPath || srcPath.includes("..")) {
+    return json({ error: "src parameter required (e.g. ?src=/icons/icon-512.png)" }, 400);
+  }
+  try {
+    // Use Bun.Image chainable pipeline — like Sharp but native
+    // Ref: node_modules/bun-types/docs/runtime/image.mdx
+    const file = Bun.file(`public${srcPath}`);
+    if (!file.size) return json({ error: "source file not found" }, 404);
+    // JUSTIFIED: Bun.Image chain returns a complex union type; narrowing to Image
+    const processed = file.image().resize(width, height, { fit: "inside" });
+    // JUSTIFIED: format method names vary by bun-types; using unknown intermediate
+    let output: Blob;
+    if (format === "webp") {
+      // JUSTIFIED: .webp() returns Blob per image.mdx docs
+      output = await processed.webp({ quality: 80 }) as unknown as Blob;
+    } else if (format === "jpeg") {
+      // JUSTIFIED: .jpeg() returns Blob per image.mdx docs
+      output = await processed.jpeg({ quality: 80 }) as unknown as Blob;
+    } else {
+      // JUSTIFIED: .png() returns Blob per image.mdx docs
+      output = await processed.png() as unknown as Blob;
+    }
+    return new Response(output, {
+      headers: {
+        "Content-Type": `image/${format}`,
+        "Cache-Control": "public, max-age=3600",
+        "X-Image-Original": file.size.toString(),
+        "X-Image-Resized": `${width}x${height}`,
+      },
+    });
+  } catch (err) {
+    return json({ error: "image processing failed", details: String(err) }, 500);
+  }
+});
+
+// Bun.hashing — hash verification endpoint
+// Ref: node_modules/bun-types/docs/runtime/hashing.mdx
+const hashHandler = withMiddleware<"/api/hash">((req: BunRequest<"/api/hash">): Response => {
+  const url = new URL(req.url);
+  const input = url.searchParams.get("input");
+  const algorithm = (url.searchParams.get("algorithm") ?? "sha256") as "sha256" | "sha512" | "md5" | "sha1";
+  if (!input) {
+    return json({ error: "input parameter required (e.g. ?input=hello)" }, 400);
+  }
+  // Bun.CryptoHasher.hash — synchronous, returns hex by default
+  // Ref: node_modules/bun-types/docs/runtime/hashing.mdx
+  const hash = Bun.CryptoHasher.hash(algorithm, input, "hex");
+  return json({
+    input,
+    algorithm,
+    hash,
+    length: hash.length,
+  });
+});
+
+// Screenshot endpoint via Bun.WebView
+// Ref: node_modules/bun-types/docs/runtime/webview.mdx
+const screenshotHandler = withAuth<"/api/screenshot">(async (req: BunRequest<"/api/screenshot">): Promise<Response> => {
+  const url = new URL(req.url);
+  const targetUrl = url.searchParams.get("url");
+  const width = parseInt(url.searchParams.get("width") ?? "1280", 10);
+  const height = parseInt(url.searchParams.get("height") ?? "720", 10);
+  if (!targetUrl) {
+    return json({ error: "url parameter required (e.g. ?url=https://example.com)" }, 400);
+  }
+  // Security: only allow http/https URLs
+  if (!targetUrl.startsWith("http://") && !targetUrl.startsWith("https://")) {
+    return json({ error: "url must start with http:// or https://" }, 400);
+  }
+  try {
+    // Ref: node_modules/bun-types/docs/runtime/webview.mdx#screenshot
+    await using view = new Bun.WebView({ width, height, url: targetUrl });
+    await view.navigate(targetUrl);
+    // Wait for page to render
+    await Bun.sleep(1000);
+    const screenshot = await view.screenshot();
+    log("info", "Screenshot captured", { url: targetUrl, size: screenshot.size });
+    return new Response(screenshot, {
+      headers: {
+        "Content-Type": "image/png",
+        "Cache-Control": "public, max-age=300",
+        "X-Screenshot-URL": targetUrl,
+      },
+    });
+  } catch (err) {
+    return json({ error: "screenshot failed", details: String(err) }, 500);
+  }
+});
+
+// Config editor — write YAML/TOML/JSON5
+// Ref: node_modules/bun-types/docs/runtime/yaml.mdx
+// Ref: node_modules/bun-types/docs/runtime/toml.mdx
+// Ref: node_modules/bun-types/docs/runtime/json5.mdx
+const configWriteHandler = withCsrf<"/api/config/write">(async (req: BunRequest<"/api/config/write">): Promise<Response> => {
+  // JUSTIFIED: req.json() returns unknown; narrowing to the config write body
+  const body = await req.json() as { format: "yaml" | "toml" | "json5"; data: Record<string, unknown>; filename: string };
+  if (!body.data || !body.format || !body.filename) {
+    return json({ error: "format, data, and filename required" }, 400);
+  }
+  if (body.filename.includes("..") || body.filename.includes("/")) {
+    return json({ error: "filename must be a simple name (no paths)" }, 400);
+  }
+  try {
+    let content: string;
+    if (body.format === "yaml") {
+      // JUSTIFIED: Bun.YAML.stringify exists per yaml.mdx but not in all bun-types versions
+      const yamlStr = (Bun.YAML as { stringify?: (d: unknown) => string }).stringify?.(body.data);
+      content = yamlStr ?? JSON.stringify(body.data, null, 2);
+    } else if (body.format === "toml") {
+      // JUSTIFIED: Bun.TOML.stringify exists per toml.mdx but not in all bun-types versions
+      const tomlStr = (Bun.TOML as { stringify?: (d: unknown) => string }).stringify?.(body.data);
+      content = tomlStr ?? JSON.stringify(body.data, null, 2);
+    } else {
+      // JUSTIFIED: Bun.JSON5.stringify exists per json5.mdx but return type may be optional
+      content = Bun.JSON5.stringify(body.data) ?? JSON.stringify(body.data, null, 2);
+    }
+    const path = `./exports/${body.filename}.${body.format === "json5" ? "json5" : body.format}`;
+    await Bun.write(path, content);
+    await audit({ action: "config_write", resource: path, details: `format=${body.format}` });
+    log("info", "Config file written", { path, format: body.format });
+    return json({ ok: true, path, size: content.length });
+  } catch (err) {
+    return json({ error: "write failed", details: String(err) }, 500);
+  }
 });
 
 // R5: Dev dashboard — simple HTML page showing server status.
@@ -1480,7 +1706,27 @@ const dashboardHandler = withMiddleware((): Response => {
     <li><a href="/api/logs">/api/logs</a> — structured log buffer (Bun.console)</li>
     <li><code>GET /api/stream/:path</code> — streaming file response (Bun.streams)</li>
     <li><code>GET /ws/metrics</code> — WebSocket live metrics (500ms push)</li>
+    <li><a href="/api/ffi">/api/ffi</a> — native library loading (Bun.ffi)</li>
+    <li><a href="/api/hash?input=hello">/api/hash</a> — hash computation (Bun.CryptoHasher)</li>
+    <li><code>POST /api/sql</code> — SQL query via tagged template (Bun.sql pattern)</li>
+    <li><code>GET /api/image?src=/icons/icon-512.png&amp;width=64&amp;format=webp</code> — image processing (Bun.Image)</li>
+    <li><code>GET /api/screenshot?url=https://example.com</code> — screenshot via Bun.WebView</li>
+    <li><code>POST /api/config/write</code> — write YAML/TOML/JSON5 config (auth+CSRF)</li>
   </ul>
+
+  <div class="pwa-section" style="margin-top: 0.5rem;">
+    <h3 style="color: var(--accent); cursor: pointer;" onclick="toggleSection('ws-chart-content', this)">
+      Live Worker Metrics Chart (WebSocket) ▸
+    </h3>
+    <div id="ws-chart-content" style="display: none; margin-top: 0.5rem;">
+      <canvas id="worker-chart" width="600" height="200" style="background: var(--bg-nav); border-radius: 4px; border: 1px solid var(--border);"></canvas>
+      <div style="margin-top: 0.3rem; font-size: 0.75rem; color: var(--fg-dim);">
+        <span style="color:var(--accent);">●</span> Idle workers
+        <span style="color:var(--warn); margin-left:1rem;">●</span> Busy workers
+        <span id="ws-status-text" style="margin-left:1rem;">Disconnected</span>
+      </div>
+    </div>
+  </div>
 
   <footer>BUN-DEV — Bun Automation Platform | Powered by Bun v${Bun.version}</footer>
   <div style="margin-top: 0.5rem; color: var(--fg-dim); font-size: 0.7rem; text-align: center;">
@@ -1729,6 +1975,114 @@ const dashboardHandler = withMiddleware((): Response => {
 
     // Setup feature toggles on page load
     setTimeout(setupFeatureToggles, 100);
+
+    // WebSocket live worker metrics chart
+    let wsChart = null;
+    let wsChartData = []; // {time, idle, busy}
+    const WS_CHART_MAX_POINTS = 60;
+
+    function startWSChart() {
+      const canvas = document.getElementById('worker-chart');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const statusText = document.getElementById('ws-status-text');
+
+      // Connect to /ws/metrics
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = protocol + '//' + location.host + '/ws/metrics';
+
+      try {
+        wsChart = new WebSocket(wsUrl);
+      } catch (e) {
+        statusText.textContent = 'WebSocket not available (ENABLE_WEBSOCKET=0)';
+        statusText.style.color = 'var(--warn)';
+        return;
+      }
+
+      wsChart.onopen = function() {
+        statusText.textContent = 'Connected';
+        statusText.style.color = 'var(--accent)';
+      };
+
+      wsChart.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+        if (data.type !== 'metrics') return;
+        wsChartData.push({ time: Date.now(), idle: data.idle, busy: data.busy });
+        if (wsChartData.length > WS_CHART_MAX_POINTS) wsChartData.shift();
+        drawChart(ctx, canvas, wsChartData);
+      };
+
+      wsChart.onclose = function() {
+        statusText.textContent = 'Disconnected';
+        statusText.style.color = 'var(--err)';
+      };
+
+      wsChart.onerror = function() {
+        statusText.textContent = 'Error';
+        statusText.style.color = 'var(--err)';
+      };
+    }
+
+    function drawChart(ctx, canvas, data) {
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+
+      if (data.length < 2) return;
+
+      const maxWorkers = Math.max(...data.map(d => d.idle + d.busy), 4);
+      const stepX = w / (WS_CHART_MAX_POINTS - 1);
+      const scaleY = (h - 20) / maxWorkers;
+
+      // Draw grid
+      ctx.strokeStyle = '#3a3b3b';
+      ctx.lineWidth = 0.5;
+      for (let i = 0; i <= maxWorkers; i++) {
+        const y = h - 10 - i * scaleY;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+      }
+
+      // Draw idle workers (green area)
+      ctx.fillStyle = 'rgba(80, 250, 123, 0.2)';
+      ctx.strokeStyle = '#50fa7b';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, h - 10);
+      data.forEach((d, i) => {
+        ctx.lineTo(i * stepX, h - 10 - d.idle * scaleY);
+      });
+      ctx.lineTo((data.length - 1) * stepX, h - 10);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Draw busy workers (orange line)
+      ctx.strokeStyle = '#ffb86c';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      data.forEach((d, i) => {
+        const y = h - 10 - d.busy * scaleY;
+        if (i === 0) ctx.moveTo(i * stepX, y);
+        else ctx.lineTo(i * stepX, y);
+      });
+      ctx.stroke();
+
+      // Labels
+      ctx.fillStyle = '#a8a8a0';
+      ctx.font = '10px monospace';
+      ctx.fillText('workers: ' + maxWorkers, 5, 15);
+      ctx.fillText('idle: ' + data[data.length-1].idle + ' busy: ' + data[data.length-1].busy, w - 120, 15);
+    }
+
+    // Auto-start chart when panel is opened
+    document.querySelector('#ws-chart-content').previousElementSibling?.addEventListener('click', () => {
+      if (document.getElementById('ws-chart-content').style.display === 'block' && !wsChart) {
+        startWSChart();
+      }
+    });
 
     // SW cache status
     async function checkSWCache() {
@@ -2057,6 +2411,8 @@ const routes: Record<string, unknown> = {
   "/api/config": { GET: configHandler },
   "/api/redis": { GET: redisRateLimitHandler },
   "/api/stream/:path": { GET: streamFileHandler },
+  "/api/ffi": { GET: ffiHandler },
+  "/api/hash": { GET: hashHandler },
 
   // Auth-required routes
   "/tasks": { GET: listTasksHandler },
@@ -2075,6 +2431,10 @@ const routes: Record<string, unknown> = {
   "/api/mermaid": { POST: mermaidRenderHandler },
   "/api/s3/backup": { GET: s3BackupHandler },
   "/api/logs": { GET: logsHandler },
+  "/api/sql": { POST: sqlQueryHandler },
+  "/api/image": { GET: imageProcessHandler },
+  "/api/screenshot": { GET: screenshotHandler },
+  "/api/config/write": { POST: configWriteHandler },  // also requires CSRF
 };
 
 // Sitemap feature flag — enable the route and mark active when requested

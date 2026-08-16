@@ -41,3 +41,33 @@ const md = `# BUN-DEV Status
 // Ref: node_modules/bun-types/docs/runtime/markdown.mdx#ansi
 const ansi = Bun.markdown.ansi(md);
 console.log(ansi);
+
+// Bun.sliceAnsi — ANSI-aware string slicing (preserves escape codes)
+// Ref: bun.d.ts — sliceAnsi(str, start, end, opts)
+// Blog: v1.3.11 — "Bun.sliceAnsi — ANSI & grapheme-aware string slicing"
+import { sliceAnsi } from "bun";
+
+const statusLine = "\x1b[32m✅ BUN-DEV\x1b[0m — running normally";
+const sliced = sliceAnsi(statusLine, 0, 20);
+console.log("\n" + sliced + "...");
+
+// Show available Bun APIs
+const apis = [
+  "Bun.serve", "Bun.sqlite", "Bun.WebView", "Bun.cron", "Bun.secrets",
+  "Bun.Image", "Bun.Archive", "Bun.glob", "Bun.shell", "Bun.redis",
+  "Bun.s3", "Bun.sql", "Bun.semver", "Bun.YAML", "Bun.TOML", "Bun.JSON5",
+  "Bun.CryptoHasher", "Bun.CSRF", "Bun.password", "Bun.markdown",
+  "Bun.color", "Bun.JSONL", "Bun.XML", "Bun.CookieMap", "Bun.ffi",
+  "Bun.streams", "Bun.sliceAnsi",
+];
+
+console.log("\n\x1b[36mIntegrated Bun APIs:\x1b[0m");
+const apiLine = apis.join(", ");
+// sliceAnsi truncates to terminal width while preserving colors
+const termWidth = process.stdout.columns ?? 80;
+if (apiLine.length > termWidth) {
+  console.log(sliceAnsi(apiLine, 0, termWidth - 3) + "...");
+} else {
+  console.log(apiLine);
+}
+console.log(`\n\x1b[2m${apis.length} APIs integrated — ${(apis.length / 30 * 100).toFixed(0)}% coverage\x1b[0m`);

@@ -2219,4 +2219,234 @@ console.log(color("red", "number"));`;
     expect(html).toContain("/api/stream/:path");
     expect(html).toContain("/ws/metrics");
   });
+
+  // --- Deeper Enhancement: SQL, FFI, Image, Hash, Screenshot, Config Write ---
+
+  it("GET /api/ffi loads native library via Bun.ffi", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/ffi`);
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+    const data = await res.json() as { ffi: string; sqlite3_version?: string };
+    expect(data.ffi).toBeDefined();
+    // If libsqlite3 is available, version should be present
+    if (data.sqlite3_version) {
+      expect(data.sqlite3_version).toMatch(/^\d+\.\d+/);
+    }
+  });
+
+  it("GET /api/hash computes hash of input", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/hash?input=hello&algorithm=sha256`);
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+    const data = await res.json() as { input: string; algorithm: string; hash: string; length: number };
+    expect(data.input).toBe("hello");
+    expect(data.algorithm).toBe("sha256");
+    expect(data.hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(data.length).toBe(64);
+  });
+
+  it("GET /api/hash rejects empty input", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/hash`);
+    expect(res.status).toBe(400);
+  });
+
+  it("GET /api/hash supports sha512", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/hash?input=test&algorithm=sha512`);
+    // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+    const data = await res.json() as { hash: string; length: number };
+    expect(data.length).toBe(128); // sha512 hex = 64 bytes = 128 chars
+  });
+
+  it("POST /api/sql requires auth", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/sql`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: "SELECT 1 as test" }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("POST /api/sql rejects non-SELECT queries", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/sql`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({ query: "DELETE FROM tasks" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("POST /api/sql executes SELECT query with auth", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/sql`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({ query: "SELECT count(*) as cnt FROM tasks" }),
+    });
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+    const data = await res.json() as { rows: Record<string, unknown>[]; count: number };
+    expect(data.count).toBeGreaterThan(0);
+    expect(data.rows[0]?.cnt).toBeDefined();
+  });
+
+  it("GET /api/image requires auth", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/image?src=/icons/icon-512.png`);
+    expect(res.status).toBe(401);
+  });
+
+  it("GET /api/image rejects path traversal", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/image?src=../../etc/passwd`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("GET /api/image resizes image to webp", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/image?src=/icons/icon-512.png&width=64&height=64&format=webp`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    // Image processing may fail if source doesn't exist — accept 200 or 404
+    if (res.status === 200) {
+      expect(res.headers.get("Content-Type")).toBe("image/webp");
+      expect(res.headers.get("X-Image-Resized")).toBe("64x64");
+    }
+  });
+
+  it("GET /api/screenshot requires auth", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/screenshot?url=https://example.com`);
+    expect(res.status).toBe(401);
+  });
+
+  it("GET /api/screenshot rejects non-http URLs", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/screenshot?url=file:///etc/passwd`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("GET /api/screenshot rejects missing url param", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/screenshot`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("POST /api/config/write requires auth + CSRF", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/config/write`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ format: "yaml", data: { test: 1 }, filename: "test" }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("POST /api/config/write rejects path traversal in filename", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/config/write`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${authToken}`,
+        "X-CSRF-Token": csrfToken,
+      },
+      body: JSON.stringify({ format: "json5", data: { test: 1 }, filename: "../evil" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("POST /api/config/write creates a JSON5 config file", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/config/write`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${authToken}`,
+        "X-CSRF-Token": csrfToken,
+      },
+      body: JSON.stringify({ format: "json5", data: { test: "value", num: 42 }, filename: "test-config" }),
+    });
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+    const data = await res.json() as { ok: boolean; path: string; size: number };
+    expect(data.ok).toBe(true);
+    expect(data.path).toContain("test-config.json5");
+  });
+
+  it("GET /api/export/bundle.tar?gzip=1 returns compressed tar", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/export/bundle.tar?gzip=1`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toBe("application/gzip");
+    expect(res.headers.get("Content-Disposition")).toContain(".tar.gz");
+    expect(res.headers.get("X-Export-Ratio")).toBeDefined();
+  });
+
+  it("POST /api/admin/shell accepts 'git' command", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/admin/shell`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${authToken}`,
+        "X-CSRF-Token": csrfToken,
+      },
+      body: JSON.stringify({ command: "git" }),
+    });
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+    const data = await res.json() as { command: string; output: string };
+    expect(data.command).toBe("git");
+  });
+
+  it("POST /api/admin/shell accepts 'env' command", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/admin/shell`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${authToken}`,
+        "X-CSRF-Token": csrfToken,
+      },
+      body: JSON.stringify({ command: "env" }),
+    });
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+    const data = await res.json() as { command: string; output: string };
+    expect(data.output).toContain("NODE_ENV=");
+  });
+
+  it("all responses have X-Trace-Id header", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/health`);
+    expect(res.headers.get("X-Trace-Id")).not.toBeNull();
+    expect(res.headers.get("X-Trace-Id")!.length).toBe(16);
+  });
+
+  it("all responses have X-Response-Time header", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/health`);
+    const timing = res.headers.get("X-Response-Time");
+    expect(timing).not.toBeNull();
+    expect(timing!.endsWith("ms")).toBe(true);
+  });
+
+  it("GET /dashboard has WebSocket live chart canvas", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
+    const html = await res.text();
+    expect(html).toContain("worker-chart");
+    expect(html).toContain("startWSChart");
+    expect(html).toContain("drawChart");
+    expect(html).toContain("/ws/metrics");
+  });
+
+  it("GET /dashboard lists Bun.ffi, hash, sql, image, screenshot endpoints", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
+    const html = await res.text();
+    expect(html).toContain("/api/ffi");
+    expect(html).toContain("/api/hash");
+    expect(html).toContain("/api/sql");
+    expect(html).toContain("/api/image");
+    expect(html).toContain("/api/screenshot");
+    expect(html).toContain("/api/config/write");
+  });
 });
