@@ -30,6 +30,7 @@ describe("Server API Integration", () => {
         PORT: String(TEST_PORT),
         NODE_ENV: "development",
         WORKER_POOL_SIZE: "1",
+        ENABLE_SITEMAP: "1",
       },
       stdin: "ignore",
       stdout: "pipe",
@@ -129,6 +130,23 @@ describe("Server API Integration", () => {
     // Deeper: lastmod is a valid ISO 8601 date
     const lastmod = text.match(/<lastmod>([^<]+)<\/lastmod>/)?.[1] ?? "";
     expect(lastmod).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+  });
+
+  it("GET /features lists sitemap as active when ENABLE_SITEMAP=1", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/features`);
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to the features response shape
+    const data = (await res.json()) as { features: { key: string; active: boolean }[] };
+    const sitemap = data.features.find((f) => f.key === "sitemap");
+    expect(sitemap).toBeDefined();
+    expect(sitemap!.active).toBe(true);
+  });
+
+  it("GET /dashboard includes sitemap link when sitemap is active", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('href="/sitemap.xml"');
   });
 
   // --- Auth ---

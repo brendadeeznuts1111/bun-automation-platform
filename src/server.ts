@@ -54,6 +54,7 @@ const ENABLE_DEV_DASHBOARD = isFeatureEnabled("devDashboard") ||
   (NODE_ENV === "development" && process.env.ENABLE_DEV_DASHBOARD !== "0");
 // C6: WebSocket support — behind ENABLE_WEBSOCKET flag
 const ENABLE_WEBSOCKET = shouldActivate("websocket");
+const ENABLE_SITEMAP = shouldActivate("sitemap");
 
 // TLS cert/key — only loaded if ENABLE_TLS is true
 let tlsConfig: { cert: string; key: string } | undefined;
@@ -603,6 +604,7 @@ const dashboardHandler = withMiddleware((): Response => {
   <ul>
     <li><a href="/health">/health</a> — health check</li>
     <li><a href="/metrics">/metrics</a> — Prometheus metrics</li>
+    ${ENABLE_SITEMAP ? '<li><a href="/sitemap.xml">/sitemap.xml</a> — sitemap XML</li>' : ""}
     <li><a href="/protocol">/protocol</a> — protocol info</li>
     <li><a href="/features">/features</a> — feature flags</li>
     <li><a href="/dashboard">/dashboard</a> — this page</li>
@@ -661,7 +663,6 @@ const routes: Record<string, unknown> = {
   // Public routes (no auth)
   "/health": { GET: healthHandler },
   "/metrics": { GET: metricsHandler },
-  "/sitemap.xml": { GET: sitemapHandler },
   "/login": { POST: loginHandler },
   "/protocol": { GET: protocolHandler },
   "/features": { GET: featuresHandler },
@@ -674,6 +675,12 @@ const routes: Record<string, unknown> = {
   "/screenshot/:id": { GET: getScreenshotHandler },
   "/audit": { GET: auditHandler },
 };
+
+// Sitemap feature flag — enable the route and mark active when requested
+if (ENABLE_SITEMAP) {
+  routes["/sitemap.xml"] = { GET: sitemapHandler };
+  markActive("sitemap");
+}
 
 // R3: Conditionally add dashboard route
 if (ENABLE_DEV_DASHBOARD) {

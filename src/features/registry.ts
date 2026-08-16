@@ -118,6 +118,16 @@ const FEATURES: Record<string, FeatureFlag> = {
     readyForPromotion: false,
     notes: "Experimental per v1.3.14 blog. render-mermaid.ts uses protocol: 'http3' with fallback to HTTP/1.1.",
   },
+
+  sitemap: {
+    key: "sitemap",
+    envVar: "ENABLE_SITEMAP",
+    status: "experimental",
+    description: "Serve /sitemap.xml with a generated list of public static routes.",
+    dependencies: [],
+    readyForPromotion: false,
+    notes: "Bun.XML.stringify will replace the manual XML builder after the project upgrades to Bun v1.4.",
+  },
 };
 
 // --- Runtime state ---------------------------------------------------------
