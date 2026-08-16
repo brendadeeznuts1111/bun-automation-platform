@@ -18,6 +18,7 @@
  *
  * Ref: https://github.com/facebook/react/blob/v18.3.1/packages/react/src/ReactElement.js#L24
  * Ref: https://github.com/facebook/react/blob/v19.0.0/packages/react/src/ReactElement.js
+ * Ref: node_modules/bun-types/docs/runtime/markdown.mdx (Bun.markdown.react() API)
  */
 
 import { describe, expect, it } from "bun:test";
@@ -25,6 +26,7 @@ import { describe, expect, it } from "bun:test";
 // Reference ID for cross-referencing
 const REF_REACT_18 = "REF-REACT-18" as const;
 
+// Ref: node_modules/bun-types/docs/runtime/markdown.mdx#react-18-and-older
 type ReactOpts = Parameters<typeof Bun.markdown.react>[2];
 
 const md = "# Hello **world**\n\n- item 1\n- item 2\n\n| Col1 | Col2 |\n|------|------|\n| a | b |";
@@ -366,6 +368,7 @@ describe("Symbol registration (global)", () => {
   });
 });
 
+// Ref: node_modules/bun-types/docs/runtime/markdown.mdx#component-overrides
 describe("Custom component $$typeof normalization", () => {
   // JUSTIFIED: custom components are used as the `type` field by Bun.markdown.react.
   // The component function is NOT called by Bun — it's called by React during rendering.
@@ -1533,6 +1536,7 @@ describe("Custom component props: what React passes during rendering", () => {
   });
 });
 
+// Ref: node_modules/bun-types/docs/runtime/markdown.mdx#options
 describe("React markdown parser options (real options per bun-types)", () => {
   it("strikethrough: false → literal ~~ as text", () => {
     // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
@@ -2080,6 +2084,7 @@ describe("React 18 vs 19 cross-verification across all features", () => {
   });
 });
 
+// Ref: node_modules/bun-types/docs/runtime/markdown.mdx#options
 describe("tagFilter deep dive: 5 dangerous tags (Bun v1.3.14 gap)", () => {
   // JUSTIFIED: ReactEl children are typed unknown; narrowing for child access
   function childAt(el: ReactEl, idx: number): any {
