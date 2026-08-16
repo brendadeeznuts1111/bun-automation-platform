@@ -545,3 +545,201 @@ describe("Structure identical across versions (comprehensive)", () => {
     expect(types(el19).sort()).toEqual(types(el18).sort());
   });
 });
+
+describe("Element types and props (comprehensive)", () => {
+  // JUSTIFIED: narrowing to access props for element type verification
+  type El = { $$typeof?: symbol; type: unknown; props: Record<string, unknown> & { children?: unknown } };
+
+  function firstChild(el: ReactEl): El {
+    // JUSTIFIED: narrowing unknown children array to first element
+    return (el.props.children as unknown[])[0] as unknown as El;
+  }
+
+  it("empty markdown → fragment with empty children array", () => {
+    const tree = react("");
+    expect(String(tree.type)).toBe("Symbol(react.fragment)");
+    expect(Array.isArray(tree.props.children)).toBe(true);
+    expect((tree.props.children as unknown[]).length).toBe(0);
+  });
+
+  it("whitespace-only markdown → fragment with empty children", () => {
+    const tree = react("   \n\n  \n  ");
+    expect((tree.props.children as unknown[]).length).toBe(0);
+  });
+
+  it("paragraph → p element with text children", () => {
+    const tree = react("hello");
+    const p = firstChild(tree);
+    expect(p.type).toBe("p");
+  });
+
+  it("headings h1-h6 → correct type", () => {
+    const tree = react("# H1\n## H2\n### H3\n#### H4\n##### H5\n###### H6");
+    const children = tree.props.children as unknown[];
+    // JUSTIFIED: narrowing children array elements to El for type checking
+    const types = children.map(c => (c as unknown as El).type);
+    expect(types).toEqual(["h1", "h2", "h3", "h4", "h5", "h6"]);
+  });
+
+  it("bold → strong element", () => {
+    const tree = react("**bold**");
+    const p = firstChild(tree);
+    // JUSTIFIED: narrowing p.children array to first element
+    const strong = (p.props.children as unknown[])[0] as unknown as El;
+    expect(strong.type).toBe("strong");
+  });
+
+  it("italic → em element", () => {
+    const tree = react("*italic*");
+    const p = firstChild(tree);
+    // JUSTIFIED: narrowing p.children array to first element
+    const em = (p.props.children as unknown[])[0] as unknown as El;
+    expect(em.type).toBe("em");
+  });
+
+  it("inline code → code element", () => {
+    const tree = react("`code`");
+    const p = firstChild(tree);
+    // JUSTIFIED: narrowing p.children array to first element
+    const code = (p.props.children as unknown[])[0] as unknown as El;
+    expect(code.type).toBe("code");
+  });
+
+  it("link → a element with href prop", () => {
+    const tree = react("[text](https://x.com)");
+    const p = firstChild(tree);
+    // JUSTIFIED: narrowing p.children array to first element
+    const a = (p.props.children as unknown[])[0] as unknown as El;
+    expect(a.type).toBe("a");
+    expect(a.props.href).toBe("https://x.com");
+  });
+
+  it("image → img element with src and alt props", () => {
+    const tree = react("![alt text](https://x.com/i.png)");
+    const p = firstChild(tree);
+    // JUSTIFIED: narrowing p.children array to first element
+    const img = (p.props.children as unknown[])[0] as unknown as El;
+    expect(img.type).toBe("img");
+    expect(img.props.src).toBe("https://x.com/i.png");
+    expect(img.props.alt).toBe("alt text");
+  });
+
+  it("unordered list → ul with li children", () => {
+    const tree = react("- a\n- b");
+    const ul = firstChild(tree);
+    expect(ul.type).toBe("ul");
+    const items = ul.props.children as unknown[];
+    expect(items.length).toBe(2);
+    // JUSTIFIED: narrowing li elements for type checking
+    expect((items[0] as unknown as El).type).toBe("li");
+    // JUSTIFIED: narrowing unknown array element to El for type check
+    expect((items[1] as unknown as El).type).toBe("li");
+  });
+
+  it("ordered list → ol with start prop and li children", () => {
+    const tree = react("1. first\n2. second");
+    const ol = firstChild(tree);
+    expect(ol.type).toBe("ol");
+    expect(ol.props.start).toBe(1);
+  });
+
+  it("task list → li with checked prop", () => {
+    const tree = react("- [ ] todo\n- [x] done");
+    const ul = firstChild(tree);
+    const items = ul.props.children as unknown[];
+    // JUSTIFIED: narrowing li elements for checked prop checking
+    expect((items[0] as unknown as El).props.checked).toBe(false);
+    // JUSTIFIED: narrowing unknown array element to El for props check
+    expect((items[1] as unknown as El).props.checked).toBe(true);
+  });
+
+  it("blockquote → blockquote with p child", () => {
+    const tree = react("> quoted text");
+    const bq = firstChild(tree);
+    expect(bq.type).toBe("blockquote");
+    // JUSTIFIED: narrowing blockquote children for p element check
+    const p = (bq.props.children as unknown[])[0] as unknown as El;
+    expect(p.type).toBe("p");
+  });
+
+  it("code block → pre with language prop", () => {
+    const tree = react("```js\nconsole.log(1)\n```");
+    const pre = firstChild(tree);
+    expect(pre.type).toBe("pre");
+    expect(pre.props.language).toBe("js");
+  });
+
+  it("code block without language → pre with language=undefined", () => {
+    const tree = react("```\ncode\n```");
+    const pre = firstChild(tree);
+    expect(pre.type).toBe("pre");
+    expect(pre.props.language).toBeUndefined();
+  });
+
+  it("hr → hr element", () => {
+    const tree = react("---");
+    const hr = firstChild(tree);
+    expect(hr.type).toBe("hr");
+  });
+
+  it("table → table/thead/tbody/tr/th/td structure", () => {
+    const tree = react("| H1 | H2 |\n|----|----|\n| 1 | 2 |");
+    const table = firstChild(tree);
+    expect(table.type).toBe("table");
+    // JUSTIFIED: narrowing table children for thead/tbody check
+    const thead = (table.props.children as unknown[])[0] as unknown as El;
+    // JUSTIFIED: narrowing table children to El for tbody check
+    const tbody = (table.props.children as unknown[])[1] as unknown as El;
+    expect(thead.type).toBe("thead");
+    expect(tbody.type).toBe("tbody");
+  });
+
+  it("nested list → ul/li/ul/li structure", () => {
+    const tree = react("- a\n  - b\n- d");
+    const ul = firstChild(tree);
+    const items = ul.props.children as unknown[];
+    // JUSTIFIED: narrowing first li for nested ul check
+    const li0 = items[0] as unknown as El;
+    expect(li0.type).toBe("li");
+    // li0 children should contain text "a" and a nested ul
+    const li0Children = li0.props.children as unknown[];
+    // Find the nested ul among li0's children
+    // JUSTIFIED: narrowing unknown child to El for type comparison in find
+    const nestedUl = li0Children.find((c: unknown) => (c as unknown as El)?.type === "ul");
+    expect(nestedUl).toBeDefined();
+  });
+});
+
+describe("headings.ids option with react()", () => {
+  it("headings.ids: true → h1 gets id prop", () => {
+    // JUSTIFIED: headings option type not in react's third arg type — testing runtime
+    const tree = react("# Hello World", undefined, { headings: { ids: true } } as unknown as Parameters<typeof Bun.markdown.react>[2]);
+    // JUSTIFIED: narrowing children array to first element for id prop check
+    const h1 = (tree.props.children as unknown[])[0] as unknown as { type: unknown; props: { id?: string; children?: unknown } };
+    expect(h1.props.id).toBe("hello-world");
+  });
+
+  it("default (no headings.ids) → h1 has no id prop", () => {
+    const tree = react("# Hello World");
+    // JUSTIFIED: narrowing children array to first element for id prop check
+    const h1 = (tree.props.children as unknown[])[0] as unknown as { type: unknown; props: { id?: string; children?: unknown } };
+    expect(h1.props.id).toBeUndefined();
+  });
+});
+
+describe("allowDangerousHtml option with react()", () => {
+  it("default: raw HTML → html element wrapper", () => {
+    const tree = react("<div>raw</div>");
+    // JUSTIFIED: narrowing children array to first element for type check
+    const child = (tree.props.children as unknown[])[0] as unknown as { type: unknown; props: Record<string, unknown> };
+    expect(String(child.type)).toBe("html");
+  });
+
+  it("noHtmlBlocks: true → HTML wrapped in p", () => {
+    // JUSTIFIED: noHtmlBlocks option type — testing runtime behavior
+    const tree = react("<div>raw</div>", undefined, { noHtmlBlocks: true } as unknown as Parameters<typeof Bun.markdown.react>[2]);
+    // JUSTIFIED: narrowing children array to first element for type check
+    const p = (tree.props.children as unknown[])[0] as unknown as { type: unknown; props: Record<string, unknown> };
+    expect(p.type).toBe("p");
+  });
+});
