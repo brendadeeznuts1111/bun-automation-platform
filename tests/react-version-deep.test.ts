@@ -875,3 +875,111 @@ describe("GFM extensions in react()", () => {
     expect(aEl).toBeDefined();
   });
 });
+
+describe("Key field: all elements have key=null", () => {
+  // JUSTIFIED: narrowing to access key field for all elements in tree
+  type KeyEl = { $$typeof?: symbol; type: unknown; key: unknown; ref: unknown; props: { children?: unknown } };
+
+  function collectAllKeys(el: unknown, results: { type: string; key: unknown }[] = []): { type: string; key: unknown }[] {
+    if (!el || typeof el !== "object") return results;
+    // JUSTIFIED: narrowing unknown to KeyEl for key field inspection
+    const e = el as KeyEl;
+    if (e.$$typeof) {
+      const type = typeof e.type === "function" ? "fn" : String(e.type).replace("Symbol(react.", "").replace(")", "");
+      results.push({ type, key: e.key });
+    }
+    const children = e.props?.children;
+    if (Array.isArray(children)) {
+      for (const c of children) collectAllKeys(c, results);
+    } else if (children && typeof children === "object") {
+      collectAllKeys(children, results);
+    }
+    return results;
+  }
+
+  it("root element key is null (not undefined)", () => {
+    const tree = react("# Test");
+    expect(tree.key).toBeNull();
+    expect(typeof tree.key).toBe("object"); // null is type "object"
+  });
+
+  it("all elements in complex tree have key=null", () => {
+    const md = "# H1\n\n**bold**\n\n- a\n- b\n- c\n\n| H1 | H2 |\n|----|----|\n| 1 | 2 |\n\n> quote\n\n```\ncode\n```\n\n---";
+    const tree = react(md);
+    const allKeys = collectAllKeys(tree);
+    expect(allKeys.length).toBeGreaterThan(10);
+    for (const { key } of allKeys) {
+      expect(key).toBeNull();
+    }
+  });
+
+  it("list items all have key=null (no auto-keying by Bun)", () => {
+    const tree = react("- a\n- b\n- c");
+    // JUSTIFIED: narrowing root children to first element (ul)
+    const ul = (tree.props.children as unknown[])[0] as unknown as KeyEl;
+    const items = ul.props.children as unknown[];
+    // JUSTIFIED: narrowing li elements for key check
+    for (const item of items) {
+      // JUSTIFIED: narrowing unknown array element to KeyEl for key check
+      expect((item as KeyEl).key).toBeNull();
+    }
+  });
+
+  it("table cells all have key=null", () => {
+    const tree = react("| H1 | H2 |\n|----|----|\n| 1 | 2 |");
+    // JUSTIFIED: narrowing root children to first element (table)
+    const table = (tree.props.children as unknown[])[0] as unknown as KeyEl;
+    const allKeys = collectAllKeys(table);
+    for (const { key } of allKeys) {
+      expect(key).toBeNull();
+    }
+  });
+
+  it("custom component elements have key=null", () => {
+    // JUSTIFIED: custom component — Bun uses it as type field
+    const comp = (props: { children?: unknown }) => ({ type: "div", props: { children: props.children } });
+    const tree = react("# Test", { h1: comp as never });
+    // JUSTIFIED: narrowing children array to first element
+    const h1 = (tree.props.children as unknown[])[0] as unknown as KeyEl;
+    expect(h1.key).toBeNull();
+  });
+
+  it("repeated elements (multiple paragraphs) all have key=null", () => {
+    const tree = react("text\n\ntext\n\ntext");
+    const children = tree.props.children as unknown[];
+    // JUSTIFIED: narrowing children for key check
+    for (const child of children) {
+      // JUSTIFIED: narrowing unknown array element to KeyEl for key check
+      expect((child as KeyEl).key).toBeNull();
+    }
+  });
+
+  it("React 18 and 19 both assign key=null", () => {
+    const tree19 = react("# Test");
+    const tree18 = react("# Test", undefined, { reactVersion: 18 });
+    expect(tree19.key).toBeNull();
+    expect(tree18.key).toBeNull();
+  });
+});
+
+describe("React.Children.toArray auto-keys", () => {
+  it("React.Children.toArray assigns keys (.0, .1, .2) to array children", () => {
+    const React = require("react");
+    const tree = react("- a\n- b\n- c");
+    // JUSTIFIED: narrowing root children to first element (ul)
+    const ul = (tree.props.children as unknown[])[0] as unknown as { props: { children: unknown[] } };
+    const arr = React.Children.toArray(ul.props.children);
+    expect(arr.length).toBe(3);
+    expect(arr[0].key).toBe(".0");
+    expect(arr[1].key).toBe(".1");
+    expect(arr[2].key).toBe(".2");
+  });
+
+  it("React.Children.toArray fails on React 18 elements (isValidElement rejects them)", () => {
+    const React = require("react");
+    const tree = react("- a\n- b", undefined, { reactVersion: 18 });
+    // JUSTIFIED: narrowing root children to first element (ul)
+    const ul = (tree.props.children as unknown[])[0] as unknown as { props: { children: unknown[] } };
+    expect(() => React.Children.toArray(ul.props.children)).toThrow();
+  });
+});
