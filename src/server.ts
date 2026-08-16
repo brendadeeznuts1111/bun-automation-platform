@@ -625,6 +625,28 @@ const featuresHandler = withMiddleware((): Response => {
   return json({ features: listFeatures() });
 });
 
+// Color conversion API — chains Bun.serve with Bun.color()
+// Ref: https://bun.com/docs/runtime/color
+// Accepts ?color=<input>&format=<outputFormat> and returns the converted color.
+const colorHandler = withMiddleware<"">((req: BunRequest<"">): Response => {
+  const url = new URL(req.url);
+  const input = url.searchParams.get("color");
+  if (!input) {
+    return errorResponse("missing 'color' query parameter", 400);
+  }
+  const format = url.searchParams.get("format") ?? "css";
+  const validFormats = ["css", "ansi", "ansi-16", "ansi-256", "ansi-16m", "number", "rgb", "rgba", "hsl", "hex", "HEX", "{rgb}", "{rgba}", "[rgb]", "[rgba]"];
+  if (!validFormats.includes(format)) {
+    return errorResponse(`invalid format '${format}'. Valid: ${validFormats.join(", ")}`, 400);
+  }
+  // JUSTIFIED: Bun.color's second param is a union; we validated against the list above
+  const result = Bun.color(input, format as Parameters<typeof Bun.color>[1]);
+  if (result === null) {
+    return errorResponse(`failed to parse color '${input}'`, 400);
+  }
+  return json({ input, format, output: result });
+});
+
 // R5: Dev dashboard — simple HTML page showing server status.
 // Will be replaced with React + HTML imports dashboard (OPEN_TASKS F1).
 // D6: Dashboard is dev-only — auto-disabled in production unless explicitly enabled.
@@ -696,6 +718,7 @@ const dashboardHandler = withMiddleware((): Response => {
     <li><code>GET /api/audit.jsonl</code> — audit log JSONL export</li>
     <li><code>GET /api/tasks.jsonl</code> — tasks JSONL export</li>
     <li><code>GET /api/sessions.jsonl</code> — sessions JSONL export</li>
+    <li><code>GET /api/color?color=red&amp;format=css</code> — color conversion</li>
     <li><code>POST /api/markdown</code> — render markdown to HTML</li>
   </ul>
   <script>
@@ -727,17 +750,21 @@ const dashboardHandler = withMiddleware((): Response => {
   // HTMLRewriter: dynamically inject theme-color meta, feature-flag script,
   // and a data-rewritten attribute into the dashboard HTML.
   // Ref: https://bun.com/docs/runtime/htmlrewriter
+  // Ref: https://bun.com/docs/runtime/color — Bun.color normalizes the input
   if (ENABLE_HTML_REWRITER) {
     const activeFlags = listFeatures()
       .filter((f) => f.active)
       .map((f) => `'${f.key}': true`)
       .join(",");
     const flagScript = `<script>window.__FEATURE_FLAGS__ = {${activeFlags}};</script>`;
+    // Use Bun.color to normalize the theme color to a CSS-compatible hex string.
+    // In production, use black; in development, use the Dracula green (#50fa7b).
+    const rawThemeColor = NODE_ENV === "production" ? "#000000" : "#50fa7b";
+    const themeColor = Bun.color(rawThemeColor, "css") ?? rawThemeColor;
     response = new HTMLRewriter()
       .on("head", {
         element(el) {
           // Inject theme-color meta based on environment
-          const themeColor = NODE_ENV === "production" ? "#000000" : "#50fa7b";
           el.append(
             `<meta name="theme-color" content="${themeColor}">`,
             { html: true },
@@ -815,6 +842,7 @@ const routes: Record<string, unknown> = {
   "/login": { POST: loginHandler },
   "/protocol": { GET: protocolHandler },
   "/features": { GET: featuresHandler },
+  "/api/color": { GET: colorHandler },
 
   // Auth-required routes
   "/tasks": { GET: listTasksHandler },
@@ -1001,6 +1029,7 @@ console.log(`  GET  /audit          — audit log (auth required)`);
 console.log(`  GET  /api/audit.jsonl — audit log JSONL export (auth required)`);
 console.log(`  GET  /protocol       — protocol info (public)`);
 console.log(`  GET  /features       — feature flags + promotion status (public)`);
+console.log(`  GET  /api/color      — color conversion via Bun.color (public)`);
 if (ENABLE_DEV_DASHBOARD) {
   console.log(`  GET  /dashboard      — dev dashboard (public)`);
 }

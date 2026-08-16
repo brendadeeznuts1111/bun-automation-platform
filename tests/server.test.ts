@@ -144,6 +144,59 @@ describe("Server API Integration", () => {
     expect(sitemap!.active).toBe(true);
   });
 
+  it("GET /api/color converts colors via Bun.color — chains Bun.serve + Bun.color", async () => {
+    // Ref: https://bun.com/docs/runtime/color
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/color?color=red&format=css`);
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to the color response shape
+    const data = (await res.json()) as { input: string; format: string; output: string };
+    expect(data.input).toBe("red");
+    expect(data.format).toBe("css");
+    expect(data.output).toBe("red");
+  });
+
+  it("GET /api/color converts hex to rgb format", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/color?color=%2350fa7b&format=rgb`);
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to the color response shape
+    const data = (await res.json()) as { input: string; format: string; output: string };
+    expect(data.format).toBe("rgb");
+    expect(data.output).toBe("rgb(80, 250, 123)");
+  });
+
+  it("GET /api/color converts hex to number format", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/color?color=%2350fa7b&format=number`);
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to the color response shape
+    const data = (await res.json()) as { input: string; format: string; output: number };
+    expect(data.format).toBe("number");
+    expect(typeof data.output).toBe("number");
+    expect(data.output).toBe(0x50fa7b);
+  });
+
+  it("GET /api/color converts to {rgb} object format", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/color?color=red&format={rgb}`);
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to the color response shape
+    const data = (await res.json()) as { input: string; format: string; output: { r: number; g: number; b: number } };
+    expect(data.output).toEqual({ r: 255, g: 0, b: 0 });
+  });
+
+  it("GET /api/color returns 400 for invalid color input", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/color?color=notacolor&format=css`);
+    expect(res.status).toBe(400);
+  });
+
+  it("GET /api/color returns 400 for missing color parameter", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/color?format=css`);
+    expect(res.status).toBe(400);
+  });
+
+  it("GET /api/color returns 400 for invalid format", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/color?color=red&format=invalid`);
+    expect(res.status).toBe(400);
+  });
+
   it("GET /dashboard includes sitemap link when sitemap is active", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
     expect(res.status).toBe(200);
