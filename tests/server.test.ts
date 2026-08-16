@@ -242,6 +242,35 @@ describe("Server API Integration", () => {
     }
   });
 
+  it("GET /api/audit.jsonl can be consumed incrementally with parseChunk", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/audit.jsonl?limit=5`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    expect(res.status).toBe(200);
+    expect(res.body).toBeDefined();
+    // Ref: node_modules/bun-types/docs/runtime/jsonl.mdx#parseChunk
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    const events: unknown[] = [];
+    let done = false;
+    while (!done) {
+      const { value, done: chunkDone } = await reader.read();
+      if (value) {
+        buffer += decoder.decode(value);
+      }
+      const result = Bun.JSONL.parseChunk(buffer);
+      events.push(...result.values);
+      buffer = buffer.slice(result.read);
+      done = chunkDone;
+    }
+    expect(events.length).toBeGreaterThan(0);
+    for (const obj of events) {
+      expect(obj).toHaveProperty("action");
+      expect(obj).toHaveProperty("created_at");
+    }
+  });
+
   it("Bun.JSONL.parseChunk handles partial and complete audit JSONL chunks", () => {
     // Ref: node_modules/bun-types/docs/runtime/jsonl.mdx#parseChunk
     const full = '{"action":"login"}\n{"action":"task"}';

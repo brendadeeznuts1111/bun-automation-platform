@@ -516,16 +516,25 @@ const auditHandler = withAuth<"">((req, ctx) => {
   return json({ logs, limit, offset });
 });
 
-// JSONL audit export — chains Bun.serve with the audit log DB + streaming format
-// Ref: node_modules/bun-types/docs/runtime/jsonl.mdx (or Bun.JSONL.parse docs)
+// JSONL audit export — chains Bun.serve + Bun.sqlite + Bun.JSONL streaming
+// Ref: node_modules/bun-types/docs/runtime/jsonl.mdx
+// Ref: node_modules/bun-types/docs/runtime/streams.mdx
 const auditJsonlHandler = withAuth<"">((req, ctx) => {
   const url = new URL(req.url);
   const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "50", 10), 200);
   const offset = parseInt(url.searchParams.get("offset") ?? "0", 10);
   const agentId = ctx.agentId;
   const logs = getAuditLog(limit, offset, agentId);
-  const lines = logs.map((log) => JSON.stringify(log)).join("\n");
-  return new Response(lines, { headers: { "Content-Type": "application/jsonl" } });
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const log of logs) {
+        controller.enqueue(encoder.encode(JSON.stringify(log) + "\n"));
+      }
+      controller.close();
+    },
+  });
+  return new Response(stream, { headers: { "Content-Type": "application/jsonl" } });
 });
 
 // --- Server ----------------------------------------------------------------
