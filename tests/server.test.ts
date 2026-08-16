@@ -2099,4 +2099,124 @@ console.log(color("red", "number"));`;
     expect(html).toContain("/api/export/bundle.tar");
     expect(html).toContain("/api/audit/stream");
   });
+
+  // --- Deep Enhancement: Mermaid, Redis, S3, Logs, Stream, WebSocket ---
+
+  it("GET /api/redis returns status (not configured without REDIS_URL)", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/redis?test=1`);
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+    const data = await res.json() as { redis: string };
+    expect(data.redis).toBeDefined();
+  });
+
+  it("GET /api/s3/backup requires auth", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/s3/backup`);
+    expect(res.status).toBe(401);
+  });
+
+  it("GET /api/s3/backup returns status with auth", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/s3/backup`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+    const data = await res.json() as { s3: string };
+    expect(data.s3).toBeDefined();
+  });
+
+  it("GET /api/logs requires auth", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/logs`);
+    expect(res.status).toBe(401);
+  });
+
+  it("GET /api/logs returns structured log entries with auth", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/logs`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+    const data = await res.json() as { logs: unknown[]; count: number };
+    expect(Array.isArray(data.logs)).toBe(true);
+    expect(data.count).toBeGreaterThan(0);
+  });
+
+  it("GET /api/stream/:path rejects path traversal", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/stream/..%2F..%2Fetc%2Fpasswd`);
+    expect(res.status).toBe(400);
+  });
+
+  it("GET /api/stream/:path returns 404 for nonexistent file", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/stream/nonexistent.txt`);
+    expect(res.status).toBe(404);
+  });
+
+  it("GET /api/stream/:path streams existing file", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/stream/manifest.json`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toContain("application/json");
+  });
+
+  it("POST /api/mermaid requires auth", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/mermaid`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: "graph TD; A-->B" }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("POST /api/mermaid rejects empty code", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/mermaid`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({ code: "" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("GET /dashboard has SSE audit terminal panel", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
+    const html = await res.text();
+    expect(html).toContain("audit-terminal");
+    expect(html).toContain("startAuditStream");
+    expect(html).toContain("EventSource");
+  });
+
+  it("GET /dashboard has Mermaid live renderer", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
+    const html = await res.text();
+    expect(html).toContain("mermaid-input");
+    expect(html).toContain("renderMermaid()");
+    expect(html).toContain("Mermaid Live Renderer");
+  });
+
+  it("GET /dashboard has Swagger/OpenAPI panel", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
+    const html = await res.text();
+    expect(html).toContain("swagger-content");
+    expect(html).toContain("loadSwagger");
+    expect(html).toContain("API Docs (OpenAPI)");
+  });
+
+  it("GET /dashboard has feature toggle buttons", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
+    const html = await res.text();
+    expect(html).toContain("toggleFeature");
+    expect(html).toContain("setupFeatureToggles");
+  });
+
+  it("GET /dashboard lists all new deep enhancement endpoints", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
+    const html = await res.text();
+    expect(html).toContain("/api/mermaid");
+    expect(html).toContain("/api/redis");
+    expect(html).toContain("/api/s3/backup");
+    expect(html).toContain("/api/logs");
+    expect(html).toContain("/api/stream/:path");
+    expect(html).toContain("/ws/metrics");
+  });
 });
