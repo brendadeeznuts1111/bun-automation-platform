@@ -149,6 +149,20 @@ describe("Server API Integration", () => {
     expect(html).toContain('href="/sitemap.xml"');
   });
 
+  it("POST /api/markdown chains Bun.markdown.html() through Bun.serve", async () => {
+    const md = "# Hello\n\n| A | B |\n|---|---|\n| 1 | 2 |";
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/markdown`, {
+      method: "POST",
+      body: md,
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toContain("text/html");
+    const html = await res.text();
+    expect(html).toContain("<h1>");
+    expect(html).toContain("<table>");
+    expect(html).toContain("Hello");
+  });
+
   // --- Auth ---
 
   it("POST /login rejects invalid credentials and audits failure", async () => {

@@ -608,6 +608,7 @@ const dashboardHandler = withMiddleware((): Response => {
     <li><a href="/protocol">/protocol</a> — protocol info</li>
     <li><a href="/features">/features</a> — feature flags</li>
     <li><a href="/dashboard">/dashboard</a> — this page</li>
+    <li><code>POST /api/markdown</code> — render markdown to HTML</li>
   </ul>
   <script>
     async function fetchFeatures() {
@@ -658,6 +659,18 @@ function sitemapHandler(req: BunRequest): Response {
   return new Response(xml, { headers: { "Content-Type": "application/xml" } });
 }
 
+// Markdown rendering API — chains Bun.serve with Bun.markdown.html()
+// Ref: node_modules/bun-types/docs/runtime/markdown.mdx
+async function markdownHandler(req: BunRequest): Promise<Response> {
+  const body = await req.text();
+  const maxBytes = 1024 * 1024; // 1 MB
+  if (body.length > maxBytes) {
+    return errorResponse("markdown body too large", 413);
+  }
+  const html = Bun.markdown.html(body);
+  return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+}
+
 // Build the routes object — conditionally include dashboard routes
 const routes: Record<string, unknown> = {
   // Public routes (no auth)
@@ -681,6 +694,9 @@ if (ENABLE_SITEMAP) {
   routes["/sitemap.xml"] = { GET: sitemapHandler };
   markActive("sitemap");
 }
+
+// Markdown rendering chain — always available public API
+routes["/api/markdown"] = { POST: markdownHandler };
 
 // R3: Conditionally add dashboard route
 if (ENABLE_DEV_DASHBOARD) {
