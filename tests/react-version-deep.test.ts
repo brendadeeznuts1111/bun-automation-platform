@@ -25,6 +25,8 @@ import { describe, expect, it } from "bun:test";
 // Reference ID for cross-referencing
 const REF_REACT_18 = "REF-REACT-18" as const;
 
+type ReactOpts = Parameters<typeof Bun.markdown.react>[2];
+
 const md = "# Hello **world**\n\n- item 1\n- item 2\n\n| Col1 | Col2 |\n|------|------|\n| a | b |";
 
 // JUSTIFIED: Bun.markdown.react returns ReactElement which has $$typeof, type, key, ref, props.
@@ -1531,10 +1533,6 @@ describe("Custom component props: what React passes during rendering", () => {
 });
 
 describe("React markdown parser options (real options per bun-types)", () => {
-  // JUSTIFIED: Options type for React doesn't include all markdown parser options in bun-types v1.3.14;
-  // passing them as unknown to test runtime behavior
-  type ReactOpts = Parameters<typeof Bun.markdown.react>[2];
-
   it("strikethrough: false → literal ~~ as text", () => {
     // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
     const tree = react("~~deleted~~", undefined, { strikethrough: false } as unknown as ReactOpts);
@@ -1664,5 +1662,157 @@ describe("React markdown parser options (real options per bun-types)", () => {
     const h1 = (tree.props.children as unknown[])[0] as unknown as { type: unknown; props: { id?: string; children: unknown } };
     expect(h1.type).toBe("h1");
     expect(h1.props.id).toBe("hello");
+  });
+});
+
+describe("SSR output: renderToString for all element types", () => {
+  const React = require("react");
+  const { renderToString } = require("react-dom/server");
+
+  function toHTML(md: string, opts?: ReactOpts): string {
+    // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
+    const tree = opts ? react(md, undefined, opts as unknown as ReactOpts) : react(md);
+    return renderToString(tree);
+  }
+
+  it("h1-h6 render correct tags", () => {
+    const html = toHTML("# H1\n## H2\n### H3\n#### H4\n##### H5\n###### H6");
+    expect(html).toContain("<h1>");
+    expect(html).toContain("</h1>");
+    expect(html).toContain("<h2>");
+    expect(html).toContain("<h6>");
+  });
+
+  it("paragraph renders", () => {
+    const html = toHTML("hello");
+    expect(html).toContain("<p>");
+    expect(html).toContain("hello");
+  });
+
+  it("strong, em, code render", () => {
+    const html = toHTML("**b** *i* `c`");
+    expect(html).toContain("<strong>");
+    expect(html).toContain("<em>");
+    expect(html).toContain("<code>");
+  });
+
+  it("link renders with href", () => {
+    const html = toHTML("[text](https://x.com)");
+    expect(html).toContain('<a href="https://x.com"');
+    expect(html).toContain("text");
+  });
+
+  it("image renders as self-closing img with src and alt", () => {
+    const html = toHTML("![alt](https://x.com/i.png)");
+    expect(html).toContain('<img src="https://x.com/i.png"');
+    expect(html).toContain('alt="alt"');
+  });
+
+  it("unordered list renders", () => {
+    const html = toHTML("- a\n- b");
+    expect(html).toContain("<ul>");
+    expect(html).toContain("<li>");
+  });
+
+  it("ordered list renders with start", () => {
+    const html = toHTML("1. first\n2. second");
+    expect(html).toContain('<ol start="1">');
+    expect(html).toContain("<li>");
+  });
+
+  it("task list li checked attribute is not rendered (invalid on li)", () => {
+    const html = toHTML("- [x] done");
+    expect(html).toContain("<ul>");
+    expect(html).toContain("done");
+    // React does not render `checked` on <li> because it is not a valid HTML attribute
+    expect(html).not.toContain('checked="true"');
+  });
+
+  it("blockquote renders", () => {
+    const html = toHTML("> quote");
+    expect(html).toContain("<blockquote>");
+    expect(html).toContain("quote");
+  });
+
+  it("pre renders with language attribute", () => {
+    const html = toHTML("```js\ncode\n```");
+    expect(html).toContain("<pre");
+    expect(html).toContain('language="js"');
+    expect(html).toContain("code");
+  });
+
+  it("hr renders", () => {
+    const html = toHTML("---");
+    expect(html).toContain("<hr");
+  });
+
+  it("table renders full structure", () => {
+    const html = toHTML("| H | H |\n|----|----|\n| 1 | 2 | 3 |");
+    expect(html).toContain("<table>");
+    expect(html).toContain("<thead>");
+    expect(html).toContain("<tbody>");
+    expect(html).toContain("<tr>");
+    expect(html).toContain("<th>");
+    expect(html).toContain("<td>");
+  });
+
+  it("hard line break renders as br", () => {
+    const html = toHTML("line1  \nline2");
+    expect(html).toContain("<br");
+  });
+
+  it("strikethrough renders as del", () => {
+    const html = toHTML("~~deleted~~");
+    expect(html).toContain("<del>");
+    expect(html).toContain("deleted");
+  });
+
+  it("nested list renders", () => {
+    const html = toHTML("- a\n  - b\n- c");
+    expect(html).toContain("<ul>");
+    expect(html).toMatch(/<li[^>]*>.*<ul>.*<\/ul>.*<\/li>/s);
+  });
+
+  it("CJK and emoji content preserved in output", () => {
+    const html = toHTML("# 日本語 👋");
+    expect(html).toContain("日本語");
+    expect(html).toContain("👋");
+  });
+
+  it("raw HTML blocks are escaped inside a custom html element", () => {
+    const html = toHTML("<div class=\"foo\">block</div>");
+    // React 19 renders the raw HTML string as escaped text inside <html>...</html>
+    expect(html).toContain("<html>");
+    expect(html).toContain("&lt;div class=&quot;foo&quot;&gt;");
+    expect(html).toContain("block");
+  });
+
+  it("headings with ids render id attribute", () => {
+    const html = toHTML("# Hello World", { headings: { ids: true } });
+    expect(html).toContain('<h1 id="hello-world"');
+  });
+
+  it("autolinks render when enabled", () => {
+    const html = toHTML("Visit https://x.com", { autolinks: true });
+    expect(html).toContain('<a href="https://x.com"');
+  });
+
+  it("wiki links render with target attribute", () => {
+    const html = toHTML("[[Wiki Link]]", { wikiLinks: true });
+    expect(html).toContain('<a target="Wiki Link"');
+    expect(html).toContain("Wiki Link");
+  });
+
+  it("custom components affect rendered output", () => {
+    const tree = react("# Hello", { h1: () => React.createElement("h1", { className: "custom" }, "Custom") });
+    const html = renderToString(tree);
+    expect(html).toContain('<h1 class="custom">');
+    expect(html).toContain("Custom");
+  });
+
+  it("custom component can return a string and it appears in output", () => {
+    const tree = react("# Hello", { h1: () => "plain text" });
+    const html = renderToString(tree);
+    expect(html).toContain("plain text");
   });
 });
