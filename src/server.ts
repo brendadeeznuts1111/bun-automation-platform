@@ -711,24 +711,113 @@ const dashboardHandler = withMiddleware((): Response => {
   <link rel="apple-touch-icon" href="/icons/icon-192.png">`
     : "";
   const html = `<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Bun Automation Platform — Dashboard</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BUN-DEV — Dashboard</title>
   ${pwaLinks}
   <style>
-    body { font-family: sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
-    .nav-bar { display: flex; gap: 0.5rem; align-items: center; padding: 0.5rem 1rem;
-      background: #f5f5f5; border-radius: 6px; margin-bottom: 1.5rem; flex-wrap: wrap; }
-    .nav-bar a { color: #0066cc; text-decoration: none; padding: 0.3rem 0.8rem; border-radius: 4px; font-size: 0.9rem; }
-    .nav-bar a:hover { background: #e0e0e0; }
-    .nav-bar a.active { background: #0066cc; color: #fff; }
-    .nav-bar .nav-sep { color: #ccc; margin: 0 0.2rem; }
-    .nav-bar button { background: #50fa7b; color: #1a1a2e; border: 1px solid #3a9d5c;
-      padding: 0.3rem 0.8rem; border-radius: 4px; font-size: 0.9rem; cursor: pointer; }
+    :root {
+      --bg: #1f2020;
+      --bg-card: #2a2b2b;
+      --bg-nav: #161717;
+      --fg: #f8f8f2;
+      --fg-dim: #a8a8a0;
+      --accent: #50fa7b;
+      --accent-dim: #3a9d5c;
+      --warn: #ffb86c;
+      --err: #ff5555;
+      --info: #8be9fd;
+      --border: #3a3b3b;
+      --radius: 8px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, "SF Mono", "Martian Mono", monospace;
+      background: var(--bg);
+      color: var(--fg);
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 1rem;
+      line-height: 1.6;
+    }
+    .nav-bar {
+      display: flex; gap: 0.25rem; align-items: center; padding: 0.5rem 0.75rem;
+      background: var(--bg-nav); border-radius: var(--radius); margin-bottom: 1.5rem;
+      flex-wrap: wrap; border: 1px solid var(--border);
+    }
+    .nav-bar a {
+      color: var(--info); text-decoration: none; padding: 0.3rem 0.7rem;
+      border-radius: 4px; font-size: 0.85rem;
+    }
+    .nav-bar a:hover { background: var(--border); }
+    .nav-bar a.active { background: var(--accent); color: var(--bg); font-weight: 600; }
+    .nav-bar .nav-sep { color: var(--border); margin: 0 0.1rem; }
+    .nav-bar button {
+      background: var(--accent); color: var(--bg); border: 1px solid var(--accent-dim);
+      padding: 0.3rem 0.7rem; border-radius: 4px; font-size: 0.85rem; cursor: pointer;
+      font-family: inherit;
+    }
     .nav-bar button:hover { background: #6bff8e; }
-    #features-panel { display: none; margin-top: 1rem; padding: 1rem;
-      background: #f9f9f9; border: 1px solid #ddd; border-radius: 6px; }
-    #features-panel pre { font-size: 0.85rem; overflow-x: auto; }
+    .nav-bar .pwa-install {
+      background: var(--info); color: var(--bg); border-color: #5ab8d0;
+      display: none; margin-left: auto;
+    }
+    .nav-bar .pwa-install:hover { background: #a3e6f5; }
+    h1 { color: var(--accent); font-size: 1.6rem; margin-bottom: 0.25rem; }
+    h1 .version { color: var(--fg-dim); font-size: 0.9rem; font-weight: normal; }
+    h2 { color: var(--fg); font-size: 1.1rem; margin: 1.5rem 0 0.5rem; padding-bottom: 0.25rem; border-bottom: 1px solid var(--border); }
+    .header-row { display: flex; justify-content: space-between; align-items: center; }
+    .sw-badge {
+      font-size: 0.75rem; padding: 0.2rem 0.6rem; border-radius: 12px;
+      background: var(--border); color: var(--fg-dim);
+    }
+    .sw-badge.active { background: var(--accent-dim); color: var(--accent); }
+    .sw-badge.inactive { background: #4a2b2b; color: var(--err); }
+    .status-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 0.75rem; margin: 0.5rem 0;
+    }
+    .stat-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 0.75rem 1rem;
+    }
+    .stat-card .label { font-size: 0.75rem; color: var(--fg-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+    .stat-card .value { font-size: 1.3rem; color: var(--accent); font-weight: 600; }
+    .stat-card .value.warn { color: var(--warn); }
+    .stat-card .value.err { color: var(--err); }
+    table { width: 100%; border-collapse: collapse; margin: 0.5rem 0; font-size: 0.85rem; }
+    th, td { padding: 0.4rem 0.6rem; text-align: left; border-bottom: 1px solid var(--border); }
+    th { color: var(--fg-dim); font-weight: 600; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.05em; }
+    td { color: var(--fg); }
+    tr:hover td { background: var(--bg-card); }
+    ul { list-style: none; padding: 0; }
+    ul li { padding: 0.3rem 0; font-size: 0.9rem; }
+    ul li a { color: var(--info); text-decoration: none; }
+    ul li a:hover { text-decoration: underline; }
+    ul li code { color: var(--warn); font-size: 0.85rem; }
+    #features-panel {
+      display: none; margin-top: 0.5rem; padding: 1rem;
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
+    }
+    #features-panel pre { font-size: 0.8rem; overflow-x: auto; color: var(--accent); }
+    .pwa-section {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1rem; margin: 0.5rem 0;
+    }
+    .pwa-section .pwa-row { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+    .pwa-section .pwa-icon { width: 48px; height: 48px; border-radius: 8px; }
+    .pwa-section .pwa-info { flex: 1; min-width: 200px; }
+    .pwa-section .pwa-info h3 { color: var(--accent); font-size: 1rem; margin-bottom: 0.2rem; }
+    .pwa-section .pwa-info p { color: var(--fg-dim); font-size: 0.8rem; }
+    .pwa-section .pwa-links { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .pwa-section .pwa-links a {
+      color: var(--info); font-size: 0.8rem; padding: 0.2rem 0.5rem;
+      border: 1px solid var(--border); border-radius: 4px; text-decoration: none;
+    }
+    .pwa-section .pwa-links a:hover { background: var(--border); }
+    footer { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border); color: var(--fg-dim); font-size: 0.75rem; text-align: center; }
   </style>
 </head>
 <body>
@@ -743,41 +832,92 @@ const dashboardHandler = withMiddleware((): Response => {
     <span class="nav-sep">/</span>
     <a href="/protocol">Protocol</a>
     ${NODE_ENV === "development" ? '<button id="nav-features" onclick="fetchFeatures()">Features</button>' : ""}
+    ${ENABLE_PWA ? '<button class="pwa-install" id="pwa-install-btn" onclick="installPWA()">Install App</button>' : ""}
   </nav>
-  <h1>Bun Automation Platform</h1>
-  <p>Server running on Bun v${Bun.version}</p>
+  <div class="header-row">
+    <h1>BUN-DEV <span class="version">v${Bun.version}</span></h1>
+    ${ENABLE_PWA ? '<span class="sw-badge" id="sw-status">SW: checking...</span>' : ""}
+  </div>
+  <p style="color: var(--fg-dim); font-size: 0.85rem; margin-bottom: 1rem;">Bun Automation Platform — Player Health Dashboard</p>
+
   <h2>Status</h2>
-  <ul>
-    <li>Environment: ${NODE_ENV}</li>
-    <li>TLS: ${ENABLE_TLS ? "✅ enabled" : "❌ disabled"}</li>
-    <li>HTTP/3: ${ENABLE_HTTP3 ? "✅ enabled (experimental)" : "❌ disabled"}</li>
-    <li>Workers: ${pool.total} total, ${pool.busy} busy, ${pool.idle} idle</li>
-    <li>Uptime: ${Math.floor(process.uptime())}s</li>
-  </ul>
+  <div class="status-grid">
+    <div class="stat-card">
+      <div class="label">Environment</div>
+      <div class="value">${NODE_ENV}</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">TLS</div>
+      <div class="value ${ENABLE_TLS ? "" : "err"}">${ENABLE_TLS ? "Enabled" : "Off"}</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">HTTP/3</div>
+      <div class="value ${ENABLE_HTTP3 ? "" : "warn"}">${ENABLE_HTTP3 ? "Enabled" : "Off"}</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Workers</div>
+      <div class="value">${pool.idle}/${pool.total} idle</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Uptime</div>
+      <div class="value" id="uptime">${Math.floor(process.uptime())}s</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">PWA</div>
+      <div class="value ${ENABLE_PWA ? "" : "warn"}">${ENABLE_PWA ? "Enabled" : "Off"}</div>
+    </div>
+  </div>
+
   <h2>Feature Flags</h2>
-  <table border="1" cellpadding="4" style="border-collapse: collapse;">
-    <tr><th>Feature</th><th>Status</th><th>Enabled</th><th>Description</th></tr>
+  <table>
+    <tr><th>Feature</th><th>Status</th><th>State</th><th>Description</th></tr>
     ${features}
   </table>
   <div id="features-panel">
-    <h3 style="cursor:pointer; color:#50fa7b;" onclick="document.getElementById('features-panel').style.display='none'">Live Feature Flags ✕</h3>
+    <h3 style="cursor:pointer; color:var(--accent);" onclick="document.getElementById('features-panel').style.display='none'">Live Feature Flags ✕</h3>
     <pre id="features-output">Loading...</pre>
   </div>
+
+  ${ENABLE_PWA ? `
+  <h2>PWA — Installable App</h2>
+  <div class="pwa-section">
+    <div class="pwa-row">
+      <img src="/icons/icon-128.png" alt="BUN-DEV" class="pwa-icon">
+      <div class="pwa-info">
+        <h3>BUN-DEV</h3>
+        <p>Install this dashboard as a standalone Chrome app. Works offline with cached assets.</p>
+      </div>
+    </div>
+    <div class="pwa-links" style="margin-top: 0.75rem;">
+      <a href="/manifest.json">manifest.json</a>
+      <a href="/sw.js">sw.js</a>
+      <a href="/icons/icon-512.png">icon (512px)</a>
+      <a href="/bun-com/manifest.json">bun.com manifest</a>
+      <a href="/bun-com/icons/icon-512x512.png">bun.com icon</a>
+    </div>
+  </div>
+  ` : ""}
+
   <h2>Endpoints</h2>
   <ul>
-    <li><a href="/health">/health</a> — health check</li>
+    <li><a href="/health">/health</a> — health check (JSON)</li>
     <li><a href="/metrics">/metrics</a> — Prometheus metrics</li>
     ${ENABLE_SITEMAP ? '<li><a href="/sitemap.xml">/sitemap.xml</a> — sitemap XML</li>' : ""}
     <li><a href="/protocol">/protocol</a> — protocol info</li>
-    <li><a href="/features">/features</a> — feature flags</li>
+    <li><a href="/features">/features</a> — feature flags (JSON)</li>
     <li><a href="/dashboard">/dashboard</a> — this page</li>
     <li><code>GET /api/audit.jsonl</code> — audit log JSONL export</li>
     <li><code>GET /api/tasks.jsonl</code> — tasks JSONL export</li>
     <li><code>GET /api/sessions.jsonl</code> — sessions JSONL export</li>
     <li><code>GET /api/color?color=red&amp;format=css</code> — color conversion</li>
-    <li><a href="/manifest.json">/manifest.json</a> — PWA manifest (installable Chrome app)</li>
+    <li><code>GET /api/env</code> — environment variable inspection</li>
+    <li><a href="/manifest.json">/manifest.json</a> — PWA manifest</li>
+    <li><a href="/sw.js">/sw.js</a> — service worker</li>
     <li><code>POST /api/markdown</code> — render markdown to HTML</li>
   </ul>
+
+  <footer>BUN-DEV — Bun Automation Platform | Powered by Bun v${Bun.version}</footer>
+
   <script>
     async function fetchFeatures() {
       const panel = document.getElementById('features-panel');
@@ -799,14 +939,71 @@ const dashboardHandler = withMiddleware((): Response => {
         output.textContent = 'Error: ' + e.message;
       }
     }
+    // Live uptime counter
+    let uptimeStart = ${Math.floor(process.uptime())};
+    setInterval(() => {
+      uptimeStart++;
+      const m = Math.floor(uptimeStart / 60);
+      const s = uptimeStart % 60;
+      document.getElementById('uptime').textContent = m > 0 ? m + 'm ' + s + 's' : s + 's';
+    }, 1000);
   </script>
   ${ENABLE_PWA ? `<script>
+    // PWA install prompt
+    let deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      const btn = document.getElementById('pwa-install-btn');
+      if (btn) btn.style.display = 'inline-block';
+      console.log('[PWA] install prompt available');
+    });
+    function installPWA() {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then((choice) => {
+          if (choice.outcome === 'accepted') {
+            console.log('[PWA] user accepted install');
+            const btn = document.getElementById('pwa-install-btn');
+            if (btn) btn.style.display = 'none';
+          } else {
+            console.log('[PWA] user dismissed install');
+          }
+          deferredPrompt = null;
+        });
+      } else {
+        alert('Install option not available. Use Chrome menu > Install BUN-DEV.');
+      }
+    }
+    window.addEventListener('appinstalled', () => {
+      console.log('[PWA] app installed successfully');
+      const btn = document.getElementById('pwa-install-btn');
+      if (btn) btn.style.display = 'none';
+    });
+
+    // Service worker registration + status badge
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(function(reg) {
         console.log('[PWA] service worker registered', reg.scope);
+        const badge = document.getElementById('sw-status');
+        if (badge) {
+          badge.textContent = 'SW: active';
+          badge.classList.add('active');
+        }
       }).catch(function(err) {
         console.warn('[PWA] service worker registration failed', err);
+        const badge = document.getElementById('sw-status');
+        if (badge) {
+          badge.textContent = 'SW: failed';
+          badge.classList.add('inactive');
+        }
       });
+    } else {
+      const badge = document.getElementById('sw-status');
+      if (badge) {
+        badge.textContent = 'SW: unsupported';
+        badge.classList.add('inactive');
+      }
     }
   </script>` : ""}
 </body>

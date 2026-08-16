@@ -1093,6 +1093,28 @@ console.log(color("red", "number"));`;
     expect(html).toContain('<link rel="apple-touch-icon" href="/icons/icon-192.png">');
   });
 
+  it("GET /dashboard has enhanced dark theme with PWA install button", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
+    const html = await res.text();
+    // Dark theme CSS variables
+    expect(html).toContain("--bg: #1f2020");
+    expect(html).toContain("--accent: #50fa7b");
+    // PWA install button (beforeinstallprompt handler)
+    expect(html).toContain("pwa-install-btn");
+    expect(html).toContain("installPWA()");
+    expect(html).toContain("beforeinstallprompt");
+    // SW status badge
+    expect(html).toContain("sw-status");
+    // PWA section with icon and links
+    expect(html).toContain('class="pwa-section"');
+    expect(html).toContain("/bun-com/manifest.json");
+    // Live uptime counter
+    expect(html).toContain("setInterval");
+    expect(html).toContain("uptimeStart");
+    // Footer
+    expect(html).toContain("BUN-DEV");
+  });
+
   it("GET /features lists pwa as active when ENABLE_PWA=1", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/features`);
     expect(res.status).toBe(200);
