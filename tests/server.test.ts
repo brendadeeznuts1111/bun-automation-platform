@@ -106,6 +106,18 @@ describe("Server API Integration", () => {
     expect(text).toContain("workers{state=\"total\"} 1");
   });
 
+  it("GET /sitemap.xml returns valid sitemap XML", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/sitemap.xml`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toContain("application/xml");
+    const text = await res.text();
+    expect(text).toContain("<?xml version=\"1.0\"");
+    expect(text).toContain("<urlset");
+    expect(text).toContain("/health");
+    expect(text).toContain("/features");
+    expect(text).not.toContain("/sitemap.xml");
+  });
+
   // --- Auth ---
 
   it("POST /login rejects invalid credentials and audits failure", async () => {

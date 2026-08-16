@@ -634,11 +634,31 @@ const dashboardHandler = withMiddleware((): Response => {
   return new Response(html, { headers: { "Content-Type": "text/html" } });
 });
 
+// Sitemap XML — lists all public static routes
+// Ref: node_modules/bun-types/docs/runtime/http/server.mdx
+function sitemapHandler(req: BunRequest): Response {
+  const url = new URL(req.url);
+  const base = `${url.protocol}//${url.host}`;
+  const lastmod = new Date().toISOString();
+  const paths = Object.keys(routes).filter(
+    (p) => !p.includes(":") && p !== "/sitemap.xml",
+  );
+  const urls = paths
+    .map(
+      (p) =>
+        `  <url><loc>${base}${p}</loc><lastmod>${lastmod}</lastmod><changefreq>weekly</changefreq><priority>0.5</priority></url>`,
+    )
+    .join("\n");
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>`;
+  return new Response(xml, { headers: { "Content-Type": "application/xml" } });
+}
+
 // Build the routes object — conditionally include dashboard routes
 const routes: Record<string, unknown> = {
   // Public routes (no auth)
   "/health": { GET: healthHandler },
   "/metrics": { GET: metricsHandler },
+  "/sitemap.xml": { GET: sitemapHandler },
   "/login": { POST: loginHandler },
   "/protocol": { GET: protocolHandler },
   "/features": { GET: featuresHandler },
