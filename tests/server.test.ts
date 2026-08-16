@@ -209,6 +209,35 @@ describe("Server API Integration", () => {
     expect(typeof data.total).toBe("number");
   });
 
+  it("GET /api/tasks.jsonl streams tasks as JSONL consumable with parseChunk", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/tasks.jsonl?limit=10`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toContain("application/jsonl");
+    expect(res.body).toBeDefined();
+    // Ref: node_modules/bun-types/docs/runtime/jsonl.mdx#parseChunk
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    const tasks: Record<string, unknown>[] = [];
+    let done = false;
+    while (!done) {
+      const { value, done: chunkDone } = await reader.read();
+      if (value) buffer += decoder.decode(value);
+      const result = Bun.JSONL.parseChunk(buffer);
+      // JUSTIFIED: parseChunk returns unknown[]; narrowing to the task row shape
+      tasks.push(...(result.values as Record<string, unknown>[]));
+      buffer = buffer.slice(result.read);
+      done = chunkDone;
+    }
+    // Each task row should have id and agent_id columns
+    for (const task of tasks) {
+      expect(task).toHaveProperty("id");
+      expect(task).toHaveProperty("agent_id");
+    }
+  });
+
   it("GET /audit returns paginated audit log entries with auth", async () => {
     interface AuditResponse {
       logs: unknown[];
@@ -223,6 +252,36 @@ describe("Server API Integration", () => {
     // JUSTIFIED: res.json() returns unknown; narrowing to the typed response interface
     const data = (await res.json()) as AuditResponse;
     expect(Array.isArray(data.logs)).toBe(true);
+  });
+
+  it("GET /api/sessions.jsonl streams sessions as JSONL consumable with parseChunk", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/sessions.jsonl?limit=10`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toContain("application/jsonl");
+    expect(res.body).toBeDefined();
+    // Ref: node_modules/bun-types/docs/runtime/jsonl.mdx#parseChunk
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    const sessions: Record<string, unknown>[] = [];
+    let done = false;
+    while (!done) {
+      const { value, done: chunkDone } = await reader.read();
+      if (value) buffer += decoder.decode(value);
+      const result = Bun.JSONL.parseChunk(buffer);
+      // JUSTIFIED: parseChunk returns unknown[]; narrowing to the session row shape
+      sessions.push(...(result.values as Record<string, unknown>[]));
+      buffer = buffer.slice(result.read);
+      done = chunkDone;
+    }
+    // Sessions list may be empty (no tasks created in this test run) but must
+    // be a valid stream. If any sessions exist, each should have id and task_id.
+    for (const session of sessions) {
+      expect(session).toHaveProperty("id");
+      expect(session).toHaveProperty("task_id");
+    }
   });
 
   it("GET /api/audit.jsonl returns parseable JSONL via Bun.JSONL.parse", async () => {

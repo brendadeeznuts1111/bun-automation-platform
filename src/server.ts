@@ -364,6 +364,33 @@ const listTasksHandler = withAuth<"">((req, ctx) => {
   return json({ tasks, total, limit, offset });
 });
 
+// Streaming JSONL export of tasks — same query as /tasks but as JSONL lines
+// Ref: node_modules/bun-types/docs/runtime/jsonl.mdx
+// Ref: node_modules/bun-types/docs/runtime/streams.mdx
+const tasksJsonlHandler = withAuth<"">((req, ctx) => {
+  const url = new URL(req.url);
+  const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "50", 10), 200);
+  const offset = parseInt(url.searchParams.get("offset") ?? "0", 10);
+  const status = url.searchParams.get("status");
+  const tasks = read((db) => {
+    return db.query(
+      `SELECT id, agent_id, url, status, progress, priority, error, created_at, updated_at, completed_at
+       FROM tasks WHERE agent_id = ? AND (? IS NULL OR status = ?)
+       ORDER BY priority DESC, created_at DESC LIMIT ? OFFSET ?`,
+    ).all(ctx.agentId, status, status, limit, offset);
+  });
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const task of tasks) {
+        controller.enqueue(encoder.encode(JSON.stringify(task) + "\n"));
+      }
+      controller.close();
+    },
+  });
+  return new Response(stream, { headers: { "Content-Type": "application/jsonl" } });
+});
+
 const createTaskHandler = withCsrf<"">(async (req, ctx) => {
   try {
     // JUSTIFIED: req.json() returns unknown; narrowing to the task creation body shape
@@ -467,6 +494,42 @@ const listSessionsHandler = withAuth<"">((req, ctx) => {
   });
 
   return json({ sessions, limit, offset });
+});
+
+// Streaming JSONL export of sessions — same query as /sessions but as JSONL lines
+// Ref: node_modules/bun-types/docs/runtime/jsonl.mdx
+// Ref: node_modules/bun-types/docs/runtime/streams.mdx
+const sessionsJsonlHandler = withAuth<"">((req, ctx) => {
+  const url = new URL(req.url);
+  const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "50", 10), 200);
+  const offset = parseInt(url.searchParams.get("offset") ?? "0", 10);
+  const includeExpired = url.searchParams.get("include_expired") === "true";
+  const sessions = read((db) => {
+    if (includeExpired) {
+      return db.query(
+        `SELECT s.id, s.task_id, s.screenshot_path, s.screenshot_color, s.expires_at, s.last_healthy, s.created_at
+         FROM sessions s JOIN tasks t ON s.task_id = t.id
+         WHERE t.agent_id = ?
+         ORDER BY s.created_at DESC LIMIT ? OFFSET ?`,
+      ).all(ctx.agentId, limit, offset);
+    }
+    return db.query(
+      `SELECT s.id, s.task_id, s.screenshot_path, s.screenshot_color, s.expires_at, s.last_healthy, s.created_at
+       FROM sessions s JOIN tasks t ON s.task_id = t.id
+       WHERE t.agent_id = ? AND (s.expires_at IS NULL OR s.expires_at > datetime('now'))
+       ORDER BY s.created_at DESC LIMIT ? OFFSET ?`,
+    ).all(ctx.agentId, limit, offset);
+  });
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const session of sessions) {
+        controller.enqueue(encoder.encode(JSON.stringify(session) + "\n"));
+      }
+      controller.close();
+    },
+  });
+  return new Response(stream, { headers: { "Content-Type": "application/jsonl" } });
 });
 
 const getScreenshotHandler = withAuth<"/screenshot/:id">(async (req, ctx) => {
@@ -630,6 +693,8 @@ const dashboardHandler = withMiddleware((): Response => {
     <li><a href="/features">/features</a> — feature flags</li>
     <li><a href="/dashboard">/dashboard</a> — this page</li>
     <li><code>GET /api/audit.jsonl</code> — audit log JSONL export</li>
+    <li><code>GET /api/tasks.jsonl</code> — tasks JSONL export</li>
+    <li><code>GET /api/sessions.jsonl</code> — sessions JSONL export</li>
     <li><code>POST /api/markdown</code> — render markdown to HTML</li>
   </ul>
   <script>
@@ -704,9 +769,11 @@ const routes: Record<string, unknown> = {
 
   // Auth-required routes
   "/tasks": { GET: listTasksHandler },
+  "/api/tasks.jsonl": { GET: tasksJsonlHandler },
   "/task": { POST: createTaskHandler },       // also requires CSRF
   "/task/:id": { GET: getTaskHandler },
   "/sessions": { GET: listSessionsHandler },
+  "/api/sessions.jsonl": { GET: sessionsJsonlHandler },
   "/screenshot/:id": { GET: getScreenshotHandler },
   "/audit": { GET: auditHandler },
   "/api/audit.jsonl": { GET: auditJsonlHandler },
@@ -868,9 +935,11 @@ console.log(`  GET  /health         — health check + worker pool status (publi
 console.log(`  GET  /metrics        — Prometheus-format metrics (public)`);
 console.log(`  POST /login          — agent authentication → returns token + csrf_token`);
 console.log(`  GET  /tasks          — list tasks (auth required)`);
+console.log(`  GET  /api/tasks.jsonl — tasks JSONL export (auth required)`);
 console.log(`  POST /task           — create task (auth + CSRF required)`);
 console.log(`  GET  /task/:id       — get task by ID (auth required)`);
 console.log(`  GET  /sessions       — list sessions (auth required)`);
+console.log(`  GET  /api/sessions.jsonl — sessions JSONL export (auth required)`);
 console.log(`  GET  /screenshot/:id — serve screenshot (auth required)`);
 console.log(`  GET  /audit          — audit log (auth required)`);
 console.log(`  GET  /api/audit.jsonl — audit log JSONL export (auth required)`);
