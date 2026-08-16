@@ -2868,6 +2868,131 @@ bun ./README.md | pbcopy
 <tr><td><code>Bun.randomUUIDv7</code></td><td>Monotonic IDs, buffer/base64 encoding, explicit timestamp</td><td>✅</td></tr>
 </tbody>
 </table>
+<h3 id="deep-audit-bugs-35-40-fourth-round">Deep audit: Bugs 35-40 (fourth round)</h3>
+<table>
+<thead>
+<tr><th>Bug</th><th>API</th><th>Description</th><th>Severity</th></tr>
+</thead>
+<tbody>
+<tr><td>35</td><td><code>Bun.write</code></td><td>Object input written as <code>[object Object]</code> instead of JSON stringified</td><td>Medium</td></tr>
+<tr><td>36</td><td><code>Bun.write</code></td><td><code>ReadableStream</code> input written as <code>[object ReadableStream]</code> instead of being consumed</td><td>Medium</td></tr>
+<tr><td>37</td><td><code>Bun.pid</code></td><td>Property is <code>undefined</code> — <code>process.pid</code> works fine</td><td>Low</td></tr>
+<tr><td>38</td><td><code>Bun.now()</code></td><td>Function does not exist — <code>Date.now()</code> works fine</td><td>Low</td></tr>
+<tr><td>39</td><td><code>Bun.Timer</code></td><td>Does not exist (documented in some versions)</td><td>Low</td></tr>
+<tr><td>40</td><td><code>Bun.spawnSync</code></td><td><code>input</code> option doesn't pipe to stdin — stdout is empty</td><td>Medium</td></tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Bug 35 detail:</strong> <code>Bun.write(path, { a: 1 })</code> writes the literal string <code>[object Object]</code> to the file. Objects are not JSON-stringified. Use <code>JSON.stringify(obj)</code> before passing to <code>Bun.write</code>.</p>
+</blockquote>
+<blockquote>
+<p><strong>Bug 36 detail:</strong> <code>Bun.write(path, readableStream)</code> writes the literal string <code>[object ReadableStream]</code> to the file. Streams are not consumed. Use <code>Bun.file(path).writer()</code> for streaming writes, or convert the stream to a string/Buffer first.</p>
+</blockquote>
+<blockquote>
+<p><strong>Bug 40 detail:</strong> <code>Bun.spawnSync({ cmd: [&quot;cat&quot;], input: &quot;data&quot; })</code> should pipe &quot;data&quot; to stdin, but stdout is empty. The <code>input</code> option appears to be silently ignored. Use <code>Bun.spawn</code> with <code>stdin: &quot;pipe&quot;</code> and <code>proc.stdin.write()</code> instead.</p>
+</blockquote>
+<h3 id="deep-audit-bunfile-bunwrite-behaviors">Deep audit: Bun.file / Bun.write behaviors</h3>
+<table>
+<thead>
+<tr><th>Feature</th><th>Behavior</th></tr>
+</thead>
+<tbody>
+<tr><td><code>Bun.file(path).size</code></td><td>0 for non-existent files</td></tr>
+<tr><td><code>Bun.file(path).type</code></td><td><code>text/plain;charset=utf-8</code> by default</td></tr>
+<tr><td><code>Bun.file(path).exists()</code></td><td>Async, returns boolean</td></tr>
+<tr><td><code>Bun.file(path).text()</code></td><td>Async, throws ENOENT for non-existent</td></tr>
+<tr><td><code>Bun.file(path).json()</code></td><td>Async, parses JSON</td></tr>
+<tr><td><code>Bun.file(path).slice(start, end)</code></td><td>Returns <code>Blob</code>, not <code>BunFile</code></td></tr>
+<tr><td><code>Bun.file(path).writer()</code></td><td>Returns <code>FileSink</code> for streaming writes</td></tr>
+<tr><td><code>Bun.write(path, data)</code></td><td>Returns <code>number</code> (bytes written), not <code>BunFile</code></td></tr>
+<tr><td><code>Bun.write</code> with <code>createPath: true</code></td><td>Auto-creates nested directories</td></tr>
+<tr><td><code>Bun.write</code> with <code>number</code></td><td>Converts to string (42 → &quot;42&quot;)</td></tr>
+<tr><td><code>Bun.write</code> with <code>boolean</code></td><td>Converts to string (true → &quot;true&quot;)</td></tr>
+<tr><td><code>Bun.write</code> with <code>BigInt</code></td><td>Converts to string (123n → &quot;123&quot;)</td></tr>
+<tr><td><code>Bun.write</code> with <code>null</code></td><td>Throws &quot;expects a Blob-y thing&quot;</td></tr>
+<tr><td><code>Bun.write</code> with <code>undefined</code></td><td>Throws &quot;expects a Blob-y thing&quot;</td></tr>
+<tr><td><code>Bun.write</code> with <code>Response</code></td><td>Writes response body</td></tr>
+<tr><td><code>FileSink.write()</code></td><td>Returns bytes written (number)</td></tr>
+<tr><td><code>FileSink.flush()</code></td><td>Returns bytes flushed (number)</td></tr>
+<tr><td><code>FileSink.end()</code></td><td>Returns total bytes written (number)</td></tr>
+</tbody>
+</table>
+<h3 id="deep-audit-bunspawn-bunspawnsync-bun-behaviors">Deep audit: Bun.spawn / Bun.spawnSync / Bun.$ behaviors</h3>
+<table>
+<thead>
+<tr><th>Feature</th><th>Behavior</th></tr>
+</thead>
+<tbody>
+<tr><td><code>Bun.spawn</code> default stdin</td><td><code>&quot;inherit&quot;</code> (can hang in test env — use <code>&quot;ignore&quot;</code>)</td></tr>
+<tr><td><code>Bun.spawn</code> stdout/stderr</td><td>Must set <code>&quot;pipe&quot;</code> explicitly to capture</td></tr>
+<tr><td><code>Bun.spawn</code> <code>env</code> option</td><td>Merges with <code>process.env</code> (spread manually)</td></tr>
+<tr><td><code>Bun.spawn</code> <code>cwd</code> option</td><td>Sets working directory</td></tr>
+<tr><td><code>Bun.spawn</code> <code>onExit</code> callback</td><td>Fires after <code>proc.exited</code> resolves</td></tr>
+<tr><td><code>Bun.spawn</code> non-existent cmd</td><td>Throws <code>Executable not found in $PATH</code></td></tr>
+<tr><td><code>Bun.spawn</code> <code>kill()</code></td><td>Sends SIGTERM, exit code = 143</td></tr>
+<tr><td><code>Bun.spawnSync</code> stdout</td><td>Returns <code>Buffer</code></td></tr>
+<tr><td><code>Bun.spawnSync</code> <code>timeout</code></td><td>Kills with SIGTERM after N ms</td></tr>
+<tr><td><code>Bun.spawnSync</code> <code>input</code></td><td>❌ Bug 40 — doesn't pipe to stdin</td></tr>
+<tr><td><code>Bun.$</code> interpolation</td><td>Auto-escapes dangerous characters</td></tr>
+<tr><td><code>Bun.$</code> array interpolation</td><td>Spreads array elements as separate args</td></tr>
+<tr><td><code>Bun.$</code> <code>.quiet()</code></td><td>Suppresses terminal output, still captures stdout</td></tr>
+<tr><td><code>Bun.$</code> <code>.nothrow()</code></td><td>Doesn't throw on non-zero exit</td></tr>
+<tr><td><code>Bun.$</code> <code>.cwd(path)</code></td><td>Sets working directory</td></tr>
+<tr><td><code>Bun.$</code> <code>.env(obj)</code></td><td>Sets environment variables</td></tr>
+</tbody>
+</table>
+<h3 id="deep-audit-bunsqlite-behaviors">Deep audit: bun:sqlite behaviors</h3>
+<table>
+<thead>
+<tr><th>Feature</th><th>Behavior</th></tr>
+</thead>
+<tbody>
+<tr><td><code>Database(&quot;:memory:&quot;)</code></td><td>In-memory database</td></tr>
+<tr><td><code>db.prepare(sql).run(params)</code></td><td>Insert/update/delete</td></tr>
+<tr><td><code>db.prepare(sql).get(params)</code></td><td>Returns first row or null</td></tr>
+<tr><td><code>db.prepare(sql).all(params)</code></td><td>Returns all rows as array</td></tr>
+<tr><td><code>db.prepare(sql).values(params)</code></td><td>Returns rows as arrays (not objects)</td></tr>
+<tr><td><code>db.prepare(sql).iterate()</code></td><td>Iterator over rows</td></tr>
+<tr><td>Named params</td><td>Use <code>$name</code> prefix: <code>{ $name: &quot;value&quot; }</code></td></tr>
+<tr><td><code>db.transaction(fn)</code></td><td>Returns transaction function; rolls back on throw</td></tr>
+<tr><td><code>db.exec(sql)</code></td><td>Multiple statements separated by <code>;</code></td></tr>
+<tr><td><code>db.exec</code> without semicolon</td><td>Works (single statement)</td></tr>
+<tr><td>NULL values</td><td>Returned as <code>null</code></td></tr>
+<tr><td>BLOB values</td><td>Returned as <code>Uint8Array</code></td></tr>
+<tr><td>INTEGER values</td><td>Returned as <code>number</code></td></tr>
+<tr><td>TEXT values</td><td>Returned as <code>string</code></td></tr>
+<tr><td>REAL values</td><td>Returned as <code>number</code></td></tr>
+<tr><td><code>db.loadExtension</code></td><td>Exists as function</td></tr>
+<tr><td>WAL mode</td><td><code>PRAGMA journal_mode=WAL</code> (in-memory uses memory)</td></tr>
+</tbody>
+</table>
+<h3 id="deep-audit-buntranspiler-compression-stringwidth-escapehtml">Deep audit: Bun.Transpiler, compression, stringWidth, escapeHTML</h3>
+<table>
+<thead>
+<tr><th>API</th><th>Feature</th><th>Status</th></tr>
+</thead>
+<tbody>
+<tr><td><code>Bun.Transpiler</code></td><td>TS → JS (strips types, interfaces)</td><td>✅</td></tr>
+<tr><td><code>Bun.Transpiler</code></td><td>JSX transformation</td><td>✅</td></tr>
+<tr><td><code>Bun.gzipSync</code></td><td>Level 1-9 compression</td><td>✅</td></tr>
+<tr><td><code>Bun.gunzipSync</code></td><td>Decompression roundtrip</td><td>✅</td></tr>
+<tr><td><code>Bun.deflateSync</code> / <code>inflateSync</code></td><td>Roundtrip</td><td>✅</td></tr>
+<tr><td><code>Bun.zstdCompressSync</code> / <code>zstdDecompressSync</code></td><td>Roundtrip</td><td>✅</td></tr>
+<tr><td><code>Bun.stringWidth</code></td><td>ASCII=1, CJK=2, emoji=2, ZWJ=2, control=0</td><td>✅</td></tr>
+<tr><td><code>Bun.stringWidth</code></td><td>Combining chars add 0 width</td><td>✅</td></tr>
+<tr><td><code>Bun.escapeHTML</code></td><td>Escapes <code>&lt;&gt;&amp;&quot;'</code></td><td>✅</td></tr>
+<tr><td><code>Bun.escapeHTML</code></td><td>Non-string inputs stringified first</td><td>✅</td></tr>
+<tr><td><code>Bun.escapeHTML</code></td><td>Single quote → <code>&amp;#x27;</code> (not <code>&amp;#39;</code>)</td><td>✅</td></tr>
+<tr><td><code>Bun.dns.lookup</code></td><td>Returns array of addresses with family</td><td>✅</td></tr>
+<tr><td><code>Bun.dns.lookup</code></td><td>Family filter (4=IPv4, 6=IPv6)</td><td>✅</td></tr>
+<tr><td><code>Bun.gc</code></td><td>Manual garbage collection</td><td>✅</td></tr>
+<tr><td><code>Bun.readableStreamToArray</code></td><td>Collects stream chunks to array</td><td>✅</td></tr>
+<tr><td><code>Bun.pathToFileURL</code></td><td>Converts path to file:// URL</td><td>✅</td></tr>
+<tr><td><code>Bun.fileURLToPath</code></td><td>Converts file:// URL to path</td><td>✅</td></tr>
+<tr><td><code>Bun.nanoseconds()</code></td><td>Returns <code>number</code> (not <code>BigInt</code>)</td><td>✅</td></tr>
+<tr><td><code>Bun.env</code></td><td>Same reference as <code>process.env</code></td><td>✅</td></tr>
+</tbody>
+</table>
 <h2 id="related">Related</h2>
 <ul>
 <li><a href="https://bun.com/docs/runtime/markdown">Bun.markdown docs</a> — GFM parser used for this page</li>
