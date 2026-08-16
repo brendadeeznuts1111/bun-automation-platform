@@ -2079,3 +2079,79 @@ describe("React 18 vs 19 cross-verification across all features", () => {
     expect(normalizedJSON(t18)).toBe(normalizedJSON(t19));
   });
 });
+
+describe("tagFilter deep dive: 5 dangerous tags (Bun v1.3.14 gap)", () => {
+  // JUSTIFIED: ReactEl children are typed unknown; narrowing for child access
+  function childAt(el: ReactEl, idx: number): any {
+    // JUSTIFIED: narrowing children array for index access
+    return (el.props.children as unknown[])[idx] as any;
+  }
+
+  // Raw HTML blocks are wrapped in a custom <html> element; children are plain strings
+  function rawText(el: any): string {
+    const children = el.props.children;
+    return Array.isArray(children) ? children.join("") : String(children ?? "");
+  }
+
+  it("<script> not escaped when tagFilter: true", () => {
+    const md = "<script>alert(1)</script>";
+    // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
+    const tDefault = react(md, undefined, {} as unknown as ReactOpts);
+    // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
+    const tFilter = react(md, undefined, { tagFilter: true } as unknown as ReactOpts);
+    const defaultText = rawText(childAt(tDefault, 0));
+    const filterText = rawText(childAt(tFilter, 0));
+    expect(filterText).toContain("<script>");
+    expect(filterText).toContain("alert(1)");
+    expect(filterText).toBe(defaultText);
+  });
+
+  it("<style> not escaped when tagFilter: true", () => {
+    const md = "<style>body{}</style>";
+    // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
+    const tDefault = react(md, undefined, {} as unknown as ReactOpts);
+    // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
+    const tFilter = react(md, undefined, { tagFilter: true } as unknown as ReactOpts);
+    const defaultText = rawText(childAt(tDefault, 0));
+    const filterText = rawText(childAt(tFilter, 0));
+    expect(filterText).toContain("<style>");
+    expect(filterText).toContain("body{}");
+    expect(filterText).toBe(defaultText);
+  });
+
+  it("<iframe> not escaped when tagFilter: true", () => {
+    const md = '<iframe src="x"></iframe>';
+    // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
+    const tDefault = react(md, undefined, {} as unknown as ReactOpts);
+    // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
+    const tFilter = react(md, undefined, { tagFilter: true } as unknown as ReactOpts);
+    const defaultText = rawText(childAt(tDefault, 0));
+    const filterText = rawText(childAt(tFilter, 0));
+    expect(filterText).toContain("<iframe");
+    expect(filterText).toContain('src="x"');
+    expect(filterText).toBe(defaultText);
+  });
+
+  it("<script> inline block not escaped when tagFilter: true", () => {
+    const md = "<div>ok</div>\n\n<script>alert(1)</script>";
+    // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
+    const tFilter = react(md, undefined, { tagFilter: true } as unknown as ReactOpts);
+    const html0 = rawText(childAt(tFilter, 0));
+    const html1 = rawText(childAt(tFilter, 1));
+    expect(html0).toContain("<div>");
+    expect(html0).toContain("ok");
+    expect(html1).toContain("<script>");
+    expect(html1).toContain("alert(1)");
+  });
+
+  it("allowed <div> and disallowed <script> both unchanged when tagFilter: true", () => {
+    const md = "<div>ok</div>\n<script>bad</script>";
+    // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
+    const tFilter = react(md, undefined, { tagFilter: true } as unknown as ReactOpts);
+    const html = rawText(childAt(tFilter, 0));
+    expect(html).toContain("<div>");
+    expect(html).toContain("ok");
+    expect(html).toContain("<script>");
+    expect(html).toContain("bad");
+  });
+});
