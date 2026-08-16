@@ -636,6 +636,9 @@ const dashboardHandler = withMiddleware((): Response => {
 
 // Sitemap XML — lists all public static routes
 // Ref: node_modules/bun-types/docs/runtime/http/server.mdx
+// TODO: Bun v1.4 adds Bun.XML.stringify(); when the project upgrades, replace
+//       the manual string builder with a structured object. See:
+//       https://bun.sh/docs/runtime/xml
 function sitemapHandler(req: BunRequest): Response {
   const url = new URL(req.url);
   const base = `${url.protocol}//${url.host}`;

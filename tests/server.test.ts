@@ -116,6 +116,19 @@ describe("Server API Integration", () => {
     expect(text).toContain("/health");
     expect(text).toContain("/features");
     expect(text).not.toContain("/sitemap.xml");
+
+    // Deeper: every <url> has a valid absolute <loc>
+    const locs = text.match(/<loc>([^<]+)<\/loc>/g) ?? [];
+    expect(locs.length).toBeGreaterThan(0);
+    for (const loc of locs) {
+      const url = loc.replace(/<\/?loc>/g, "");
+      expect(url.startsWith("http")).toBe(true);
+      expect(url).not.toContain("/:");
+    }
+
+    // Deeper: lastmod is a valid ISO 8601 date
+    const lastmod = text.match(/<lastmod>([^<]+)<\/lastmod>/)?.[1] ?? "";
+    expect(lastmod).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
   });
 
   // --- Auth ---
