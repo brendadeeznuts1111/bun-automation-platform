@@ -739,6 +739,7 @@ describe("allowDangerousHtml option with react()", () => {
 
   it("noHtmlBlocks: true → HTML wrapped in p", () => {
     // JUSTIFIED: noHtmlBlocks option type — testing runtime behavior
+    // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
     const tree = react("<div>raw</div>", undefined, { noHtmlBlocks: true } as unknown as Parameters<typeof Bun.markdown.react>[2]);
     // JUSTIFIED: narrowing children array to first element for type check
     const p = (tree.props.children as unknown[])[0] as unknown as { type: unknown; props: Record<string, unknown> };
@@ -1639,6 +1640,7 @@ describe("React markdown parser options (real options per bun-types)", () => {
 
   it("noHtmlBlocks: true → block HTML wrapped in p (not escaped)", () => {
     // JUSTIFIED: narrowing for React element property access in option test
+    // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
     const tree = react("<div>block</div>", undefined, { noHtmlBlocks: true } as unknown as ReactOpts);
     // JUSTIFIED: narrowing for React element property access in option test
     const p = (tree.props.children as unknown[])[0] as unknown as { type: unknown };
@@ -1670,6 +1672,7 @@ describe("SSR output: renderToString for all element types", () => {
   const { renderToString } = require("react-dom/server");
 
   function toHTML(md: string, opts?: ReactOpts): string {
+    // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
     // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
     const tree = opts ? react(md, undefined, opts as unknown as ReactOpts) : react(md);
     return renderToString(tree);
@@ -1814,5 +1817,165 @@ describe("SSR output: renderToString for all element types", () => {
     const tree = react("# Hello", { h1: () => "plain text" });
     const html = renderToString(tree);
     expect(html).toContain("plain text");
+  });
+});
+
+describe("Tags, lists, and meta-as-props", () => {
+  const { renderToString } = require("react-dom/server");
+
+  // JUSTIFIED: ReactEl children are typed unknown; narrowing for child access
+  function childAt(el: ReactEl, idx: number): any {
+    // JUSTIFIED: narrowing children array for index access
+    return (el.props.children as unknown[])[idx] as any;
+  }
+
+  it("ordered list with start=5", () => {
+    const tree = react("5. first\n6. second");
+    const ol = childAt(tree, 0);
+    expect(ol.props.start).toBe(5);
+    const html = renderToString(tree);
+    expect(html).toContain('<ol start="5">');
+  });
+
+  it("task list li receives checked=true", () => {
+    const tree = react("- [x] done");
+    const ul = childAt(tree, 0);
+    const li = childAt(ul, 0);
+    expect(li.props.checked).toBe(true);
+  });
+
+  it("non-task li has no checked prop", () => {
+    const tree = react("- regular");
+    const ul = childAt(tree, 0);
+    const li = childAt(ul, 0);
+    expect(li.props.checked).toBeUndefined();
+  });
+
+  it("nested list: li contains nested ul", () => {
+    const tree = react("- a\n  - b\n- c");
+    const ul = childAt(tree, 0);
+    const li = childAt(ul, 0);
+    const nestedUl = (li.props.children as any[]).find((c: any) => c.type === "ul");
+    expect(nestedUl).toBeDefined();
+  });
+
+  it("table cell alignment: right", () => {
+    const tree = react("| H |\n|--:|\n| a |");
+    const table = childAt(tree, 0);
+    const thead = childAt(table, 0);
+    const tr = childAt(thead, 0);
+    const th = childAt(tr, 0);
+    expect(th.props.align).toBe("right");
+    const html = renderToString(tree);
+    expect(html).toContain('align="right"');
+  });
+
+  it("table cell alignment: center", () => {
+    const tree = react("| H |\n|:---:|\n| a |");
+    const table = childAt(tree, 0);
+    const thead = childAt(table, 0);
+    const tr = childAt(thead, 0);
+    const th = childAt(tr, 0);
+    expect(th.props.align).toBe("center");
+    const html = renderToString(tree);
+    expect(html).toContain('align="center"');
+  });
+
+  it("table cell alignment: left", () => {
+    const tree = react("| H |\n|:---|\n| a |");
+    const table = childAt(tree, 0);
+    const thead = childAt(table, 0);
+    const tr = childAt(thead, 0);
+    const th = childAt(tr, 0);
+    expect(th.props.align).toBe("left");
+    const html = renderToString(tree);
+    expect(html).toContain('align="left"');
+  });
+
+  // Raw HTML blocks are wrapped in a custom <html> element; children are plain strings (not escaped)
+  function rawText(el: any): string {
+    const children = el.props.children;
+    return Array.isArray(children) ? children.join("") : String(children ?? "");
+  }
+
+  it("tagFilter: true still allows <script> (not escaped)", () => {
+    // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
+    const tree = react("<script>alert(1)</script>", undefined, { tagFilter: true } as unknown as ReactOpts);
+    const htmlEl = childAt(tree, 0);
+    expect(htmlEl.type).toBe("html");
+    expect(rawText(htmlEl)).toContain("<script>");
+    expect(rawText(htmlEl)).toContain("alert(1)");
+  });
+
+  it("tagFilter: true still allows <style>", () => {
+    // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
+    const tree = react("<style>body{}</style>", undefined, { tagFilter: true } as unknown as ReactOpts);
+    const htmlEl = childAt(tree, 0);
+    expect(rawText(htmlEl)).toContain("<style>");
+    expect(rawText(htmlEl)).toContain("body{}");
+  });
+
+  it("tagFilter: true still allows <iframe>", () => {
+    // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
+    const tree = react("<iframe src=x></iframe>", undefined, { tagFilter: true } as unknown as ReactOpts);
+    const htmlEl = childAt(tree, 0);
+    expect(rawText(htmlEl)).toContain("<iframe");
+    expect(rawText(htmlEl)).toContain("src=x");
+  });
+
+  it("noHtmlBlocks: true wraps <div> in <p> but keeps attributes", () => {
+    // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
+    const tree = react('<div class="foo">block</div>', undefined, { noHtmlBlocks: true } as unknown as ReactOpts);
+    const p = childAt(tree, 0);
+    expect(p.type).toBe("p");
+    expect(rawText(p)).toContain('class="foo"');
+    expect(rawText(p)).toContain("block");
+  });
+
+  it("noHtmlSpans: true wraps inline <span> in <p>", () => {
+    // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
+    const tree = react('text <span class="x">span</span> more', undefined, { noHtmlSpans: true } as unknown as ReactOpts);
+    const p = childAt(tree, 0);
+    expect(p.type).toBe("p");
+    expect(rawText(p)).toContain('class="x"');
+    expect(rawText(p)).toContain("span");
+  });
+
+  it("HTML block with multiple attributes preserved", () => {
+    const tree = react('<div class="foo" id="bar" data-x="1">text</div>');
+    const htmlEl = childAt(tree, 0);
+    expect(htmlEl.type).toBe("html");
+    expect(rawText(htmlEl)).toContain('class="foo"');
+    expect(rawText(htmlEl)).toContain('id="bar"');
+    expect(rawText(htmlEl)).toContain('data-x="1"');
+    expect(rawText(htmlEl)).toContain("text");
+  });
+
+  it("list with multiple paragraphs in one item", () => {
+    const tree = react("- para1\n\n  para2");
+    const ul = childAt(tree, 0);
+    const li = childAt(ul, 0);
+    const children = li.props.children as any[];
+    const pCount = children.filter((c: any) => c.type === "p").length;
+    expect(pCount).toBe(2);
+  });
+
+  it("link meta: href, title passed as props", () => {
+    const tree = react('[text](https://x.com "title")');
+    const p = childAt(tree, 0);
+    const a = (p.props.children as any[]).find((c: any) => c.type === "a");
+    expect(a).toBeDefined();
+    expect(a.props.href).toBe("https://x.com");
+    expect(a.props.title).toBe("title");
+  });
+
+  it("image meta: src, alt, title passed as props", () => {
+    const tree = react('![alt](https://x.com/i.png "title")');
+    const p = childAt(tree, 0);
+    const img = (p.props.children as any[]).find((c: any) => c.type === "img");
+    expect(img).toBeDefined();
+    expect(img.props.src).toBe("https://x.com/i.png");
+    expect(img.props.alt).toBe("alt");
+    expect(img.props.title).toBe("title");
   });
 });
