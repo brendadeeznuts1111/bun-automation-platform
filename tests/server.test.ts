@@ -225,6 +225,22 @@ describe("Server API Integration", () => {
     expect(Array.isArray(data.logs)).toBe(true);
   });
 
+  it("GET /api/audit.jsonl returns audit log as JSONL", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/audit.jsonl?limit=5`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toContain("application/jsonl");
+    const text = await res.text();
+    const lines = text.split("\n").filter(Boolean);
+    expect(lines.length).toBeGreaterThan(0);
+    for (const line of lines) {
+      const obj = JSON.parse(line);
+      expect(obj).toHaveProperty("action");
+      expect(obj).toHaveProperty("created_at");
+    }
+  });
+
   // --- CSRF ---
 
   it("POST /task returns 403 without CSRF token (even with auth)", async () => {

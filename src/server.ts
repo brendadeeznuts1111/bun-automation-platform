@@ -516,6 +516,18 @@ const auditHandler = withAuth<"">((req, ctx) => {
   return json({ logs, limit, offset });
 });
 
+// JSONL audit export — chains Bun.serve with the audit log DB + streaming format
+// Ref: node_modules/bun-types/docs/runtime/jsonl.mdx (or Bun.JSONL.parse docs)
+const auditJsonlHandler = withAuth<"">((req, ctx) => {
+  const url = new URL(req.url);
+  const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "50", 10), 200);
+  const offset = parseInt(url.searchParams.get("offset") ?? "0", 10);
+  const agentId = ctx.agentId;
+  const logs = getAuditLog(limit, offset, agentId);
+  const lines = logs.map((log) => JSON.stringify(log)).join("\n");
+  return new Response(lines, { headers: { "Content-Type": "application/jsonl" } });
+});
+
 // --- Server ----------------------------------------------------------------
 
 // R5: /protocol endpoint — shows which HTTP version the client used.
@@ -608,6 +620,7 @@ const dashboardHandler = withMiddleware((): Response => {
     <li><a href="/protocol">/protocol</a> — protocol info</li>
     <li><a href="/features">/features</a> — feature flags</li>
     <li><a href="/dashboard">/dashboard</a> — this page</li>
+    <li><code>GET /api/audit.jsonl</code> — audit log JSONL export</li>
     <li><code>POST /api/markdown</code> — render markdown to HTML</li>
   </ul>
   <script>
@@ -687,6 +700,7 @@ const routes: Record<string, unknown> = {
   "/sessions": { GET: listSessionsHandler },
   "/screenshot/:id": { GET: getScreenshotHandler },
   "/audit": { GET: auditHandler },
+  "/api/audit.jsonl": { GET: auditJsonlHandler },
 };
 
 // Sitemap feature flag — enable the route and mark active when requested
@@ -850,6 +864,7 @@ console.log(`  GET  /task/:id       — get task by ID (auth required)`);
 console.log(`  GET  /sessions       — list sessions (auth required)`);
 console.log(`  GET  /screenshot/:id — serve screenshot (auth required)`);
 console.log(`  GET  /audit          — audit log (auth required)`);
+console.log(`  GET  /api/audit.jsonl — audit log JSONL export (auth required)`);
 console.log(`  GET  /protocol       — protocol info (public)`);
 console.log(`  GET  /features       — feature flags + promotion status (public)`);
 if (ENABLE_DEV_DASHBOARD) {
