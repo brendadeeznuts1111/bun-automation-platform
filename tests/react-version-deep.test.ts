@@ -743,3 +743,135 @@ describe("allowDangerousHtml option with react()", () => {
     expect(p.type).toBe("p");
   });
 });
+
+describe("Edge cases: input types", () => {
+  it("null input throws", () => {
+    // JUSTIFIED: testing runtime error handling — null is not a valid input type
+    expect(() => Bun.markdown.react(null as never)).toThrow("Expected a string or buffer");
+  });
+
+  it("number input throws", () => {
+    // JUSTIFIED: testing runtime error handling — number is not a valid input type
+    expect(() => Bun.markdown.react(42 as never)).toThrow("Expected a string or buffer");
+  });
+
+  it("object input throws", () => {
+    // JUSTIFIED: testing runtime error handling — object is not a valid input type
+    expect(() => Bun.markdown.react({ a: 1 } as never)).toThrow("Expected a string or buffer");
+  });
+
+  it("Uint8Array input works", () => {
+    const buf = new TextEncoder().encode("# Hello");
+    // JUSTIFIED: Uint8Array is accepted at runtime but not in type signature
+    const tree = Bun.markdown.react(buf as unknown as string) as unknown as ReactEl;
+    // JUSTIFIED: narrowing children array to first element for type check
+    const h1 = (tree.props.children as unknown[])[0] as unknown as { type: unknown };
+    expect(h1.type).toBe("h1");
+  });
+
+  it("ArrayBuffer input works", () => {
+    const buf = new TextEncoder().encode("# Hello");
+    // JUSTIFIED: ArrayBuffer is accepted at runtime but not in type signature
+    const tree = Bun.markdown.react(buf.buffer as unknown as string) as unknown as ReactEl;
+    // JUSTIFIED: narrowing children array to first element for type check
+    const h1 = (tree.props.children as unknown[])[0] as unknown as { type: unknown };
+    expect(h1.type).toBe("h1");
+  });
+});
+
+describe("Edge cases: malformed markdown", () => {
+  it("7+ hashes → paragraph (not heading)", () => {
+    const tree = react("####### H7");
+    // JUSTIFIED: narrowing children array to first element for type check
+    const child = (tree.props.children as unknown[])[0] as unknown as { type: unknown };
+    expect(child.type).toBe("p");
+  });
+
+  it("malformed table (no separator row) → paragraph", () => {
+    const tree = react("| Col |\n| no separator |\n| val |");
+    // JUSTIFIED: narrowing children array to first element for type check
+    const child = (tree.props.children as unknown[])[0] as unknown as { type: unknown };
+    expect(child.type).toBe("p");
+  });
+
+  it("unclosed code block → pre element (auto-closed)", () => {
+    const tree = react("```\ncode without end");
+    // JUSTIFIED: narrowing children array to first element for type check
+    const child = (tree.props.children as unknown[])[0] as unknown as { type: unknown };
+    expect(child.type).toBe("pre");
+  });
+
+  it("empty string → fragment with empty children", () => {
+    const tree = react("");
+    expect((tree.props.children as unknown[]).length).toBe(0);
+  });
+
+  it("very long input (100k chars) → single paragraph", () => {
+    const long = "paragraph ".repeat(10000);
+    const tree = react(long);
+    expect((tree.props.children as unknown[]).length).toBe(1);
+  });
+});
+
+describe("Edge cases: unicode and special content", () => {
+  it("CJK content renders correctly", () => {
+    const tree = react("# 日本語\n\nこんにちは世界");
+    // JUSTIFIED: narrowing children array to first element for type/props check
+    const h1 = (tree.props.children as unknown[])[0] as unknown as { type: unknown; props: { children?: unknown } };
+    expect(h1.type).toBe("h1");
+    const children = h1.props.children as unknown[];
+    expect(children[0]).toBe("日本語");
+  });
+
+  it("emoji content renders correctly", () => {
+    const tree = react("# 🎉 Title\n\nHello 👋");
+    // JUSTIFIED: narrowing children array to first element for type/props check
+    const h1 = (tree.props.children as unknown[])[0] as unknown as { type: unknown; props: { children?: unknown } };
+    expect(h1.type).toBe("h1");
+    const children = h1.props.children as unknown[];
+    expect(children[0]).toContain("🎉");
+  });
+
+  it("mixed line endings (\\r\\n) handled correctly", () => {
+    const tree = react("# Title\r\n\r\nParagraph\r\n\r\n- item\r\n- item");
+    const children = tree.props.children as unknown[];
+    // JUSTIFIED: narrowing children for type checking
+    expect((children[0] as unknown as { type: unknown }).type).toBe("h1");
+    // JUSTIFIED: narrowing children array element for type check
+    expect((children[1] as unknown as { type: unknown }).type).toBe("p");
+    // JUSTIFIED: narrowing children array element for type check
+    expect((children[2] as unknown as { type: unknown }).type).toBe("ul");
+  });
+});
+
+describe("GFM extensions in react()", () => {
+  it("strikethrough → del element", () => {
+    const tree = react("~~deleted~~");
+    // JUSTIFIED: narrowing children array to first element for type/props check
+    const p = (tree.props.children as unknown[])[0] as unknown as { type: unknown; props: { children?: unknown } };
+    // JUSTIFIED: narrowing p.children array to first element
+    const del = (p.props.children as unknown[])[0] as unknown as { type: unknown };
+    expect(del.type).toBe("del");
+  });
+
+  it("autolink URL → plain text (not autolinked by default in react)", () => {
+    const tree = react("Visit https://bun.com");
+    // JUSTIFIED: narrowing children array to first element for type/props check
+    const p = (tree.props.children as unknown[])[0] as unknown as { type: unknown; props: { children?: unknown } };
+    expect(p.type).toBe("p");
+    // URL is plain text, not an <a> element
+    const children = p.props.children as unknown[];
+    expect(children[0]).toContain("https://bun.com");
+  });
+
+  it("footnote-like syntax → a element with href", () => {
+    const tree = react("Text[^1]\n\n[^1]: footnote");
+    // JUSTIFIED: narrowing children array to first element for type/props check
+    const p = (tree.props.children as unknown[])[0] as unknown as { type: unknown; props: { children?: unknown } };
+    const children = p.props.children as unknown[];
+    // Find the <a> element among children
+    // JUSTIFIED: narrowing child to check for a element type
+    const aEl = children.find((c: unknown) => (c as unknown as { type?: unknown })?.type === "a");
+    expect(aEl).toBeDefined();
+  });
+});
