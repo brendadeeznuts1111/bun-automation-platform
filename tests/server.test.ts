@@ -110,6 +110,16 @@ describe("Server API Integration", () => {
     expect(text).toContain("workers{state=\"total\"} 1");
   });
 
+  it("GET /metrics includes PWA and route metrics", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/metrics`);
+    const text = await res.text();
+    expect(text).toContain("routes{type=\"total\"}");
+    expect(text).toContain("routes{type=\"pwa\"}");
+    expect(text).toContain('pwa{enabled="true"}');
+    expect(text).toContain("features{type=\"active\"}");
+    expect(text).toContain("features{type=\"total\"}");
+  });
+
   it("GET /sitemap.xml returns valid sitemap XML", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/sitemap.xml`);
     expect(res.status).toBe(200);
@@ -133,6 +143,20 @@ describe("Server API Integration", () => {
     // Deeper: lastmod is a valid ISO 8601 date
     const lastmod = text.match(/<lastmod>([^<]+)<\/lastmod>/)?.[1] ?? "";
     expect(lastmod).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+  });
+
+  it("GET /sitemap.xml includes PWA routes when ENABLE_PWA=1", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/sitemap.xml`);
+    const text = await res.text();
+    expect(text).toContain("/manifest.json");
+    expect(text).toContain("/sw.js");
+    expect(text).toContain("/dashboard");
+    expect(text).toContain("/api/pwa/compare");
+    expect(text).toContain("/api/pwa/validate");
+    expect(text).toContain("/bun-com/manifest.json");
+    // Param routes should NOT be in sitemap
+    expect(text).not.toContain("/icons/:filename");
+    expect(text).not.toContain("/bun-com/icons/:filename");
   });
 
   it("GET /features lists sitemap as active when ENABLE_SITEMAP=1", async () => {

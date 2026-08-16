@@ -422,9 +422,49 @@ describe("Bun.file() MIME type — special types", () => {
     expect(file.type).toBe("application/json5");
   });
 
+  it(".webmanifest → application/manifest+json", () => {
+    const file = Bun.file("./file.webmanifest");
+    expect(file.type).toBe("application/manifest+json");
+  });
+
   it(".markdown → text/markdown", () => {
     const file = Bun.file("./file.markdown");
     expect(file.type).toBe("text/markdown");
+  });
+});
+
+// ============================================================================
+// PWA manifest MIME types — served by our server
+// ============================================================================
+
+describe("Bun.file() MIME type — PWA manifest + icons", () => {
+  it("manifest.json is served as application/manifest+json by our server", async () => {
+    // Our server explicitly sets Content-Type for manifest.json
+    // (Bun.file alone would return application/json, but the route overrides)
+    const file = Bun.file("./public/manifest.json");
+    // Bun.file detects .json as application/json — our server overrides to
+    // application/manifest+json per the W3C spec
+    expect(file.type).toBe("application/json;charset=utf-8");
+  });
+
+  it("sw.js is served as application/javascript by our server", () => {
+    const file = Bun.file("./public/sw.js");
+    expect(file.type).toBe("text/javascript;charset=utf-8");
+  });
+
+  it("PWA icons (.png) have correct MIME type", () => {
+    const file = Bun.file("./public/icons/icon-128.png");
+    expect(file.type).toBe("image/png");
+  });
+
+  it("bun.com SVG icon has correct MIME type", () => {
+    const file = Bun.file("./public/bun-com/icons/logo.svg");
+    expect(file.type).toBe("image/svg+xml");
+  });
+
+  it("bun.com favicon.ico has correct MIME type", () => {
+    const file = Bun.file("./public/bun-com/icons/favicon.ico");
+    expect(file.type).toBe("image/x-icon");
   });
 });
 

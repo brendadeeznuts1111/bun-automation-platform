@@ -265,6 +265,10 @@ const metricsHandler = withMiddleware((): Response => {
   });
 
   const pool = getPoolStatus();
+  const routeCount = Object.keys(routes).length;
+  const pwaRouteCount = Object.keys(routes).filter((r) =>
+    r.includes("manifest") || r.includes("sw.js") || r.includes("icons") || r.includes("pwa")
+  ).length;
   const metrics = [
     ...taskCounts.map((t) => `tasks{status="${t.status}"} ${t.count}`),
     `workers{state="total"} ${pool.total}`,
@@ -272,6 +276,11 @@ const metricsHandler = withMiddleware((): Response => {
     `workers{state="idle"} ${pool.idle}`,
     `workers{state="queued"} ${pool.queued}`,
     `process_uptime_seconds ${process.uptime()}`,
+    `routes{type="total"} ${routeCount}`,
+    `routes{type="pwa"} ${pwaRouteCount}`,
+    `pwa{enabled="${ENABLE_PWA ? "true" : "false"}"} 1`,
+    `features{type="active"} ${listFeatures().filter((f) => f.active).length}`,
+    `features{type="total"} ${listFeatures().length}`,
   ].join("\n");
 
   return new Response(metrics, {
