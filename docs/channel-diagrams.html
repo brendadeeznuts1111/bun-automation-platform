@@ -2768,6 +2768,106 @@ bun ./README.md | pbcopy
 <tr><td>null-prototype object</td><td>Works normally</td></tr>
 </tbody>
 </table>
+<h3 id="deep-audit-bugs-26-34-third-round">Deep audit: Bugs 26-34 (third round)</h3>
+<table>
+<thead>
+<tr><th>Bug</th><th>API</th><th>Description</th><th>Severity</th></tr>
+</thead>
+<tbody>
+<tr><td>26</td><td><code>Bun.markdown.html</code></td><td>YAML frontmatter not stripped — rendered as <code>&lt;hr&gt;</code> + <code>&lt;h2&gt;</code> instead of being removed</td><td>Medium</td></tr>
+<tr><td>27</td><td><code>Bun.markdown.html</code></td><td>Math blocks (<code>$$...$$</code>) and inline math (<code>$...$</code>) not supported — rendered as literal text</td><td>Low</td></tr>
+<tr><td>28</td><td><code>Bun.markdown.html</code></td><td>Heading IDs with CJK characters produce empty <code>id=&quot;&quot;</code> (slugify strips all non-ASCII)</td><td>Medium</td></tr>
+<tr><td>29</td><td><code>console.log</code></td><td><code>%s</code> format specifier with Symbol throws <code>TypeError: Cannot convert a symbol to a string</code> (direct log works fine)</td><td>Medium</td></tr>
+<tr><td>30</td><td><code>console.log</code></td><td><code>%d</code> format specifier with BigInt throws or produces <code>NaN</code> (direct log works fine)</td><td>Low</td></tr>
+<tr><td>31</td><td><code>console.log</code></td><td><code>%j</code> format specifier with BigInt throws <code>JSON.stringify cannot serialize BigInt</code></td><td>Low</td></tr>
+<tr><td>32</td><td><code>console.dir</code></td><td>Default depth is 2 (same as <code>console.log</code>), NOT 0 like Node.js — <code>console.dir</code> should show full depth by default</td><td>Medium</td></tr>
+<tr><td>33</td><td><code>Bun.inspect</code></td><td>Non-enumerable properties shown by default (unlike Node.js which hides them without <code>showHidden: true</code>)</td><td>Low</td></tr>
+<tr><td>34</td><td><code>Bun.sleepSync</code></td><td>Throws when given a <code>Date</code> argument, unlike <code>Bun.sleep</code> which accepts <code>Date</code> — inconsistent API</td><td>Medium</td></tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Bug 29 detail:</strong> <code>console.log(&quot;%s&quot;, Symbol(&quot;test&quot;))</code> throws <code>TypeError: Cannot convert a symbol to a string</code>, but <code>console.log(Symbol(&quot;test&quot;))</code> works fine and prints <code>Symbol(test)</code>. The <code>%s</code> formatter should use the same string conversion as direct logging.</p>
+</blockquote>
+<blockquote>
+<p><strong>Bug 32 detail:</strong> In Node.js, <code>console.dir(obj)</code> defaults to <code>depth: 0</code> (full inspection), while <code>console.log(obj)</code> defaults to <code>depth: 2</code>. In Bun, both default to <code>depth: 2</code>, making <code>console.dir</code> identical to <code>console.log</code> and defeating its purpose.</p>
+</blockquote>
+<blockquote>
+<p><strong>Bug 33 detail:</strong> <code>Bun.inspect(obj)</code> shows non-enumerable properties by default. In Node.js, <code>util.inspect(obj)</code> hides them unless <code>showHidden: true</code> is passed. Bun's <code>showHidden</code> option works but is effectively a no-op since non-enumerable properties are already shown.</p>
+</blockquote>
+<blockquote>
+<p><strong>Bug 34 detail:</strong> <code>Bun.sleep(new Date(future))</code> works, but <code>Bun.sleepSync(new Date(future))</code> throws <code>Expected milliseconds to be a number for 'sleepSync'</code>. The two sleep APIs should accept the same input types.</p>
+</blockquote>
+<h3 id="deep-audit-buninspect-color-codes">Deep audit: Bun.inspect color codes</h3>
+<table>
+<thead>
+<tr><th>Type</th><th>ANSI Color</th></tr>
+</thead>
+<tbody>
+<tr><td>Number (including NaN, Infinity, -0, BigInt)</td><td>Yellow (33)</td></tr>
+<tr><td>Boolean</td><td>Yellow (33)</td></tr>
+<tr><td>null</td><td>Yellow (33)</td></tr>
+<tr><td>String (with quotes)</td><td>Green (32)</td></tr>
+<tr><td>Symbol</td><td>Blue (34)</td></tr>
+<tr><td>RegExp</td><td>Red (31)</td></tr>
+<tr><td>Date</td><td>Magenta (35)</td></tr>
+<tr><td>Function (named/arrow)</td><td>Cyan (36)</td></tr>
+<tr><td>Promise (resolved state)</td><td>Cyan (36)</td></tr>
+<tr><td>undefined</td><td>Dim (2)</td></tr>
+<tr><td>Object keys</td><td>Default (reset)</td></tr>
+<tr><td>Colons, commas</td><td>Dim (2)</td></tr>
+<tr><td>Empty object/array</td><td>No color codes</td></tr>
+</tbody>
+</table>
+<h3 id="deep-audit-bunmarkdownhtml-gfm-features">Deep audit: Bun.markdown.html() GFM features</h3>
+<table>
+<thead>
+<tr><th>Feature</th><th>Status</th><th>Notes</th></tr>
+</thead>
+<tbody>
+<tr><td>GFM task lists</td><td>✅</td><td><code>- [ ]</code> and <code>- [x]</code> with disabled checkboxes</td></tr>
+<tr><td>Strikethrough (single <code>~~</code>)</td><td>✅</td><td>Renders as <code>&lt;del&gt;</code></td></tr>
+<tr><td>Strikethrough (triple <code>~~~</code>)</td><td>❌</td><td>Treated as code block fence</td></tr>
+<tr><td>Emoji in headings/text</td><td>✅</td><td>Passes through correctly</td></tr>
+<tr><td>Nested bold/italic</td><td>✅</td><td><code>&lt;strong&gt;</code> inside <code>&lt;em&gt;</code> and vice versa</td></tr>
+<tr><td>Blockquote nesting</td><td>✅</td><td>Nested <code>&lt;blockquote&gt;</code> elements</td></tr>
+<tr><td>Ordered list <code>start</code> attribute</td><td>✅</td><td><code>&lt;ol start=&quot;3&quot;&gt;</code> for non-1 start</td></tr>
+<tr><td>Mixed ordered/unordered lists</td><td>✅</td><td><code>&lt;ol&gt;</code> containing <code>&lt;ul&gt;</code></td></tr>
+<tr><td>Table with formatting in cells</td><td>✅</td><td>Bold, italic, code, strike, links, images</td></tr>
+<tr><td>YAML frontmatter</td><td>❌ Bug 26</td><td>Not stripped, rendered as content</td></tr>
+<tr><td>Math blocks (<code>$$...$$</code>)</td><td>❌ Bug 27</td><td>Not supported, literal text</td></tr>
+<tr><td>Inline math (<code>$...$</code>)</td><td>❌ Bug 27</td><td>Not supported, literal text</td></tr>
+<tr><td>Heading IDs with CJK</td><td>❌ Bug 28</td><td>Empty <code>id=&quot;&quot;</code> for non-ASCII</td></tr>
+<tr><td>Buffer/Uint8Array input</td><td>✅</td><td>Accepted (docs say &quot;string or buffer&quot;)</td></tr>
+<tr><td>react() output</td><td>✅</td><td>React element with <code>$$typeof</code> symbol</td></tr>
+</tbody>
+</table>
+<h3 id="deep-audit-bunpassword-buncsrf-buncolor-bunsemver-bunhash">Deep audit: Bun.password, Bun.CSRF, Bun.color, Bun.semver, Bun.hash</h3>
+<table>
+<thead>
+<tr><th>API</th><th>Feature</th><th>Status</th></tr>
+</thead>
+<tbody>
+<tr><td><code>Bun.password</code></td><td>argon2id, argon2d, argon2i, bcrypt</td><td>✅ All 4 algorithms work</td></tr>
+<tr><td><code>Bun.password</code></td><td>bcrypt cost parameter</td><td>✅ Affects hash</td></tr>
+<tr><td><code>Bun.CSRF</code></td><td>sha256, sha384, sha512</td><td>✅ All 3 algorithms work</td></tr>
+<tr><td><code>Bun.CSRF</code></td><td>Wrong secret rejection</td><td>✅</td></tr>
+<tr><td><code>Bun.color</code></td><td>16 output formats</td><td>✅ hex, HEX, rgb, rgba, hsl, css, number, lab, ansi, ansi_16, ansi_16m, ansi_256, [rgb], [rgba], {rgb}, {rgba}</td></tr>
+<tr><td><code>Bun.color</code></td><td>Named colors (red, blue, etc.)</td><td>✅</td></tr>
+<tr><td><code>Bun.color</code></td><td>Invalid color returns null</td><td>✅</td></tr>
+<tr><td><code>Bun.semver</code></td><td>satisfies, order, prerelease</td><td>✅</td></tr>
+<tr><td><code>Bun.hash</code></td><td>wyhash (default), crc32, adler32</td><td>✅</td></tr>
+<tr><td><code>Bun.hash</code></td><td>Seed parameter</td><td>✅ (wyhash only)</td></tr>
+<tr><td><code>Bun.hash</code></td><td>Uint8Array input</td><td>✅</td></tr>
+<tr><td><code>Bun.Glob</code></td><td>match, scan, brace expansion, char class</td><td>✅</td></tr>
+<tr><td><code>Bun.sleep</code></td><td>Date input, 0, negative</td><td>✅ All work</td></tr>
+<tr><td><code>Bun.sleepSync</code></td><td>Date input</td><td>❌ Bug 34 (throws)</td></tr>
+<tr><td><code>Bun.sleepSync</code></td><td>Negative</td><td>❌ Throws (by design)</td></tr>
+<tr><td><code>Bun.peek</code></td><td>Non-promise values</td><td>✅ Returns as-is</td></tr>
+<tr><td><code>Bun.peek.status</code></td><td>fulfilled, pending, rejected</td><td>✅</td></tr>
+<tr><td><code>Bun.which</code></td><td>PATH option</td><td>✅</td></tr>
+<tr><td><code>Bun.randomUUIDv7</code></td><td>Monotonic IDs, buffer/base64 encoding, explicit timestamp</td><td>✅</td></tr>
+</tbody>
+</table>
 <h2 id="related">Related</h2>
 <ul>
 <li><a href="https://bun.com/docs/runtime/markdown">Bun.markdown docs</a> — GFM parser used for this page</li>
