@@ -2065,9 +2065,11 @@ const dashboardHandler = withMiddleware((): Response => {
 
     <div class="api-cat">
       <h3>📦 PWA &amp; Static</h3>
-      <div class="api-row"><a href="/manifest.json" class="api-method api-get">GET</a><span class="api-path">/manifest.json</span><span class="api-desc">PWA manifest</span></div>
+      <div class="api-row"><a href="/manifest.json" class="api-method api-get">GET</a><span class="api-path">/manifest.json</span><span class="api-desc">dynamic PWA manifest (runtime-injected)</span><span class="api-bun">Bun.file</span></div>
+      <div class="api-row"><span class="api-method api-post">POST</span><span class="api-path">/api/manifest</span><span class="api-desc">update manifest field at runtime</span><span class="api-auth">auth</span><span class="api-csrf">CSRF</span></div>
+      <div class="api-row"><span class="api-method api-post">POST</span><span class="api-path">/api/share-target</span><span class="api-desc">PWA share target (receive shared content)</span></div>
       <div class="api-row"><a href="/sw.js" class="api-method api-get">GET</a><span class="api-path">/sw.js</span><span class="api-desc">service worker</span></div>
-      ${ENABLE_SITEMAP ? '<div class="api-row"><a href="/sitemap.xml" class="api-method api-get">GET</a><span class="api-path">/sitemap.xml</span><span class="api-desc">sitemap XML</span></div>' : ""}
+      ${ENABLE_SITEMAP ? '<div class="api-row"><a href="/sitemap.xml" class="api-method api-get">GET</a><span class="api-path">/sitemap.xml</span><span class="api-desc">sitemap with priority + changefreq metadata</span></div>' : ""}
       <div class="api-row"><a href="/protocol" class="api-method api-get">GET</a><span class="api-path">/protocol</span><span class="api-desc">protocol info (HTTP/3 status)</span></div>
       <div class="api-row"><a href="/features" class="api-method api-get">GET</a><span class="api-path">/features</span><span class="api-desc">feature flags (JSON)</span></div>
       <div class="api-row"><a href="/dashboard" class="api-method api-get">GET</a><span class="api-path">/dashboard</span><span class="api-desc">this page</span></div>
@@ -2911,26 +2913,79 @@ const dashboardHandler = withMiddleware((): Response => {
   return response;
 });
 
-// Sitemap XML — lists all public static routes
-// Ref: node_modules/bun-types/docs/runtime/http/server.mdx
-// TODO: Bun v1.4 adds Bun.XML.stringify(); when the project upgrades, replace
-//       the manual string builder with a structured object. See:
-//       https://bun.sh/docs/runtime/xml
+// Sitemap XML — lists all public routes with metadata
+// Ref: https://www.sitemaps.org/protocol.html
+// Each route has priority (1.0=most important), changefreq, and lastmod.
+// Dynamic routes (with :params) are excluded; auth-required routes get lower priority.
 function sitemapHandler(req: BunRequest): Response {
   const url = new URL(req.url);
   const base = `${url.protocol}//${url.host}`;
   const lastmod = new Date().toISOString();
+
+  // Route metadata — priority and changefreq per route pattern
+  // Ref: https://www.sitemaps.org/protocol.html#xmlTagDefinitions
+  const routeMeta: Record<string, { priority: number; changefreq: string }> = {
+    "/health": { priority: 0.9, changefreq: "always" },
+    "/metrics": { priority: 0.8, changefreq: "always" },
+    "/dashboard": { priority: 1.0, changefreq: "hourly" },
+    "/manifest.json": { priority: 0.6, changefreq: "weekly" },
+    "/sw.js": { priority: 0.4, changefreq: "monthly" },
+    "/features": { priority: 0.7, changefreq: "daily" },
+    "/protocol": { priority: 0.5, changefreq: "weekly" },
+    "/api/openapi.json": { priority: 0.8, changefreq: "daily" },
+    "/api/semver": { priority: 0.6, changefreq: "weekly" },
+    "/api/pwa/validate": { priority: 0.5, changefreq: "weekly" },
+    "/api/pwa/compare": { priority: 0.4, changefreq: "weekly" },
+    "/api/diagrams": { priority: 0.5, changefreq: "weekly" },
+    "/api/config": { priority: 0.4, changefreq: "weekly" },
+    "/api/ffi": { priority: 0.3, changefreq: "monthly" },
+    "/api/hash": { priority: 0.3, changefreq: "monthly" },
+    "/api/transpile": { priority: 0.4, changefreq: "weekly" },
+    "/api/compress": { priority: 0.3, changefreq: "monthly" },
+    "/api/utils": { priority: 0.3, changefreq: "monthly" },
+    "/api/redis": { priority: 0.3, changefreq: "monthly" },
+  };
+
+  // Auth-required routes get lower priority
+  const authRoutes = new Set([
+    "/tasks", "/sessions", "/api/tasks.jsonl", "/api/sessions.jsonl",
+    "/api/audit.jsonl", "/api/audit/stream", "/api/export/bundle.tar",
+    "/api/s3/backup", "/api/logs", "/api/processes", "/api/fs",
+    "/api/runtime", "/api/sql", "/api/image", "/api/screenshot",
+    "/api/mermaid",
+  ]);
+
   const paths = Object.keys(routes).filter(
-    (p) => !p.includes(":") && p !== "/sitemap.xml",
+    (p) => !p.includes(":") && p !== "/sitemap.xml" && !p.startsWith("/bun-com/"),
   );
+
   const urls = paths
-    .map(
-      (p) =>
-        `  <url><loc>${base}${p}</loc><lastmod>${lastmod}</lastmod><changefreq>weekly</changefreq><priority>0.5</priority></url>`,
-    )
+    .map((p) => {
+      const meta = routeMeta[p] ?? {
+        priority: authRoutes.has(p) ? 0.3 : 0.5,
+        changefreq: authRoutes.has(p) ? "hourly" : "weekly",
+      };
+      return `  <url>
+    <loc>${base}${p}</loc>
+    <lastmod>${lastmod}</lastmod>
+    <changefreq>${meta.changefreq}</changefreq>
+    <priority>${meta.priority.toFixed(1)}</priority>
+  </url>`;
+    })
     .join("\n");
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>`;
-  return new Response(xml, { headers: { "Content-Type": "application/xml" } });
+
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls}
+</urlset>`;
+
+  return new Response(xml, {
+    headers: {
+      "Content-Type": "application/xml; charset=utf-8",
+      "Cache-Control": "public, max-age=3600",
+      "X-Sitemap-Route-Count": paths.length.toString(),
+    },
+  });
 }
 
 // Markdown rendering API — chains Bun.serve with Bun.markdown.html()
@@ -3028,13 +3083,118 @@ if (ENABLE_HTML_REWRITER) {
 // installed as a Chrome standalone app.
 // Ref: https://web.dev/articles/add-manifest
 if (ENABLE_PWA) {
-  // Serve the PWA manifest
+  // Dynamic PWA manifest — reads base from disk, injects runtime values
+  // (server URL, active features, Bun version) so the manifest reflects
+  // the actual running server state.
+  // Ref: https://web.dev/articles/add-manifest
+  // Ref: https://w3c.github.io/manifest-app-info/
   routes["/manifest.json"] = {
-    GET: withMiddleware((): Response => {
+    GET: withMiddleware(async (req: BunRequest): Promise<Response> => {
       const manifest = Bun.file("public/manifest.json");
-      return new Response(manifest, {
-        headers: { "Content-Type": "application/manifest+json" },
+      // Read the base manifest and inject runtime metadata
+      // JUSTIFIED: .json() returns unknown; narrowing to manifest shape
+      const base = await manifest.json() as Record<string, unknown>;
+      const m = base;
+        const url = new URL(req.url);
+        const origin = `${url.protocol}//${url.host}`;
+        // Inject runtime values
+        m.id = `/?source=pwa&host=${origin}`;
+        m.start_url = `/dashboard?source=pwa&host=${origin}`;
+        // Add runtime info to description
+        const desc = m.description as string;
+        m.description = `${desc} Running on Bun ${Bun.version} at ${origin}.`;
+        // Add file_handlers for PWA file association (Chrome 117+)
+        // Ref: https://developer.chrome.com/articles/file-handling/
+        m.file_handlers = [
+          {
+            action: `/dashboard?source=file-handler`,
+            accept: {
+              "application/json": [".json"],
+              "application/manifest+json": [".webmanifest"],
+              "text/markdown": [".md", ".markdown"],
+              "text/yaml": [".yaml", ".yml"],
+              "text/toml": [".toml"],
+            },
+          },
+        ];
+        // Add protocol_handlers for deep linking
+        // Ref: https://developer.mozilla.org/en-US/docs/Web/Manifest/protocol_handlers
+        m.protocol_handlers = [
+          { protocol: "web+bun-dev", url: `/dashboard?source=protocol&url=%s` },
+        ];
+        // Add share_target for receiving shared content (Chrome 76+)
+        // Ref: https://developer.chrome.com/articles/web-share-target/
+        m.share_target = {
+          action: "/api/share-target",
+          method: "POST",
+          enctype: "application/x-www-form-urlencoded",
+          params: {
+            title: "title",
+            text: "text",
+            url: "url",
+          },
+        };
+        // Add launch_handler for single-instance behavior (Chrome 118+)
+        // Ref: https://developer.chrome.com/articles/launch-handler/
+        m.launch_handler = {
+          client_mode: "navigate-existing",
+        };
+        return new Response(JSON.stringify(m, null, 2), {
+          headers: {
+            "Content-Type": "application/manifest+json",
+            "Cache-Control": "no-cache", // Dynamic — don't cache
+          },
+        });
+    }),
+  };
+
+  // Manifest editor — update the manifest at runtime (auth + CSRF)
+  // POST /api/manifest with { field: "theme_color", value: "#ff0000" }
+  routes["/api/manifest"] = {
+    POST: withCsrf(async (req: BunRequest): Promise<Response> => {
+      // JUSTIFIED: req.json() returns unknown; narrowing to manifest update body
+      const body = await req.json() as { field: string; value: unknown };
+      if (!body.field || body.value === undefined) {
+        return json({ error: "field and value required" }, 400);
+      }
+      const allowedFields = [
+        "name", "short_name", "description", "theme_color",
+        "background_color", "display", "orientation", "lang", "dir",
+        "categories", "start_url", "scope",
+      ];
+      if (!allowedFields.includes(body.field)) {
+        return json({ error: `field must be one of: ${allowedFields.join(", ")}` }, 400);
+      }
+      try {
+        const file = Bun.file("public/manifest.json");
+        // JUSTIFIED: .json() returns unknown; narrowing to manifest shape
+        const manifest = await file.json() as Record<string, unknown>;
+        manifest[body.field] = body.value;
+        await Bun.write("public/manifest.json", JSON.stringify(manifest, null, 2) + "\n");
+        await audit({ action: "manifest_update", resource: "public/manifest.json", details: `${body.field}=${body.value}` });
+        log("info", "Manifest updated", { field: body.field, value: body.value });
+        return json({ ok: true, field: body.field, value: body.value });
+      } catch (err) {
+        return json({ error: "manifest update failed", details: String(err) }, 500);
+      }
+    }),
+  };
+
+  // PWA share target — receives shared content from other apps
+  // Ref: https://developer.chrome.com/articles/web-share-target/
+  routes["/api/share-target"] = {
+    POST: withMiddleware(async (req: BunRequest): Promise<Response> => {
+      const formData = await req.formData();
+      const title = formData.get("title") ?? "";
+      const text = formData.get("text") ?? "";
+      const sharedUrl = formData.get("url") ?? "";
+      await audit({
+        action: "share_received",
+        resource: "pwa-share-target",
+        details: `title=${title}, url=${sharedUrl}`,
       });
+      log("info", "PWA share received", { title, url: sharedUrl });
+      return json({ ok: true, received: { title, text, url: sharedUrl } });
     }),
   };
   // Serve the service worker — required by Chrome for PWA installability

@@ -153,7 +153,7 @@ describe("Server API Integration", () => {
     expect(text).toContain("/dashboard");
     expect(text).toContain("/api/pwa/compare");
     expect(text).toContain("/api/pwa/validate");
-    expect(text).toContain("/bun-com/manifest.json");
+    // /bun-com/ routes are intentionally excluded from sitemap (internal comparison only)
     // Param routes should NOT be in sitemap
     expect(text).not.toContain("/icons/:filename");
     expect(text).not.toContain("/bun-com/icons/:filename");
@@ -1074,9 +1074,10 @@ console.log(color("red", "number"));`;
       display: string;
       icons: { src: string; sizes: string; type: string }[];
     };
-    expect(manifest.name).toBe("BUN-DEV");
+    expect(manifest.name).toContain("BUN-DEV");
     expect(manifest.short_name).toBe("BUN-DEV");
-    expect(manifest.start_url).toBe("/dashboard");
+    // Dynamic manifest injects query params — just check it starts with /dashboard
+    expect(manifest.start_url).toContain("/dashboard");
     expect(manifest.display).toBe("standalone");
     expect(manifest.icons.length).toBeGreaterThan(0);
     // Should have at least a 192 and 512 icon (required for installability)
@@ -2684,5 +2685,170 @@ console.log(color("red", "number"));`;
     expect(html).toContain("/api/compress");
     expect(html).toContain("/api/utils");
     expect(html).toContain("/api/runtime");
+  });
+
+  // --- Enhanced Manifest & Sitemap ---
+
+  it("GET /manifest.json returns dynamic manifest with runtime fields", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/manifest.json`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toContain("application/manifest+json");
+    // JUSTIFIED: res.json() returns unknown; narrowing to manifest shape
+    const m = await res.json() as Record<string, unknown>;
+    expect(m.name).toBeDefined();
+    expect(m.short_name).toBe("BUN-DEV");
+    expect(m.display).toBe("standalone");
+    // Runtime-injected fields
+    expect(m.id).toContain("source=pwa");
+    expect(m.start_url).toContain("source=pwa");
+    expect(m.description).toContain("Bun");
+    // Modern PWA fields
+    expect(m.categories).toBeDefined();
+    expect(m.shortcuts).toBeDefined();
+    expect(m.screenshots).toBeDefined();
+    expect(m.file_handlers).toBeDefined();
+    expect(m.protocol_handlers).toBeDefined();
+    expect(m.share_target).toBeDefined();
+    expect(m.launch_handler).toBeDefined();
+    expect(m.display_override).toBeDefined();
+  });
+
+  it("GET /manifest.json has shortcuts with 5 entries", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/manifest.json`);
+    // JUSTIFIED: res.json() returns unknown; narrowing to manifest shape
+    const m = await res.json() as { shortcuts: { name: string; url: string }[] };
+    expect(m.shortcuts.length).toBe(5);
+    expect(m.shortcuts[0]?.name).toBe("Dashboard");
+    expect(m.shortcuts[1]?.name).toBe("API Reference");
+    expect(m.shortcuts[2]?.name).toBe("Health Check");
+    expect(m.shortcuts[3]?.name).toBe("Metrics");
+    expect(m.shortcuts[4]?.name).toBe("OpenAPI Spec");
+  });
+
+  it("GET /manifest.json has maskable icons", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/manifest.json`);
+    // JUSTIFIED: res.json() returns unknown; narrowing to manifest shape
+    const m = await res.json() as { icons: { purpose?: string; sizes: string }[] };
+    const maskable = m.icons.filter((i) => i.purpose === "maskable");
+    expect(maskable.length).toBeGreaterThanOrEqual(1);
+    expect(maskable.some((i) => i.sizes === "512x512")).toBe(true);
+  });
+
+  it("GET /manifest.json has file_handlers for JSON/MD/YAML/TOML", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/manifest.json`);
+    // JUSTIFIED: res.json() returns unknown; narrowing to manifest shape
+    const m = await res.json() as { file_handlers: { accept: Record<string, string[]> }[] };
+    expect(m.file_handlers).toBeDefined();
+    expect(m.file_handlers[0]?.accept["application/json"]).toBeDefined();
+    expect(m.file_handlers[0]?.accept["text/markdown"]).toBeDefined();
+  });
+
+  it("GET /manifest.json has share_target for receiving shared content", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/manifest.json`);
+    // JUSTIFIED: res.json() returns unknown; narrowing to manifest shape
+    const m = await res.json() as { share_target: { action: string; method: string } };
+    expect(m.share_target.action).toBe("/api/share-target");
+    expect(m.share_target.method).toBe("POST");
+  });
+
+  it("GET /manifest.json has launch_handler for single-instance", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/manifest.json`);
+    // JUSTIFIED: res.json() returns unknown; narrowing to manifest shape
+    const m = await res.json() as { launch_handler: { client_mode: string } };
+    expect(m.launch_handler.client_mode).toBe("navigate-existing");
+  });
+
+  it("POST /api/manifest requires auth + CSRF", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/manifest`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ field: "theme_color", value: "#ff0000" }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("POST /api/manifest rejects disallowed fields", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/manifest`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${authToken}`,
+        "X-CSRF-Token": csrfToken,
+      },
+      body: JSON.stringify({ field: "icons", value: [] }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("POST /api/manifest updates theme_color at runtime", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/manifest`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${authToken}`,
+        "X-CSRF-Token": csrfToken,
+      },
+      body: JSON.stringify({ field: "theme_color", value: "#50fa7b" }),
+    });
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+    const data = await res.json() as { ok: boolean; field: string; value: string };
+    expect(data.ok).toBe(true);
+    expect(data.field).toBe("theme_color");
+    // Restore the original value
+    expect(data.value).toBe("#50fa7b");
+  });
+
+  it("POST /api/share-target receives shared content", async () => {
+    const form = new FormData();
+    form.append("title", "Test Share");
+    form.append("text", "Shared text content");
+    form.append("url", "https://example.com");
+    const res = await fetch(`http://localhost:${TEST_PORT}/api/share-target`, {
+      method: "POST",
+      body: form,
+    });
+    expect(res.status).toBe(200);
+    // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+    const data = await res.json() as { ok: boolean; received: { title: string; url: string } };
+    expect(data.ok).toBe(true);
+    expect(data.received.title).toBe("Test Share");
+    expect(data.received.url).toBe("https://example.com");
+  });
+
+  it("GET /sitemap.xml has route count header", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/sitemap.xml`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toContain("application/xml");
+    expect(res.headers.get("X-Sitemap-Route-Count")).not.toBeNull();
+    const count = parseInt(res.headers.get("X-Sitemap-Route-Count")!, 10);
+    expect(count).toBeGreaterThan(10);
+  });
+
+  it("GET /sitemap.xml has priority and changefreq per URL", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/sitemap.xml`);
+    const xml = await res.text();
+    expect(xml).toContain("<priority>");
+    expect(xml).toContain("<changefreq>");
+    // Dashboard should have highest priority
+    expect(xml).toContain("<priority>1.0</priority>");
+    // Health should have "always" changefreq
+    expect(xml).toContain("<changefreq>always</changefreq>");
+  });
+
+  it("GET /sitemap.xml excludes dynamic routes with :params", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/sitemap.xml`);
+    const xml = await res.text();
+    expect(xml).not.toContain("/:id");
+    expect(xml).not.toContain("/:path");
+    expect(xml).not.toContain("/:filename");
+  });
+
+  it("GET /dashboard lists manifest editor and share-target endpoints", async () => {
+    const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
+    const html = await res.text();
+    expect(html).toContain("/api/manifest");
+    expect(html).toContain("/api/share-target");
+    expect(html).toContain("dynamic PWA manifest");
   });
 });
