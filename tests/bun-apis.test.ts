@@ -157,18 +157,24 @@ describe("Bun Native APIs & Utilities", () => {
     expect(capturedTextDirect.length).toBeGreaterThan(0);
   });
 
-  it("Bun.markdown.react supports React 18 and 19 element types", () => {
+  it("Bun.markdown.react supports React 18 and 19 element types (REF-REACT-18)", () => {
     const text = "## React Heading\n\n[Link](https://bun.com)";
+
+    // Reference ID: REF-REACT-18 — React 18 pinned as canonical reference
+    // See docs/render-diagrams.ts#react-version-reference-ref-react-18
+    console.log("[REF-REACT-18] React version reference ID printed");
 
     // Default: React 19 (react.transitional.element)
     // JUSTIFIED: Bun.markdown.react returns ReactElement; narrowing to check $$typeof
     const el19 = Bun.markdown.react(text) as { $$typeof?: symbol };
     expect(String(el19.$$typeof)).toBe("Symbol(react.transitional.element)");
+    console.log("[REF-REACT-18] React 19 symbol:", String(el19.$$typeof));
 
     // React 18: (react.element)
     // JUSTIFIED: same — narrowing the return type to check $$typeof
     const el18 = Bun.markdown.react(text, undefined, { reactVersion: 18 }) as { $$typeof?: symbol };
     expect(String(el18.$$typeof)).toBe("Symbol(react.element)");
+    console.log("[REF-REACT-18] React 18 symbol:", String(el18.$$typeof));
   });
 
   it("Bun.markdown.ansi respects AnsiTheme options", () => {
