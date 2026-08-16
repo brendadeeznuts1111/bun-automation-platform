@@ -321,6 +321,152 @@ BUN_QUOTE_BACKTICK=\`backtick_value\``;
     expect(parsed.b).toBe("backtick_value");
   });
 
+  it("Bun --env-file supports recursive variable expansion (A→B→C)", async () => {
+    // Ref: https://bun.com/docs/runtime/env#expansion
+    // Bun's expansion is recursive: C=$B, B=$A, A=1 → C resolves to "1"
+    const envContent = `A=1
+B=$A
+C=$B`;
+    const tmpEnv = `/tmp/test-recursive-${Date.now()}.env`;
+    await Bun.write(tmpEnv, envContent);
+
+    const proc = Bun.spawn({
+      cmd: ["bun", "--env-file", tmpEnv, "-e",
+        "console.log(JSON.stringify({a: process.env.A, b: process.env.B, c: process.env.C}))"],
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const output = await new Response(proc.stdout).text();
+    await proc.exited;
+    // JUSTIFIED: output is a JSON string from our console.log; narrowing to the shape
+    const parsed = JSON.parse(output.trim()) as { a: string; b: string; c: string };
+    expect(parsed.a).toBe("1");
+    expect(parsed.b).toBe("1");
+    expect(parsed.c).toBe("1");
+  });
+
+  it("Bun --env-file supports ${VAR} brace syntax for concatenation", async () => {
+    // Ref: https://bun.com/docs/runtime/env#expansion
+    // ${VAR} allows concatenation without ambiguity: ${PREFIX}_v1
+    const envContent = `PREFIX=app
+NAME=\${PREFIX}_v1`;
+    const tmpEnv = `/tmp/test-braces-${Date.now()}.env`;
+    await Bun.write(tmpEnv, envContent);
+
+    const proc = Bun.spawn({
+      cmd: ["bun", "--env-file", tmpEnv, "-e",
+        "console.log(process.env.NAME)"],
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const output = await new Response(proc.stdout).text();
+    await proc.exited;
+    expect(output.trim()).toBe("app_v1");
+  });
+
+  it("Bun --env-file does NOT support $(VAR) paren syntax in v1.3.14", async () => {
+    // Ref: https://bun.com/docs/runtime/env#expansion
+    // The docs mention $(VAR) but v1.3.14 does not support it — only $VAR and ${VAR}
+    const envContent = `PREFIX=app
+NAME=$(PREFIX)_v2`;
+    const tmpEnv = `/tmp/test-parens-${Date.now()}.env`;
+    await Bun.write(tmpEnv, envContent);
+
+    const proc = Bun.spawn({
+      cmd: ["bun", "--env-file", tmpEnv, "-e",
+        "console.log(process.env.NAME)"],
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const output = await new Response(proc.stdout).text();
+    await proc.exited;
+    // $(PREFIX) is NOT expanded — it stays as a literal string
+    expect(output.trim()).toBe("(PREFIX)_v2");
+  });
+
+  it("Bun --env-file supports nested expansion for connection strings", async () => {
+    // Ref: https://bun.com/docs/runtime/env#expansion
+    // Real-world pattern: building a DB URL from multiple vars
+    const envContent = `DB_USER=postgres
+DB_PASS=secret
+DB_HOST=localhost
+DB_PORT=5432
+DB_URL=postgres://$DB_USER:$DB_PASS@$DB_HOST:$DB_PORT`;
+    const tmpEnv = `/tmp/test-nested-${Date.now()}.env`;
+    await Bun.write(tmpEnv, envContent);
+
+    const proc = Bun.spawn({
+      cmd: ["bun", "--env-file", tmpEnv, "-e",
+        "console.log(process.env.DB_URL)"],
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const output = await new Response(proc.stdout).text();
+    await proc.exited;
+    expect(output.trim()).toBe("postgres://postgres:secret@localhost:5432");
+  });
+
+  it("Bun --env-file expansion is resolved at load time, not lazily on access", async () => {
+    // Ref: https://bun.com/docs/runtime/env#expansion
+    // In v1.3.14, expansion happens when the .env file is loaded, not when
+    // process.env is accessed. Changing A after loading does not affect B=$A.
+    // (The docs describe lazy expansion, but v1.3.14 resolves at load time.)
+    const envContent = `A=1
+B=$A`;
+    const tmpEnv = `/tmp/test-loadtime-${Date.now()}.env`;
+    await Bun.write(tmpEnv, envContent);
+
+    const proc = Bun.spawn({
+      cmd: ["bun", "--env-file", tmpEnv, "-e",
+        "process.env.A = '2'; console.log(process.env.B)"],
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const output = await new Response(proc.stdout).text();
+    await proc.exited;
+    // B was resolved to "1" at load time; changing A afterward doesn't affect it
+    expect(output.trim()).toBe("1");
+  });
+
+  it("Bun.expandEnv is not available in v1.3.14", () => {
+    // Ref: https://bun.com/docs/runtime/env#expansion
+    // The docs mention Bun.expandEnv() for manual string expansion, but this
+    // API was added in a later version. In v1.3.14 it is undefined.
+    // JUSTIFIED: Bun.expandEnv is not in v1.3.14 types; cast to check existence
+    expect((Bun as unknown as Record<string, unknown>).expandEnv).toBeUndefined();
+  });
+
+  it("Bun.env can be iterated with Object.entries", () => {
+    // Ref: https://bun.com/docs/runtime/env#reading-environment-variables
+    process.env.BUN_ITER_TEST = "iter_value";
+    const entries = Object.entries(Bun.env);
+    // JUSTIFIED: find returns undefined | [string, string]; we check for truthy
+    const found = entries.find(([k]) => k === "BUN_ITER_TEST");
+    expect(found).toBeTruthy();
+    expect(found![1]).toBe("iter_value");
+    delete process.env.BUN_ITER_TEST;
+  });
+
+  it("Bun.env supports delete operator to remove variables", () => {
+    // Ref: https://bun.com/docs/runtime/env#reading-environment-variables
+    process.env.BUN_DELETE_TEST = "temp";
+    expect(Bun.env.BUN_DELETE_TEST).toBe("temp");
+    delete Bun.env.BUN_DELETE_TEST;
+    expect(Bun.env.BUN_DELETE_TEST).toBeUndefined();
+    expect(process.env.BUN_DELETE_TEST).toBeUndefined();
+  });
+
+  it("Bun.env ?? operator for default values", () => {
+    // Ref: https://bun.com/docs/runtime/env#reading-environment-variables
+    const apiKey = Bun.env.BUN_NONEXISTENT_KEY ?? "default-key";
+    expect(apiKey).toBe("default-key");
+
+    process.env.BUN_EXISTS_KEY = "real-value";
+    const realKey = Bun.env.BUN_EXISTS_KEY ?? "default-key";
+    expect(realKey).toBe("real-value");
+    delete process.env.BUN_EXISTS_KEY;
+  });
+
   // Ref: https://bun.com/docs/runtime/color#flexible-input
   it("Bun.color accepts all flexible input types and normalizes to css", () => {
     // Ref: https://bun.com/docs/runtime/color#flexible-input
