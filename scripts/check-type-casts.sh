@@ -2,6 +2,10 @@
 # Pre-commit hook: block commits with type casts (as, @ts-ignore, @ts-expect-error)
 # that don't have a // JUSTIFIED: comment on the same or preceding line.
 #
+# Uses Python (scripts/check-type-casts-py.py) for accurate string-literal
+# detection — avoids false positives on English text like "as Unicode" or
+# "as ANSI" inside string literals.
+#
 # Install: cp scripts/check-type-casts.sh .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
 # Or add to existing pre-commit: source scripts/check-type-casts.sh
 #
@@ -22,6 +26,8 @@ if [ -z "$staged_files" ]; then
 fi
 
 errors=0
+script_dir="$(cd "$(dirname "$0")" && pwd)"
+py_checker="$script_dir/check-type-casts-py.py"
 
 for file in $staged_files; do
   # Skip files that don't exist (deleted)
@@ -31,34 +37,16 @@ for file in $staged_files; do
   content=$(git show ":$file" 2>/dev/null || true)
   [ -z "$content" ] && continue
 
-  # Check each line for type casts
-  line_num=0
-  prev_line=""
-  while IFS= read -r line; do
-    line_num=$((line_num + 1))
+  # Run Python checker on the staged content
+  violations=$(echo "$content" | python3 "$py_checker" 2>/dev/null || true)
 
-    # Check for @ts-ignore or @ts-expect-error
-    if echo "$line" | grep -qE '@ts-ignore|@ts-expect-error'; then
-      if ! echo "$line" | grep -q 'JUSTIFIED' && ! echo "$prev_line" | grep -q 'JUSTIFIED'; then
-        echo "  ✗ $file:$line_num — @ts-ignore/@ts-expect-error without // JUSTIFIED:"
-        errors=$((errors + 1))
-      fi
-    fi
-
-    # Check for `as` type casts (as SomeType, as { ... }, as import(...))
-    # Exclude: the word "as" in strings/comments, "as const", "as const" is fine
-    if echo "$line" | grep -qE '\bas\s+[A-Z{]'; then
-      # Skip if it's in a comment line
-      if ! echo "$line" | grep -qE '^\s*//|^\s*\*|^\s*/\*'; then
-        if ! echo "$line" | grep -q 'JUSTIFIED' && ! echo "$prev_line" | grep -q 'JUSTIFIED'; then
-          echo "  ✗ $file:$line_num — type cast 'as ...' without // JUSTIFIED:"
-          errors=$((errors + 1))
-        fi
-      fi
-    fi
-
-    prev_line="$line"
-  done <<< "$content"
+  if [ -n "$violations" ]; then
+    while IFS= read -r vline; do
+      [ -z "$vline" ] && continue
+      echo "  ✗ $file:$vline"
+      errors=$((errors + 1))
+    done <<< "$violations"
+  fi
 done
 
 if [ "$errors" -gt 0 ]; then
