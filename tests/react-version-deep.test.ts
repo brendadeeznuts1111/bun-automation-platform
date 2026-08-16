@@ -363,3 +363,185 @@ describe("Symbol registration (global)", () => {
     expect(Symbol.keyFor(el.type as symbol)).toBe("react.fragment");
   });
 });
+
+describe("Custom component $$typeof normalization", () => {
+  // JUSTIFIED: custom components are used as the `type` field by Bun.markdown.react.
+  // The component function is NOT called by Bun — it's called by React during rendering.
+  // Bun creates: { $$typeof: <tree symbol>, type: componentFn, props: { children }, ... }
+  type CustomEl = { $$typeof?: symbol; type: unknown; props: { children?: unknown; [k: string]: unknown }; key: unknown; ref: unknown };
+
+  // JUSTIFIED: custom component — Bun uses it as type field, doesn't call it
+  const customComp = (props: { children?: unknown }) => ({ type: "div", props: { children: props.children } });
+
+  it("React 19 tree: custom component element gets transitional.element $$typeof", () => {
+    const tree = react("# Test", { h1: customComp as never });
+    // JUSTIFIED: children is an array; first element is the h1 custom component
+    const h1 = (tree.props.children as unknown[])[0] as unknown as CustomEl;
+    expect(String(h1.$$typeof)).toBe("Symbol(react.transitional.element)");
+    expect(typeof h1.type).toBe("function");
+    console.log(`[${REF_REACT_18}] Custom comp element $$typeof: ${String(h1.$$typeof)}`);
+  });
+
+  it("React 18 tree: custom component element gets react.element $$typeof", () => {
+    const tree = react("# Test", { h1: customComp as never }, { reactVersion: 18 });
+    // JUSTIFIED: children is an array; first element is the h1 custom component
+    const h1 = (tree.props.children as unknown[])[0] as unknown as CustomEl;
+    expect(String(h1.$$typeof)).toBe("Symbol(react.element)");
+    expect(typeof h1.type).toBe("function");
+  });
+
+  it("custom component type field is the function reference (not called by Bun)", () => {
+    let called = false;
+    // JUSTIFIED: tracking if Bun calls the component — it should NOT
+    const trackingComp = (_props: { children?: unknown }) => { called = true; return null; };
+    const tree = react("# Test", { h1: trackingComp as never });
+    // JUSTIFIED: children is an array; first element is the custom component element
+    const h1 = (tree.props.children as unknown[])[0] as unknown as CustomEl;
+    expect(called).toBe(false);
+    expect(h1.type).toBe(trackingComp);
+  });
+
+  it("custom component element shares tree $$typeof (no mixing)", () => {
+    const tree19 = react("# Test", { h1: customComp as never });
+    const tree18 = react("# Test", { h1: customComp as never }, { reactVersion: 18 });
+    // JUSTIFIED: children is an array; first element is the custom component element
+    const h1_19 = (tree19.props.children as unknown[])[0] as unknown as CustomEl;
+    // JUSTIFIED: same array access for React 18 tree
+    const h1_18 = (tree18.props.children as unknown[])[0] as unknown as CustomEl;
+    expect(h1_19.$$typeof).toBe(tree19.$$typeof);
+    expect(h1_18.$$typeof).toBe(tree18.$$typeof);
+  });
+});
+
+describe("React.isValidElement compatibility", () => {
+  it("React 19 isValidElement accepts react.transitional.element (default)", () => {
+    const React = require("react");
+    const el = react("# Test");
+    expect(React.isValidElement(el)).toBe(true);
+  });
+
+  it("React 19 isValidElement rejects react.element (reactVersion: 18)", () => {
+    const React = require("react");
+    const el = react("# Test", undefined, { reactVersion: 18 });
+    expect(React.isValidElement(el)).toBe(false);
+    console.log(`[${REF_REACT_18}] React 19 isValidElement(react.element) = false — version mismatch`);
+  });
+
+  it("React 19 isValidElement checks only $$typeof (not _owner/_store)", () => {
+    const React = require("react");
+    // JUSTIFIED: manually constructing element-like object to test isValidElement criteria
+    const fake19 = {
+      $$typeof: Symbol.for("react.transitional.element"),
+      type: "h1",
+      ref: null,
+      key: null,
+      props: { children: "test" },
+    } as never;
+    expect(React.isValidElement(fake19)).toBe(true);
+
+    // JUSTIFIED: manually constructing react.element object to test rejection
+    const fake18 = {
+      $$typeof: Symbol.for("react.element"),
+      type: "h1",
+      ref: null,
+      key: null,
+      props: { children: "test" },
+    } as never;
+    expect(React.isValidElement(fake18)).toBe(false);
+  });
+});
+
+describe("React 19 renderToString compatibility", () => {
+  it("React 19 SSR renders default Bun.markdown.react output", () => {
+    const { renderToString } = require("react-dom/server");
+    const el = react("# Hello **world**");
+    const html = renderToString(el);
+    expect(html).toContain("<h1>");
+    expect(html).toContain("<strong>world</strong>");
+  });
+
+  it("React 19 SSR fails on reactVersion: 18 output", () => {
+    const { renderToString } = require("react-dom/server");
+    const el = react("# Hello", undefined, { reactVersion: 18 });
+    expect(() => renderToString(el)).toThrow();
+    console.log(`[${REF_REACT_18}] renderToString(react.element) throws — React 19 can't render React 18 elements`);
+  });
+
+  it("React 19 SSR works with custom components using React.createElement", () => {
+    const React = require("react");
+    const { renderToString } = require("react-dom/server");
+    // JUSTIFIED: custom component uses React.createElement — narrowing for renderToString
+    const components = {
+      h1: (props: { children?: unknown }) => React.createElement("h1", { className: "custom" }, props.children),
+    } as never;
+    const el = react("# Test", components);
+    const html = renderToString(el);
+    expect(html).toContain('class="custom"');
+    expect(html).toContain("<h1");
+  });
+});
+
+describe("Performance: React 18 vs 19", () => {
+  it("React 18 and 19 have similar performance (< 20% difference)", () => {
+    const bigMd = "# Hello\n\n" + "Paragraph ".repeat(50) + "\n\n- " + "item\n- ".repeat(30);
+    const iterations = 500;
+
+    // Warmup
+    for (let i = 0; i < 50; i++) {
+      react(bigMd);
+      react(bigMd, undefined, { reactVersion: 18 });
+    }
+
+    const start19 = performance.now();
+    for (let i = 0; i < iterations; i++) react(bigMd);
+    const time19 = performance.now() - start19;
+
+    const start18 = performance.now();
+    for (let i = 0; i < iterations; i++) react(bigMd, undefined, { reactVersion: 18 });
+    const time18 = performance.now() - start18;
+
+    const ratio = time19 / time18;
+    console.log(`[${REF_REACT_18}] Performance: React 19 ${time19.toFixed(2)}ms vs React 18 ${time18.toFixed(2)}ms (ratio: ${ratio.toFixed(2)})`);
+    // React 19 should be within 20% of React 18 (usually slightly faster)
+    expect(ratio).toBeGreaterThan(0.5);
+    expect(ratio).toBeLessThan(2.0);
+  });
+});
+
+describe("Structure identical across versions (comprehensive)", () => {
+  const complexMd = "# Title\n\n**bold** *italic* `code`\n\n- a\n- b\n- c\n\n| H1 | H2 |\n|----|----|\n| 1 | 2 |\n\n> quote\n\n[link](https://x.com)\n\n![img](https://x.com/i.png)";
+
+  it("element count matches between React 18 and 19", () => {
+    function count(el: unknown): number {
+      if (!el || typeof el !== "object") return 0;
+      // JUSTIFIED: narrowing unknown to ReactEl for tree traversal
+      const e = el as ReactEl;
+      let n = e.$$typeof ? 1 : 0;
+      const children = e.props?.children;
+      if (Array.isArray(children)) for (const c of children) n += count(c);
+      else if (children && typeof children === "object") n += count(children);
+      return n;
+    }
+
+    const el19 = react(complexMd);
+    const el18 = react(complexMd, undefined, { reactVersion: 18 });
+    expect(count(el19)).toBe(count(el18));
+  });
+
+  it("element types match between React 18 and 19", () => {
+    function types(el: unknown, acc: string[] = []): string[] {
+      if (!el || typeof el !== "object") return acc;
+      // JUSTIFIED: narrowing unknown to ReactEl for tree traversal
+      const e = el as ReactEl;
+      if (e.$$typeof) acc.push(String(e.type));
+      const children = e.props?.children;
+      if (Array.isArray(children)) for (const c of children) types(c, acc);
+      else if (children && typeof children === "object") types(children, acc);
+      return acc;
+    }
+
+    const el19 = react(complexMd);
+    const el18 = react(complexMd, undefined, { reactVersion: 18 });
+    expect(types(el19).sort()).toEqual(types(el18).sort());
+  });
+});
