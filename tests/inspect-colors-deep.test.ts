@@ -1,6 +1,9 @@
 /**
  * Deep audit: Bun.inspect colors and options.
  *
+ * XREF: Bug cross-reference chain — see docs/render-diagrams.ts#cross-reference-chain
+ * This file covers Bug 33 (doc:2254)
+ *
  * Verifies:
  * - Exact ANSI color codes per type (yellow=number, green=string, etc.)
  * - compact option works (single-line output)

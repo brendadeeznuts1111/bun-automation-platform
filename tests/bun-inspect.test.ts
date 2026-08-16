@@ -1,6 +1,9 @@
 /**
  * Bun.inspect() and Bun.inspect.table() depth audit.
  *
+ * XREF: Bug cross-reference chain — see docs/render-diagrams.ts#cross-reference-chain
+ * This file covers Bug 17 (doc:1857) and Bug 18 (doc:1762)
+ *
  * Verifies:
  * - Bug 17: Bun.inspect.table() depth option is INVERTED (undocumented)
  * - Bug 18: Bun.inspect() default depth is 8, not 2 (docs contradiction)

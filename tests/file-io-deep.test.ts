@@ -1,6 +1,9 @@
 /**
  * Deep audit: Bun.file / Bun.write edge cases — Bugs 35-36.
  *
+ * XREF: Bug cross-reference chain — see docs/render-diagrams.ts#cross-reference-chain
+ * This file covers Bug 35 (doc:2331), 36 (doc:2333)
+ *
  * Verifies:
  * - Bug 35: Bun.write with object writes [object Object] (not JSON)
  * - Bug 36: Bun.write with ReadableStream writes [object ReadableStream]

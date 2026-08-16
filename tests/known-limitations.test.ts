@@ -1,6 +1,9 @@
 /**
  * Known limitations tracked as failing tests.
  *
+ * XREF: Bug cross-reference chain — see docs/render-diagrams.ts#cross-reference-chain
+ * This file tracks known limitations via test.failing()
+ *
  * test.failing() inverts the result: a failing test passes, and if the
  * test starts passing (i.e. the limitation is fixed), Bun reports it as
  * a failure with a message to remove the .failing mark.

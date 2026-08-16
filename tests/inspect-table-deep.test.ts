@@ -1,6 +1,9 @@
 /**
  * Deep audit: Bun.inspect.table() edge cases — Bugs 19-22.
  *
+ * XREF: Bug cross-reference chain — see docs/render-diagrams.ts#cross-reference-chain
+ * This file covers Bug 17 (doc:1857), 19, 20, 21, 22 (doc:2229)
+ *
  * Verifies:
  * - Bug 19: Symbol keys appear as column headers but cells are empty
  * - Bug 20: String/Number/undefined/null/boolean input produces empty string

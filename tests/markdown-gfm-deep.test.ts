@@ -1,6 +1,9 @@
 /**
  * Deep audit: Bun.markdown.html() GFM features and input types.
  *
+ * XREF: Bug cross-reference chain — see docs/render-diagrams.ts#cross-reference-chain
+ * This file covers Bug 26 (doc:2289), 27 (doc:2290), 28 (doc:2292)
+ *
  * Verifies:
  * - Bug 26: Frontmatter (YAML) not stripped — rendered as HR + heading
  * - Bug 27: Math blocks ($$) not supported — rendered as literal text

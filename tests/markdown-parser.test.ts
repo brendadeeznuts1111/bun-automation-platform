@@ -1,6 +1,9 @@
 /**
  * Bun.markdown.html() parser edge cases.
  *
+ * XREF: Bug cross-reference chain — see docs/render-diagrams.ts#cross-reference-chain
+ * Related: Bug 12 (nested links), 15 (URLs with spaces), 16 (escaped pipes)
+ *
  * Verifies setext headings, reference links, tight/loose lists, code
  * blocks, tables, HR, headings, emphasis, HTML entities, URL encoding,
  * autolinks, line breaks, and escaping.

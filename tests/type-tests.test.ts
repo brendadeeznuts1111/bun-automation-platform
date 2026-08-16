@@ -1,6 +1,9 @@
 /**
  * Type-level tests using `expectTypeOf` from `bun:test`.
  *
+ * XREF: Bug cross-reference chain — see docs/render-diagrams.ts#cross-reference-chain
+ * This file has no bug numbers (type-level verification only)
+ *
  * These tests verify TypeScript type definitions in `bun-types` match the
  * actual runtime types. They are no-ops at runtime — they're checked by
  * `tsc --noEmit`.

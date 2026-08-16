@@ -1,6 +1,9 @@
 /**
  * v1.3.14 Bug Fix Verification Suite
  *
+ * XREF: Bug cross-reference chain — see docs/render-diagrams.ts#cross-reference-chain
+ * This file has no bug numbers (v1.3.14 feature verification, not audit bugs)
+ *
  * This test file verifies that our codebase correctly uses all the Bun v1.3.14
  * features and bug fixes that are relevant to us. Each test maps to a specific
  * fix or feature from the v1.3.14 blog post:

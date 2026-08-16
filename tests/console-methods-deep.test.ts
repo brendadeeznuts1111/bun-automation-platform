@@ -1,6 +1,9 @@
 /**
  * Deep audit: console.* methods — format specifiers and all methods.
  *
+ * XREF: Bug cross-reference chain — see docs/render-diagrams.ts#cross-reference-chain
+ * This file covers Bug 29 (doc:2250), 30, 31, 32 (doc:2252)
+ *
  * Verifies:
  * - Bug 29: %s with Symbol throws TypeError (should stringify like direct log)
  * - Bug 30: %d with BigInt throws (should handle gracefully)

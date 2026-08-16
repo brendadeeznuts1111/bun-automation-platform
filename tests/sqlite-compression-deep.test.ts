@@ -1,6 +1,9 @@
 /**
  * Deep audit: bun:sqlite, Bun.Transpiler, compression, stringWidth.
  *
+ * XREF: Bug cross-reference chain — see docs/render-diagrams.ts#cross-reference-chain
+ * This file has no bug numbers (API verification only, no bugs found)
+ *
  * Verifies:
  * - bun:sqlite: CRUD, prepared statements, transactions, WAL, types
  * - Bun.Transpiler: TS and JSX transformation

@@ -4,6 +4,10 @@ import { IPCChannel } from "../src/channels/ipc-channel";
 import { WSChannel } from "../src/channels/ws-channel";
 import type { ParentToWorkerMessage, WorkerToParentMessage } from "../src/types/ipc";
 
+// XREF: Bug cross-reference chain — see docs/render-diagrams.ts#cross-reference-chain
+// This file covers channel bugs C1–C7 (renamed from original 1, 5, 7, 8, 9, 12, 13)
+// Doc: docs/render-diagrams.ts lines 168–174 (Bug Fixes section)
+
 // --- Mock helpers ---
 
 /** Create a mock process object for worker-side IPC testing */
@@ -174,6 +178,7 @@ describe("IPCChannel (worker side)", () => {
 
   it("setSender updates the sender", () => {
     // Parent side: start with placeholder, then set real proc
+    // JUSTIFIED: Empty object as placeholder for Subprocess — only used as a temporary sender that gets replaced via setSender() before any IPC calls.
     const placeholder = {} as import("bun").Subprocess<"ignore", "inherit", "inherit">;
     const channel = new IPCChannel<ParentToWorkerMessage, WorkerToParentMessage>("parent", placeholder);
     const realProc = createMockSubprocess();

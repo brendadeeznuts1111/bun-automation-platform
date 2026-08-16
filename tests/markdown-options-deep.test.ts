@@ -1,6 +1,9 @@
 /**
  * Deep audit: Bun.markdown.html() options matrix — Bugs 23-25.
  *
+ * XREF: Bug cross-reference chain — see docs/render-diagrams.ts#cross-reference-chain
+ * This file covers Bug 23 (doc:2196), 24 (doc:2198), 25 (doc:2198)
+ *
  * Verifies:
  * - Bug 23: noHtmlBlocks alone doesn't block HTML (only works with noHtmlSpans)
  * - Bug 24: headings.prefix option silently ignored

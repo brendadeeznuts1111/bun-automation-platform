@@ -1,6 +1,9 @@
 /**
  * Deep audit: Bun.password, Bun.CSRF, Bun.color, Bun.semver, Bun.hash, Bun.Glob.
  *
+ * XREF: Bug cross-reference chain — see docs/render-diagrams.ts#cross-reference-chain
+ * This file covers Bug 34 (doc:2256)
+ *
  * Verifies:
  * - Bun.password: all 4 algorithms (argon2id, argon2d, argon2i, bcrypt)
  * - Bun.CSRF: all 3 algorithms (sha256, sha384, sha512)

@@ -1,6 +1,9 @@
 /**
  * MIME type detection tests for Bun.file().
  *
+ * XREF: Bug cross-reference chain — see docs/render-diagrams.ts#cross-reference-chain
+ * This file covers Bug 41 (doc:2337)
+ *
  * Verifies the `.type` property of BunFile (which extends Blob) returns
  * the correct MIME type based on file extension.
  *

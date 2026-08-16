@@ -1,6 +1,9 @@
 /**
  * Bun.markdown.html() security audit — XSS vectors and mitigations.
  *
+ * XREF: Bug cross-reference chain — see docs/render-diagrams.ts#cross-reference-chain
+ * Related: Bug 23 (noHtmlBlocks alone doesn't block HTML)
+ *
  * Verifies that Bun.markdown.html() passes through raw HTML (including
  * <script> tags) by default, and that the documented mitigation options
  * (tagFilter, noHtmlBlocks, noHtmlSpans) only partially help.

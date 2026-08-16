@@ -1,6 +1,9 @@
 /**
  * Test patterns from official Bun documentation.
  *
+ * XREF: Bug cross-reference chain — see docs/render-diagrams.ts#cross-reference-chain
+ * This file has no bug numbers (test pattern verification only)
+ *
  * Verifies all test patterns documented in:
  * - node_modules/bun-types/docs/test/writing-tests.mdx
  * - node_modules/bun-types/docs/test/lifecycle.mdx

@@ -1,6 +1,9 @@
 /**
  * Deep audit: Bun.inspect.custom and depth interaction.
  *
+ * XREF: Bug cross-reference chain — see docs/render-diagrams.ts#cross-reference-chain
+ * This file has no bug numbers (custom inspect verification only)
+ *
  * Verifies:
  * - Custom inspect receives (depth, options) with stylize function
  * - Depth decreases for nested custom inspect calls

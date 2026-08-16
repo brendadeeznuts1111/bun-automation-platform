@@ -1,6 +1,9 @@
 /**
  * Deep audit: Bun.spawn, Bun.spawnSync, Bun.$ shell — Bugs 37-40.
  *
+ * XREF: Bug cross-reference chain — see docs/render-diagrams.ts#cross-reference-chain
+ * This file covers Bug 37, 38, 39, 40 (doc:2335)
+ *
  * Verifies:
  * - Bug 37: Bun.pid is undefined (process.pid works)
  * - Bug 38: Bun.now() does not exist

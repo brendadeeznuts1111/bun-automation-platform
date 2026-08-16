@@ -1,6 +1,9 @@
 /**
  * Property-based testing patterns from official Bun documentation.
  *
+ * XREF: Bug cross-reference chain — see docs/render-diagrams.ts#cross-reference-chain
+ * This file has no bug numbers (property-based invariant testing only)
+ *
  * Property tests verify that certain invariants hold for all inputs
  * in a given domain, rather than testing specific examples. Bun's test
  * runner supports this via `test.each` with generated data, and via
