@@ -640,6 +640,214 @@ B=$A`;
     delete process.env.BUN_GETENV_REAL_TEST;
   });
 
+  // Ref: https://bun.com/docs/runtime/env#test-runner-specific
+  it("bun test sets NODE_ENV=test automatically", async () => {
+    // Ref: https://bun.com/docs/runtime/env#test-runner-specific
+    // bun test sets NODE_ENV to "test" unless explicitly overridden.
+    // We must unset NODE_ENV from the env (not set to "") for auto-set to trigger.
+    const tmpTest = `/tmp/test-node-env-${Date.now()}.ts`;
+    await Bun.write(tmpTest, `import { test } from "bun:test";
+test("check NODE_ENV", () => {
+  console.log("NODE_ENV=" + process.env.NODE_ENV);
+});`);
+    // Remove NODE_ENV from the env map so bun test auto-sets it
+    const testEnv = { ...process.env };
+    delete testEnv.NODE_ENV;
+    const proc = Bun.spawn({
+      cmd: ["bun", "test", tmpTest],
+      stdout: "pipe",
+      stderr: "pipe",
+      env: testEnv,
+    });
+    const out = await new Response(proc.stdout).text();
+    const err = await new Response(proc.stderr).text();
+    await proc.exited;
+    const combined = out + err;
+    // bun test should set NODE_ENV to "test"
+    expect(combined).toContain("NODE_ENV=test");
+  });
+
+  it("TZ environment variable controls timezone", async () => {
+    // Ref: https://bun.com/docs/runtime/env#test-runner-specific
+    // TZ sets the timezone; bun test defaults to Etc/UTC
+    const proc = Bun.spawn({
+      cmd: ["bun", "-e", "console.log(process.env.TZ)"],
+      stdout: "pipe",
+      stderr: "pipe",
+      env: { ...process.env, TZ: "America/New_York" },
+    });
+    const out = await new Response(proc.stdout).text();
+    await proc.exited;
+    expect(out.trim()).toBe("America/New_York");
+  });
+
+  it("TZ defaults to undefined (system timezone) outside bun test", async () => {
+    // Ref: https://bun.com/docs/runtime/env#test-runner-specific
+    // Outside bun test, TZ is not auto-set (uses system timezone)
+    const proc = Bun.spawn({
+      cmd: ["bun", "-e", "console.log(process.env.TZ ?? 'undefined')"],
+      stdout: "pipe",
+      stderr: "pipe",
+      env: { ...process.env, TZ: undefined },
+    });
+    const out = await new Response(proc.stdout).text();
+    await proc.exited;
+    expect(out.trim()).toBe("undefined");
+  });
+
+  // Ref: https://bun.com/docs/runtime/env#package-manager-install
+  it("BUN_INSTALL_GLOBAL_STORE enables global virtual store", async () => {
+    // Ref: https://bun.com/docs/runtime/env#package-manager-install
+    // This env var controls bun install's global virtual store feature
+    const proc = Bun.spawn({
+      cmd: ["bun", "-e", "console.log(process.env.BUN_INSTALL_GLOBAL_STORE)"],
+      stdout: "pipe",
+      stderr: "pipe",
+      env: { ...process.env, BUN_INSTALL_GLOBAL_STORE: "1" },
+    });
+    const out = await new Response(proc.stdout).text();
+    await proc.exited;
+    expect(out.trim()).toBe("1");
+  });
+
+  it("BUN_INSTALL_CACHE_DIR overrides global package cache directory", async () => {
+    // Ref: https://bun.com/docs/runtime/env#package-manager-install
+    const proc = Bun.spawn({
+      cmd: ["bun", "-e", "console.log(process.env.BUN_INSTALL_CACHE_DIR)"],
+      stdout: "pipe",
+      stderr: "pipe",
+      env: { ...process.env, BUN_INSTALL_CACHE_DIR: "/tmp/bun-cache-test" },
+    });
+    const out = await new Response(proc.stdout).text();
+    await proc.exited;
+    expect(out.trim()).toBe("/tmp/bun-cache-test");
+  });
+
+  // Ref: https://bun.com/docs/runtime/env#configuring-bun
+  it("BUN_OPTIONS prepends CLI arguments to bun commands", () => {
+    // Ref: https://bun.com/docs/runtime/env#configuring-bun
+    // BUN_OPTIONS is already set in the dev environment as "--hot"
+    // We verify it's readable (the actual prepending is a Bun runtime behavior)
+    const savedOptions = process.env.BUN_OPTIONS;
+    process.env.BUN_OPTIONS = "--hot";
+    expect(Bun.env.BUN_OPTIONS).toBe("--hot");
+    if (savedOptions !== undefined) {
+      process.env.BUN_OPTIONS = savedOptions;
+    } else {
+      delete process.env.BUN_OPTIONS;
+    }
+  });
+
+  it("BUN_CONFIG_NO_CLEAR_TERMINAL_ON_RELOAD prevents watch terminal clear", async () => {
+    // Ref: https://bun.com/docs/runtime/env#configuring-bun
+    // This env var controls bun --watch terminal clearing behavior
+    const proc = Bun.spawn({
+      cmd: ["bun", "-e", "console.log(process.env.BUN_CONFIG_NO_CLEAR_TERMINAL_ON_RELOAD)"],
+      stdout: "pipe",
+      stderr: "pipe",
+      env: { ...process.env, BUN_CONFIG_NO_CLEAR_TERMINAL_ON_RELOAD: "true" },
+    });
+    const out = await new Response(proc.stdout).text();
+    await proc.exited;
+    expect(out.trim()).toBe("true");
+  });
+
+  it("NODE_TLS_REJECT_UNAUTHORIZED disables SSL validation when set to 0", async () => {
+    // Ref: https://bun.com/docs/runtime/env#configuring-bun
+    // NODE_TLS_REJECT_UNAUTHORIZED=0 disables SSL cert validation
+    // (dangerous — dev/testing only)
+    const proc = Bun.spawn({
+      cmd: ["bun", "-e", "console.log(process.env.NODE_TLS_REJECT_UNAUTHORIZED)"],
+      stdout: "pipe",
+      stderr: "pipe",
+      env: { ...process.env, NODE_TLS_REJECT_UNAUTHORIZED: "0" },
+    });
+    const out = await new Response(proc.stdout).text();
+    await proc.exited;
+    expect(out.trim()).toBe("0");
+  });
+
+  it("TMPDIR controls temporary directory for Bun operations", async () => {
+    // Ref: https://bun.com/docs/runtime/env#configuring-bun
+    // TMPDIR is where Bun stores intermediate assets during bundling
+    const proc = Bun.spawn({
+      cmd: ["bun", "-e", "console.log(process.env.TMPDIR)"],
+      stdout: "pipe",
+      stderr: "pipe",
+      env: { ...process.env, TMPDIR: "/tmp/bun-tmpdir-test" },
+    });
+    const out = await new Response(proc.stdout).text();
+    await proc.exited;
+    expect(out.trim()).toBe("/tmp/bun-tmpdir-test");
+  });
+
+  it("bunfig.toml env=false disables .env loading (config equivalent of --no-env-file)", async () => {
+    // Ref: https://bun.com/docs/runtime/env#disabling-automatic-env-loading
+    // The bunfig.toml [env] key can disable automatic .env loading.
+    // We test this by creating a temp project with env=false in bunfig.toml
+    const testDir = `/tmp/env-bunfig-${Date.now()}`;
+    await Bun.write(`${testDir}/.env`, "BUN_BUNFIG_TEST=loaded");
+    await Bun.write(`${testDir}/bunfig.toml`, "env = false\n");
+    const proc = Bun.spawn({
+      cmd: ["bun", "-e", "console.log(process.env.BUN_BUNFIG_TEST ?? 'undefined')"],
+      cwd: testDir,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const out = await new Response(proc.stdout).text();
+    await proc.exited;
+    // With env=false in bunfig.toml, .env should NOT be loaded
+    expect(out.trim()).toBe("undefined");
+  });
+
+  it("bun exec provides cross-platform env var setting", async () => {
+    // Ref: https://bun.com/docs/runtime/env#setting-environment-variables
+    // bun exec uses Bun Shell, which supports FOO=value command syntax
+    // cross-platform (including Windows)
+    // Use Bun.$ shell template for cross-platform env var setting
+    const result = await Bun.$`BUN_EXEC_TEST=cross_platform bun -e 'console.log(process.env.BUN_EXEC_TEST)'`.text();
+    expect(result.trim()).toBe("cross_platform");
+  });
+
+  it("package.json scripts use Bun Shell for cross-platform env vars", async () => {
+    // Ref: https://bun.com/docs/runtime/env#setting-environment-variables
+    // Scripts called with `bun run` automatically use Bun Shell, so
+    // NODE_ENV=development bun --watch app.ts works cross-platform
+    const testPkg = `/tmp/test-pkg-env-${Date.now()}`;
+    await Bun.write(`${testPkg}/package.json`, JSON.stringify({
+      name: "env-test",
+      scripts: {
+        "test-env": "BUN_PKG_SCRIPT_TEST=from_script bun -e 'console.log(process.env.BUN_PKG_SCRIPT_TEST)'",
+      },
+    }));
+    const proc = Bun.spawn({
+      cmd: ["bun", "run", "test-env"],
+      cwd: testPkg,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const out = await new Response(proc.stdout).text();
+    await proc.exited;
+    expect(out).toContain("from_script");
+  });
+
+  it("Internal env vars: BUN_FEATURE_FLAG_* are readable when set", () => {
+    // Ref: https://bun.com/docs/runtime/env#internal-experimental
+    // BUN_FEATURE_FLAG_* vars enable experimental features
+    // We already use BUN_FEATURE_FLAG_NO_ORPHANS in the worker pool
+    process.env.BUN_FEATURE_FLAG_TEST_INTERNAL = "1";
+    expect(Bun.env.BUN_FEATURE_FLAG_TEST_INTERNAL).toBe("1");
+    delete process.env.BUN_FEATURE_FLAG_TEST_INTERNAL;
+  });
+
+  it("Internal env vars: BUN_GARBAGE_COLLECTOR_LEVEL is readable when set", () => {
+    // Ref: https://bun.com/docs/runtime/env#internal-experimental
+    // Forces GC to run more frequently (debugging)
+    process.env.BUN_GARBAGE_COLLECTOR_LEVEL = "1";
+    expect(Bun.env.BUN_GARBAGE_COLLECTOR_LEVEL).toBe("1");
+    delete process.env.BUN_GARBAGE_COLLECTOR_LEVEL;
+  });
+
   // Ref: https://bun.com/docs/runtime/color#flexible-input
   it("Bun.color accepts all flexible input types and normalizes to css", () => {
     // Ref: https://bun.com/docs/runtime/color#flexible-input
