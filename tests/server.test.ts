@@ -216,19 +216,23 @@ describe("Server API Integration", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toContain("application/jsonl");
     expect(res.body).toBeDefined();
-    // Ref: node_modules/bun-types/docs/runtime/jsonl.mdx#parseChunk
+    // Ref: https://bun.com/docs/runtime/jsonl#byte-offsets-with-uint8array
     const reader = res.body!.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
+    let buf = new Uint8Array(0);
     const tasks: Record<string, unknown>[] = [];
     let done = false;
     while (!done) {
       const { value, done: chunkDone } = await reader.read();
-      if (value) buffer += decoder.decode(value);
-      const result = Bun.JSONL.parseChunk(buffer);
+      if (value) {
+        const merged = new Uint8Array(buf.length + value.length);
+        merged.set(buf);
+        merged.set(value, buf.length);
+        buf = merged;
+      }
+      const result = Bun.JSONL.parseChunk(buf);
       // JUSTIFIED: parseChunk returns unknown[]; narrowing to the task row shape
       tasks.push(...(result.values as Record<string, unknown>[]));
-      buffer = buffer.slice(result.read);
+      buf = buf.subarray(result.read);
       done = chunkDone;
     }
     // Each task row should have id and agent_id columns
@@ -261,19 +265,23 @@ describe("Server API Integration", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toContain("application/jsonl");
     expect(res.body).toBeDefined();
-    // Ref: node_modules/bun-types/docs/runtime/jsonl.mdx#parseChunk
+    // Ref: https://bun.com/docs/runtime/jsonl#byte-offsets-with-uint8array
     const reader = res.body!.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
+    let buf = new Uint8Array(0);
     const sessions: Record<string, unknown>[] = [];
     let done = false;
     while (!done) {
       const { value, done: chunkDone } = await reader.read();
-      if (value) buffer += decoder.decode(value);
-      const result = Bun.JSONL.parseChunk(buffer);
+      if (value) {
+        const merged = new Uint8Array(buf.length + value.length);
+        merged.set(buf);
+        merged.set(value, buf.length);
+        buf = merged;
+      }
+      const result = Bun.JSONL.parseChunk(buf);
       // JUSTIFIED: parseChunk returns unknown[]; narrowing to the session row shape
       sessions.push(...(result.values as Record<string, unknown>[]));
-      buffer = buffer.slice(result.read);
+      buf = buf.subarray(result.read);
       done = chunkDone;
     }
     // Sessions list may be empty (no tasks created in this test run) but must
@@ -307,20 +315,25 @@ describe("Server API Integration", () => {
     });
     expect(res.status).toBe(200);
     expect(res.body).toBeDefined();
-    // Ref: node_modules/bun-types/docs/runtime/jsonl.mdx#parseChunk
+    // Ref: https://bun.com/docs/runtime/jsonl#byte-offsets-with-uint8array
+    // Zero-copy binary streaming: accumulate Uint8Array chunks and use
+    // subarray() to carry forward unconsumed bytes.
     const reader = res.body!.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    const events: unknown[] = [];
+    let buf = new Uint8Array(0);
+    const events: Record<string, unknown>[] = [];
     let done = false;
     while (!done) {
       const { value, done: chunkDone } = await reader.read();
       if (value) {
-        buffer += decoder.decode(value);
+        const merged = new Uint8Array(buf.length + value.length);
+        merged.set(buf);
+        merged.set(value, buf.length);
+        buf = merged;
       }
-      const result = Bun.JSONL.parseChunk(buffer);
-      events.push(...result.values);
-      buffer = buffer.slice(result.read);
+      const result = Bun.JSONL.parseChunk(buf);
+      // JUSTIFIED: parseChunk returns unknown[]; narrowing to the audit row shape
+      events.push(...(result.values as Record<string, unknown>[]));
+      buf = buf.subarray(result.read);
       done = chunkDone;
     }
     expect(events.length).toBeGreaterThan(0);
@@ -346,6 +359,117 @@ describe("Server API Integration", () => {
     expect(pResult.values.length).toBe(1);
     expect(pResult.done).toBe(false);
     expect(pResult.error).toBeNull();
+  });
+
+  it("Bun.JSONL.parseChunk supports byte offsets for zero-copy streaming", () => {
+    // Ref: https://bun.com/docs/runtime/jsonl#byte-offsets-with-uint8array
+    const buf = new TextEncoder().encode('{"a":1}\n{"b":2}\n{"c":3}\n');
+    // Parse starting from byte offset 8 (skips the first line)
+    const fromOffset = Bun.JSONL.parseChunk(buf, 8);
+    expect(fromOffset.values.length).toBe(2);
+    expect(fromOffset.values[0]).toEqual({ b: 2 });
+    expect(fromOffset.values[1]).toEqual({ c: 3 });
+    // read is a byte offset into the original buffer (up to last value, not trailing newline)
+    expect(fromOffset.read).toBe(23);
+
+    // Parse a specific range [0, 8) — only the first line
+    const partial = Bun.JSONL.parseChunk(buf, 0, 8);
+    expect(partial.values.length).toBe(1);
+    expect(partial.values[0]).toEqual({ a: 1 });
+  });
+
+  it("Bun.JSONL.parseChunk uses subarray for zero-copy streaming", () => {
+    // Ref: https://bun.com/docs/runtime/jsonl#byte-offsets-with-uint8array
+    // Simulate binary stream chunks arriving and use subarray() to carry
+    // forward unconsumed bytes — the zero-copy pattern from the docs.
+    const chunk1 = new TextEncoder().encode('{"id":1}\n{"id":2}\n{"id":3');
+    const chunk2 = new TextEncoder().encode('}\n{"id":4}\n');
+
+    let buf = new Uint8Array(0);
+    const collected: number[] = [];
+
+    // Append chunk1
+    const merged1 = new Uint8Array(buf.length + chunk1.length);
+    merged1.set(buf);
+    merged1.set(chunk1, buf.length);
+    buf = merged1;
+
+    const r1 = Bun.JSONL.parseChunk(buf);
+    // JUSTIFIED: parseChunk returns unknown[]; narrowing to { id: number }
+    for (const v of r1.values as { id: number }[]) collected.push(v.id);
+    // Zero-copy: subarray shares the underlying buffer
+    buf = buf.subarray(r1.read);
+    expect(r1.done).toBe(false);
+    expect(collected).toEqual([1, 2]);
+
+    // Append chunk2 (completes line 3 and adds line 4)
+    const merged2 = new Uint8Array(buf.length + chunk2.length);
+    merged2.set(buf);
+    merged2.set(chunk2, buf.length);
+    buf = merged2;
+
+    const r2 = Bun.JSONL.parseChunk(buf);
+    // JUSTIFIED: parseChunk returns unknown[]; narrowing to { id: number }
+    for (const v of r2.values as { id: number }[]) collected.push(v.id);
+    buf = buf.subarray(r2.read);
+    expect(r2.done).toBe(true);
+    expect(collected).toEqual([1, 2, 3, 4]);
+    // Trailing newline after last value may remain as 1 byte
+    expect(buf.length).toBeLessThanOrEqual(1);
+  });
+
+  it("Bun.JSONL.parseChunk recovers from errors without throwing", () => {
+    // Ref: https://bun.com/docs/runtime/jsonl#error-recovery
+    const input = '{"a":1}\n{invalid}\n{"b":2}\n';
+    const result = Bun.JSONL.parseChunk(input);
+    // Values parsed before the error are returned
+    expect(result.values.length).toBe(1);
+    expect(result.values[0]).toEqual({ a: 1 });
+    // Error is reported, not thrown
+    expect(result.error).toBeInstanceOf(SyntaxError);
+    // read reflects position up to last successful parse
+    expect(result.read).toBe(7);
+  });
+
+  it("Bun.JSONL.parseChunk returns a pre-built object shape for fast property access", () => {
+    // Ref: https://bun.com/docs/runtime/jsonl#performance-notes
+    // The result object uses a cached structure — verify all four properties
+    // are always present (values, read, done, error) regardless of input.
+    const result = Bun.JSONL.parseChunk('{"x":1}\n');
+    expect(result).toHaveProperty("values");
+    expect(result).toHaveProperty("read");
+    expect(result).toHaveProperty("done");
+    expect(result).toHaveProperty("error");
+    expect(Array.isArray(result.values)).toBe(true);
+    expect(typeof result.read).toBe("number");
+    expect(typeof result.done).toBe("boolean");
+    // error is null when no parse error occurred
+    expect(result.error).toBeNull();
+
+    // Same shape on empty input
+    const empty = Bun.JSONL.parseChunk("");
+    expect(empty).toHaveProperty("values");
+    expect(empty).toHaveProperty("read");
+    expect(empty).toHaveProperty("done");
+    expect(empty).toHaveProperty("error");
+  });
+
+  it("Bun.JSONL.parse handles all supported JSON value types", () => {
+    // Ref: https://bun.com/docs/runtime/jsonl#supported-value-types
+    const input = '42\n"hello"\ntrue\nnull\n[1,2,3]\n{"key":"value"}\n';
+    const values = Bun.JSONL.parse(input);
+    expect(values).toEqual([42, "hello", true, null, [1, 2, 3], { key: "value" }]);
+  });
+
+  it("Bun.JSONL.parse skips UTF-8 BOM in Uint8Array input", () => {
+    // Ref: https://bun.com/docs/runtime/jsonl#performance-notes
+    const bom = new Uint8Array([0xef, 0xbb, 0xbf]);
+    const payload = new TextEncoder().encode('{"ok":true}\n');
+    const buf = new Uint8Array(bom.length + payload.length);
+    buf.set(bom);
+    buf.set(payload, bom.length);
+    const values = Bun.JSONL.parse(buf);
+    expect(values).toEqual([{ ok: true }]);
   });
 
   // --- CSRF ---
