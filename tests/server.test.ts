@@ -1115,7 +1115,11 @@ console.log(color("red", "number"));`;
     const html = await res.text();
     expect(html).toContain('<link rel="manifest" href="/manifest.json">');
     expect(html).toContain('<link rel="icon" type="image/png" sizes="128x128" href="/icons/icon-128.png">');
-    expect(html).toContain('<link rel="apple-touch-icon" href="/icons/icon-192.png">');
+    // apple-touch-icon is 180x180 and opaque (Apple applies its own crop).
+    expect(html).toContain('<link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">');
+    // theme-color has prefers-color-scheme media queries for light/dark.
+    expect(html).toContain('media="(prefers-color-scheme: light)"');
+    expect(html).toContain('media="(prefers-color-scheme: dark)"');
   });
 
   it("GET /dashboard has enhanced dark theme with PWA install button", async () => {
@@ -2705,7 +2709,9 @@ console.log(color("red", "number"));`;
     // Modern PWA fields
     expect(m.categories).toBeDefined();
     expect(m.shortcuts).toBeDefined();
-    expect(m.screenshots).toBeDefined();
+    // screenshots deliberately omitted — we have no real dashboard screenshots
+    // and fake ones misrepresent the app in the install prompt.
+    expect(m.screenshots).toBeUndefined();
     expect(m.file_handlers).toBeDefined();
     expect(m.protocol_handlers).toBeDefined();
     expect(m.share_target).toBeDefined();

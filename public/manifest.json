@@ -1,92 +1,31 @@
 {
   "name": "BUN-DEV Automation Platform",
   "short_name": "BUN-DEV",
-  "description": "Bun Automation Platform — 100% Bun API coverage dashboard with live metrics, PWA tools, Mermaid rendering, SQL queries, image processing, and developer utilities.",
+  "description": "Bun Automation Platform — Bun-native dashboard with live metrics, PWA tools, Mermaid rendering, SQL queries, image processing, and developer utilities.",
   "id": "/?source=pwa",
   "start_url": "/dashboard?source=pwa",
   "scope": "/",
   "display": "standalone",
-  "display_override": [
-    "window-controls-overlay",
-    "standalone",
-    "minimal-ui",
-    "browser"
-  ],
+  "display_override": ["standalone", "minimal-ui", "browser"],
   "orientation": "any",
   "dir": "ltr",
   "lang": "en-US",
   "background_color": "#1f2020",
   "theme_color": "#50fa7b",
-  "categories": [
-    "developer",
-    "productivity",
-    "utilities"
-  ],
+  "categories": ["developer", "productivity", "utilities"],
   "icons": [
-    {
-      "src": "/icons/icon-16.png",
-      "sizes": "16x16",
-      "type": "image/png"
-    },
-    {
-      "src": "/icons/icon-32.png",
-      "sizes": "32x32",
-      "type": "image/png"
-    },
-    {
-      "src": "/icons/icon-48.png",
-      "sizes": "48x48",
-      "type": "image/png"
-    },
-    {
-      "src": "/icons/icon-64.png",
-      "sizes": "64x64",
-      "type": "image/png"
-    },
-    {
-      "src": "/icons/icon-96.png",
-      "sizes": "96x96",
-      "type": "image/png"
-    },
-    {
-      "src": "/icons/icon-128.png",
-      "sizes": "128x128",
-      "type": "image/png"
-    },
-    {
-      "src": "/icons/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/icons/icon-256.png",
-      "sizes": "256x256",
-      "type": "image/png"
-    },
-    {
-      "src": "/icons/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/icons/icon-1024.png",
-      "sizes": "1024x1024",
-      "type": "image/png"
-    },
-    {
-      "src": "/icons/maskable-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
-      "src": "/icons/maskable-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
-    }
+    { "src": "/icons/icon-16.png", "sizes": "16x16", "type": "image/png" },
+    { "src": "/icons/icon-32.png", "sizes": "32x32", "type": "image/png" },
+    { "src": "/icons/icon-48.png", "sizes": "48x48", "type": "image/png" },
+    { "src": "/icons/icon-64.png", "sizes": "64x64", "type": "image/png" },
+    { "src": "/icons/icon-96.png", "sizes": "96x96", "type": "image/png" },
+    { "src": "/icons/icon-128.png", "sizes": "128x128", "type": "image/png" },
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-256.png", "sizes": "256x256", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-1024.png", "sizes": "1024x1024", "type": "image/png" },
+    { "src": "/icons/maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "shortcuts": [
     {
@@ -94,80 +33,37 @@
       "short_name": "Home",
       "description": "Open the main dashboard",
       "url": "/dashboard?source=shortcut",
-      "icons": [
-        {
-          "src": "/icons/icon-96.png",
-          "sizes": "96x96"
-        }
-      ]
+      "icons": [{ "src": "/icons/icon-96.png", "sizes": "96x96" }]
     },
     {
       "name": "API Reference",
       "short_name": "API",
       "description": "Browse all API endpoints",
       "url": "/dashboard?source=shortcut#api-reference",
-      "icons": [
-        {
-          "src": "/icons/icon-96.png",
-          "sizes": "96x96"
-        }
-      ]
+      "icons": [{ "src": "/icons/icon-96.png", "sizes": "96x96" }]
     },
     {
       "name": "Health Check",
       "short_name": "Health",
       "description": "Server health and worker pool status",
       "url": "/health?source=shortcut",
-      "icons": [
-        {
-          "src": "/icons/icon-96.png",
-          "sizes": "96x96"
-        }
-      ]
+      "icons": [{ "src": "/icons/icon-96.png", "sizes": "96x96" }]
     },
     {
       "name": "Metrics",
       "short_name": "Metrics",
       "description": "Prometheus-format metrics",
       "url": "/metrics?source=shortcut",
-      "icons": [
-        {
-          "src": "/icons/icon-96.png",
-          "sizes": "96x96"
-        }
-      ]
+      "icons": [{ "src": "/icons/icon-96.png", "sizes": "96x96" }]
     },
     {
       "name": "OpenAPI Spec",
       "short_name": "Spec",
       "description": "OpenAPI 3.1 specification",
       "url": "/api/openapi.json?source=shortcut",
-      "icons": [
-        {
-          "src": "/icons/icon-96.png",
-          "sizes": "96x96"
-        }
-      ]
-    }
-  ],
-  "screenshots": [
-    {
-      "src": "/icons/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "form_factor": "wide",
-      "label": "BUN-DEV Dashboard — API Reference Panel"
-    },
-    {
-      "src": "/icons/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "form_factor": "narrow",
-      "label": "BUN-DEV Dashboard — Live Metrics"
+      "icons": [{ "src": "/icons/icon-96.png", "sizes": "96x96" }]
     }
   ],
   "prefer_related_applications": false,
-  "edge_side_panel": {
-    "preferred_width": 400
-  }
+  "edge_side_panel": { "preferred_width": 400 }
 }

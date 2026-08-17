@@ -1579,10 +1579,22 @@ const dashboardHandler = withMiddleware((): Response => {
   const features = listFeatures()
     .map((f) => `<tr><td>${f.key}</td><td>${f.status}</td><td>${f.active ? "✅ active" : f.blocked ? "⚠️ blocked" : "❌ off"}</td><td>${f.description}</td></tr>`)
     .join("\n");
+  // iOS/macOS ignore manifest icons entirely and read apple-touch-icon, which
+  // must be 180x180 and opaque (Apple applies its own rounded-corner crop and
+  // composites transparency onto black).
+  // Ref: https://developer.apple.com/design/human-interface-guidelines/app-icons
+  //
+  // theme-color is declared twice with prefers-color-scheme so the browser
+  // chrome matches the dashboard's actual light/dark palettes. The first
+  // matching declaration wins, so these take precedence over the unconditional
+  // fallback that HTMLRewriter appends to <head> later.
   const pwaLinks = ENABLE_PWA
     ? `<link rel="manifest" href="/manifest.json">
   <link rel="icon" type="image/png" sizes="128x128" href="/icons/icon-128.png">
-  <link rel="apple-touch-icon" href="/icons/icon-192.png">`
+  <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1f2020" media="(prefers-color-scheme: dark)">
+  <meta name="msapplication-TileColor" content="#1f2020">`
     : "";
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -2955,9 +2967,17 @@ function sitemapHandler(req: BunRequest): Response {
     "/api/mermaid",
   ]);
 
-  const paths = Object.keys(routes).filter(
-    (p) => !p.includes(":") && p !== "/sitemap.xml" && !p.startsWith("/bun-com/"),
-  );
+  // Only advertise routes a crawler can actually GET. Previously POST-only
+  // routes (/login, /api/sql, /api/manifest, /api/share-target, /api/markdown,
+  // /api/mermaid, /task) were listed, so crawlers fetched them and got 404/405.
+  // /bun-com/* is an internal comparison snapshot and is deliberately excluded.
+  const paths = Object.entries(routes)
+    .filter(([p, handlers]) => {
+      if (p.includes(":") || p === "/sitemap.xml" || p.startsWith("/bun-com/")) return false;
+      // JUSTIFIED: routes is Record<string, unknown>; narrowing to the method map
+      return Boolean((handlers as { GET?: unknown }).GET);
+    })
+    .map(([p]) => p);
 
   const urls = paths
     .map((p) => {
@@ -3079,6 +3099,92 @@ if (ENABLE_HTML_REWRITER) {
   console.log("[server] HTMLRewriter enabled — injecting into HTML responses");
 }
 
+// --- PWA manifest: committed base + runtime overrides ---------------------
+// The committed manifest is read-only at runtime. Edits made through
+// POST /api/manifest land in a separate, gitignored overrides file and are
+// merged on read. This keeps the source tree clean (previously the editor
+// rewrote and reformatted the tracked file, dirtying git on every test run).
+
+const MANIFEST_PATH = "public/manifest.json";
+const MANIFEST_OVERRIDES_PATH = "data/manifest-overrides.json";
+
+/** Read runtime overrides; missing or corrupt file yields no overrides. */
+async function readManifestOverrides(): Promise<Record<string, unknown>> {
+  try {
+    const file = Bun.file(MANIFEST_OVERRIDES_PATH);
+    if (!(await file.exists())) return {};
+    // JUSTIFIED: .json() returns unknown; narrowing to the override map shape
+    return await file.json() as Record<string, unknown>;
+  } catch {
+    // Corrupt override file must not break manifest serving.
+    log("warn", "manifest overrides unreadable — serving committed base");
+    return {};
+  }
+}
+
+type FieldVerdict = { ok: true } | { ok: false; error: string };
+
+/** Bounded non-empty string. */
+const str = (max: number) => (v: unknown): FieldVerdict =>
+  typeof v !== "string" ? { ok: false, error: "expected a string" }
+    : v.length === 0 ? { ok: false, error: "must not be empty" }
+    : v.length > max ? { ok: false, error: `exceeds ${max} characters` }
+    : { ok: true };
+
+/** Value must be one of a fixed set. */
+const oneOf = (...allowed: string[]) => (v: unknown): FieldVerdict =>
+  typeof v === "string" && allowed.includes(v)
+    ? { ok: true }
+    : { ok: false, error: `expected one of: ${allowed.join(", ")}` };
+
+/** CSS color parseable by Bun.color. Ref: docs/runtime/color.mdx */
+const color = (v: unknown): FieldVerdict =>
+  typeof v !== "string" ? { ok: false, error: "expected a color string" }
+    : Bun.color(v, "css") === null ? { ok: false, error: "not a parseable CSS color" }
+    : { ok: true };
+
+/** Same-origin root-relative path — blocks absolute URLs and traversal. */
+const path = (v: unknown): FieldVerdict =>
+  typeof v !== "string" ? { ok: false, error: "expected a string" }
+    : !v.startsWith("/") ? { ok: false, error: "must start with /" }
+    : v.includes("..") ? { ok: false, error: "must not contain .." }
+    : v.length > 512 ? { ok: false, error: "exceeds 512 characters" }
+    : { ok: true };
+
+const stringArray = (max: number) => (v: unknown): FieldVerdict =>
+  !Array.isArray(v) ? { ok: false, error: "expected an array" }
+    : v.length > max ? { ok: false, error: `at most ${max} entries` }
+    : v.every((x) => typeof x === "string" && x.length > 0 && x.length <= 64)
+      ? { ok: true }
+      : { ok: false, error: "entries must be non-empty strings under 64 chars" };
+
+/**
+ * Editable manifest fields and their value validators.
+ * Structural fields (icons, shortcuts, file_handlers, id) are intentionally
+ * absent — they are generated or must stay stable for app identity.
+ * Ref: https://w3c.github.io/manifest/
+ */
+const MANIFEST_EDITABLE_FIELDS: Record<string, (v: unknown) => FieldVerdict> = {
+  name: str(128),
+  short_name: str(64),
+  description: str(1024),
+  theme_color: color,
+  background_color: color,
+  // Ref: https://w3c.github.io/manifest/#display-member
+  display: oneOf("fullscreen", "standalone", "minimal-ui", "browser"),
+  // Ref: https://w3c.github.io/manifest/#orientation-member
+  orientation: oneOf(
+    "any", "natural", "landscape", "portrait",
+    "portrait-primary", "portrait-secondary",
+    "landscape-primary", "landscape-secondary",
+  ),
+  lang: str(35),
+  dir: oneOf("ltr", "rtl", "auto"),
+  categories: stringArray(16),
+  start_url: path,
+  scope: path,
+};
+
 // PWA feature flag — serve manifest.json and icons so the dashboard can be
 // installed as a Chrome standalone app.
 // Ref: https://web.dev/articles/add-manifest
@@ -3089,94 +3195,117 @@ if (ENABLE_PWA) {
   // Ref: https://web.dev/articles/add-manifest
   // Ref: https://w3c.github.io/manifest-app-info/
   routes["/manifest.json"] = {
-    GET: withMiddleware(async (req: BunRequest): Promise<Response> => {
-      const manifest = Bun.file("public/manifest.json");
-      // Read the base manifest and inject runtime metadata
-      // JUSTIFIED: .json() returns unknown; narrowing to manifest shape
-      const base = await manifest.json() as Record<string, unknown>;
-      const m = base;
-        const url = new URL(req.url);
-        const origin = `${url.protocol}//${url.host}`;
-        // Inject runtime values
-        m.id = `/?source=pwa&host=${origin}`;
-        m.start_url = `/dashboard?source=pwa&host=${origin}`;
-        // Add runtime info to description
-        const desc = m.description as string;
-        m.description = `${desc} Running on Bun ${Bun.version} at ${origin}.`;
-        // Add file_handlers for PWA file association (Chrome 117+)
-        // Ref: https://developer.chrome.com/articles/file-handling/
-        m.file_handlers = [
-          {
-            action: `/dashboard?source=file-handler`,
-            accept: {
-              "application/json": [".json"],
-              "application/manifest+json": [".webmanifest"],
-              "text/markdown": [".md", ".markdown"],
-              "text/yaml": [".yaml", ".yml"],
-              "text/toml": [".toml"],
-            },
+    GET: withMiddleware(async (): Promise<Response> => {
+      // JUSTIFIED: .json() returns unknown; narrowing to the manifest object shape
+      const base = await Bun.file(MANIFEST_PATH).json() as Record<string, unknown>;
+      // Layer runtime overrides (written by POST /api/manifest) on top of the
+      // committed base. The base file is never mutated.
+      const m = { ...base, ...(await readManifestOverrides()) };
+
+      // NOTE: `id` and `start_url` are deliberately NOT derived from the request
+      // origin. `id` is the PWA's stable identity — deriving it from the origin
+      // makes http/https, localhost/prod, or a port change look like a different
+      // app to the browser, which re-prompts install and orphans the existing
+      // installation. Both come from the committed manifest verbatim.
+
+      // file_handlers — desktop file association (Chrome 117+).
+      // Ref: https://developer.chrome.com/articles/file-handling/
+      // Concrete MIME types only; the spec does not allow wildcards here.
+      m.file_handlers = [
+        {
+          action: "/dashboard?source=file-handler",
+          accept: {
+            "application/json": [".json"],
+            "application/manifest+json": [".webmanifest"],
+            "text/markdown": [".md", ".markdown"],
+            "text/yaml": [".yaml", ".yml"],
+            "text/toml": [".toml"],
           },
-        ];
-        // Add protocol_handlers for deep linking
-        // Ref: https://developer.mozilla.org/en-US/docs/Web/Manifest/protocol_handlers
-        m.protocol_handlers = [
-          { protocol: "web+bun-dev", url: `/dashboard?source=protocol&url=%s` },
-        ];
-        // Add share_target for receiving shared content (Chrome 76+)
-        // Ref: https://developer.chrome.com/articles/web-share-target/
-        m.share_target = {
-          action: "/api/share-target",
-          method: "POST",
-          enctype: "application/x-www-form-urlencoded",
-          params: {
-            title: "title",
-            text: "text",
-            url: "url",
-          },
-        };
-        // Add launch_handler for single-instance behavior (Chrome 118+)
-        // Ref: https://developer.chrome.com/articles/launch-handler/
-        m.launch_handler = {
-          client_mode: "navigate-existing",
-        };
-        return new Response(JSON.stringify(m, null, 2), {
-          headers: {
-            "Content-Type": "application/manifest+json",
-            "Cache-Control": "no-cache", // Dynamic — don't cache
-          },
-        });
+        },
+      ];
+      // share_target — receives shared text/links (Chrome 76+).
+      // Ref: https://developer.chrome.com/articles/web-share-target/
+      m.share_target = {
+        action: "/api/share-target",
+        method: "POST",
+        enctype: "application/x-www-form-urlencoded",
+        params: { title: "title", text: "text", url: "url" },
+      };
+      // launch_handler — route launches into an existing window.
+      // Ref: https://developer.chrome.com/docs/web-platform/launch-handler
+      // Valid client_mode values are only: auto | navigate-new |
+      // navigate-existing | focus-existing. Anything else falls back to "auto".
+      m.launch_handler = { client_mode: "navigate-existing" };
+      // protocol_handlers — register the app to handle URL protocols.
+      // Ref: https://developer.mozilla.org/en-US/docs/Web/Manifest/protocol_handlers
+      // mailto is universally understood; the dashboard can compose a task
+      // from the subject/body. Other schemes would require OS-level
+      // registration and are omitted.
+      m.protocol_handlers = [
+        {
+          protocol: "mailto",
+          url: "/dashboard?source=protocol-handler&to=%s",
+        },
+      ];
+
+      return new Response(JSON.stringify(m, null, 2), {
+        headers: {
+          // Bun.file() reports application/json for .json, not the manifest
+          // type the spec requires — so set it explicitly.
+          "Content-Type": "application/manifest+json",
+          // Must revalidate: a stale manifest at a CDN/proxy pins old icons
+          // and shortcuts for the installed app.
+          "Cache-Control": "no-cache, must-revalidate, max-age=0",
+        },
+      });
     }),
   };
 
-  // Manifest editor — update the manifest at runtime (auth + CSRF)
+  // Manifest editor — writes a runtime *override*, never the committed base.
   // POST /api/manifest with { field: "theme_color", value: "#ff0000" }
   routes["/api/manifest"] = {
     POST: withCsrf(async (req: BunRequest): Promise<Response> => {
       // JUSTIFIED: req.json() returns unknown; narrowing to manifest update body
-      const body = await req.json() as { field: string; value: unknown };
+      const body = await req.json() as { field?: string; value?: unknown };
       if (!body.field || body.value === undefined) {
         return json({ error: "field and value required" }, 400);
       }
-      const allowedFields = [
-        "name", "short_name", "description", "theme_color",
-        "background_color", "display", "orientation", "lang", "dir",
-        "categories", "start_url", "scope",
-      ];
-      if (!allowedFields.includes(body.field)) {
-        return json({ error: `field must be one of: ${allowedFields.join(", ")}` }, 400);
+      const validator = MANIFEST_EDITABLE_FIELDS[body.field];
+      if (!validator) {
+        return json({
+          error: `field must be one of: ${Object.keys(MANIFEST_EDITABLE_FIELDS).join(", ")}`,
+        }, 400);
+      }
+      // Validate the *value*, not just the field name — an unvalidated value
+      // persists a structurally invalid manifest across restarts.
+      const verdict = validator(body.value);
+      if (!verdict.ok) {
+        return json({ error: `invalid value for ${body.field}: ${verdict.error}` }, 400);
       }
       try {
-        const file = Bun.file("public/manifest.json");
-        // JUSTIFIED: .json() returns unknown; narrowing to manifest shape
-        const manifest = await file.json() as Record<string, unknown>;
-        manifest[body.field] = body.value;
-        await Bun.write("public/manifest.json", JSON.stringify(manifest, null, 2) + "\n");
-        await audit({ action: "manifest_update", resource: "public/manifest.json", details: `${body.field}=${body.value}` });
-        log("info", "Manifest updated", { field: body.field, value: body.value });
-        return json({ ok: true, field: body.field, value: body.value });
+        const overrides = await readManifestOverrides();
+        overrides[body.field] = body.value;
+        await Bun.write(MANIFEST_OVERRIDES_PATH, JSON.stringify(overrides, null, 2) + "\n");
+        await audit({
+          action: "manifest_update",
+          resource: MANIFEST_OVERRIDES_PATH,
+          details: `${body.field}=${JSON.stringify(body.value)}`.slice(0, 200),
+        });
+        log("info", "Manifest override written", { field: body.field, value: body.value });
+        return json({ ok: true, field: body.field, value: body.value, path: MANIFEST_OVERRIDES_PATH });
       } catch (err) {
         return json({ error: "manifest update failed", details: String(err) }, 500);
       }
+    }),
+    // Clear all runtime overrides, reverting to the committed manifest.
+    DELETE: withCsrf(async (): Promise<Response> => {
+      try {
+        await Bun.file(MANIFEST_OVERRIDES_PATH).delete();
+      } catch {
+        // Already absent — reverting to base is the desired end state either way.
+      }
+      await audit({ action: "manifest_reset", resource: MANIFEST_OVERRIDES_PATH });
+      return json({ ok: true, reset: true });
     }),
   };
 
@@ -3184,14 +3313,34 @@ if (ENABLE_PWA) {
   // Ref: https://developer.chrome.com/articles/web-share-target/
   routes["/api/share-target"] = {
     POST: withMiddleware(async (req: BunRequest): Promise<Response> => {
-      const formData = await req.formData();
-      const title = formData.get("title") ?? "";
-      const text = formData.get("text") ?? "";
-      const sharedUrl = formData.get("url") ?? "";
+      // This route is unauthenticated (the OS share sheet cannot supply a
+      // bearer token), so treat every field as hostile: bound the length and
+      // strip control characters before it reaches the audit log or any
+      // newline-delimited log consumer.
+      const clean = (v: unknown, max: number): string =>
+        typeof v === "string"
+          ? v.replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, max)
+          : "";
+
+      // Inferred rather than annotated: bun-types and undici-types disagree on
+      // the FormData shape, so an explicit `FormData` annotation fails tsc.
+      let formData: Awaited<ReturnType<typeof req.formData>>;
+      try {
+        formData = await req.formData();
+      } catch {
+        // Unparseable body is a client error, not a server fault — without
+        // this the throw escapes to the top-level error() hook as a 500.
+        return json({ error: "expected form-encoded body with title/text/url" }, 400);
+      }
+
+      const title = clean(formData.get("title"), 200);
+      const text = clean(formData.get("text"), 2000);
+      const sharedUrl = clean(formData.get("url"), 2000);
+
       await audit({
         action: "share_received",
         resource: "pwa-share-target",
-        details: `title=${title}, url=${sharedUrl}`,
+        details: `title=${title}`.slice(0, 200),
       });
       log("info", "PWA share received", { title, url: sharedUrl });
       return json({ ok: true, received: { title, text, url: sharedUrl } });
@@ -3469,6 +3618,61 @@ if (ENABLE_PWA) {
         severity: "info", detail: icons.find((i) => i.type === "image/svg+xml")?.src ?? "missing",
       });
 
+      // --- Icon integrity: declared files must exist and match declared size ---
+      // Declaring an icon the server 404s on (or whose real pixels differ from
+      // its `sizes` string) previously scored as a pass, so the endpoint could
+      // report 100% installable against a manifest Chrome partly discards.
+      // Ref: node_modules/bun-types/docs/runtime/image.mdx — metadata()
+      const missing: string[] = [];
+      const mismatched: string[] = [];
+      for (const icon of icons) {
+        // Only local, root-relative icons are verifiable here.
+        if (!icon.src.startsWith("/")) continue;
+        const file = Bun.file(`public${icon.src}`);
+        if (!(await file.exists())) {
+          missing.push(icon.src);
+          continue;
+        }
+        const [w, h] = icon.sizes.split("x").map((n) => parseInt(n, 10));
+        if (!w || !h) continue;
+        try {
+          const meta = await new Bun.Image(await file.bytes()).metadata();
+          if (meta.width !== w || meta.height !== h) {
+            mismatched.push(`${icon.src} declares ${icon.sizes}, is ${meta.width}x${meta.height}`);
+          }
+        } catch {
+          mismatched.push(`${icon.src} is not a decodable image`);
+        }
+      }
+      checks.push({
+        category: "icon-integrity", check: "all declared icons exist",
+        pass: missing.length === 0, severity: "error",
+        detail: missing.length ? `missing: ${missing.join(", ")}` : `${icons.length} verified`,
+      });
+      checks.push({
+        category: "icon-integrity", check: "declared sizes match actual pixels",
+        pass: mismatched.length === 0, severity: "error",
+        detail: mismatched.length ? mismatched.join("; ") : "all match",
+      });
+
+      // A maskable icon byte-identical to its plain counterpart has no
+      // safe-zone padding, so Android's circular mask clips the glyph.
+      const maskableCopies: string[] = [];
+      for (const icon of icons.filter((i) => i.purpose === "maskable")) {
+        const plain = icons.find((i) => i.sizes === icon.sizes && i.purpose !== "maskable");
+        if (!plain) continue;
+        const [a, b] = [Bun.file(`public${icon.src}`), Bun.file(`public${plain.src}`)];
+        if (!(await a.exists()) || !(await b.exists())) continue;
+        if (Bun.SHA256.hash(await a.bytes(), "hex") === Bun.SHA256.hash(await b.bytes(), "hex")) {
+          maskableCopies.push(`${icon.src} is identical to ${plain.src}`);
+        }
+      }
+      checks.push({
+        category: "icon-integrity", check: "maskable icons have safe-zone padding",
+        pass: maskableCopies.length === 0, severity: "warning",
+        detail: maskableCopies.length ? maskableCopies.join("; ") : "padded",
+      });
+
       const errors = checks.filter((c) => c.severity === "error" && !c.pass);
       const warnings = checks.filter((c) => c.severity === "warning" && !c.pass);
       const passCount = checks.filter((c) => c.pass).length;
@@ -3493,13 +3697,32 @@ if (ENABLE_PWA) {
       if (!filename.endsWith(".png")) {
         return errorResponse("not found", 404);
       }
+      // Reject traversal before touching the filesystem.
+      if (filename.includes("..") || filename.includes("/")) {
+        return errorResponse("not found", 404);
+      }
       const file = Bun.file(`public/icons/${filename}`);
       const exists = await file.exists();
       if (!exists) {
         return errorResponse("icon not found", 404);
       }
+      // Icon filenames are NOT content-hashed (icon-512.png is a stable name),
+      // so `immutable` must not be used here — it would make icon updates
+      // permanently unreachable for already-cached clients. Use a moderate TTL
+      // plus a weak ETag so revalidation costs a 304 instead of a re-download.
+      const etag = `W/"${file.size.toString(16)}-${Math.floor(file.lastModified).toString(16)}"`;
+      if (req.headers.get("if-none-match") === etag) {
+        return new Response(null, {
+          status: 304,
+          headers: { ETag: etag, "Cache-Control": "public, max-age=86400" },
+        });
+      }
       return new Response(file, {
-        headers: { "Content-Type": "image/png", "Cache-Control": "public, max-age=86400" },
+        headers: {
+          "Content-Type": "image/png",
+          "Cache-Control": "public, max-age=86400",
+          ETag: etag,
+        },
       });
     }),
   };
