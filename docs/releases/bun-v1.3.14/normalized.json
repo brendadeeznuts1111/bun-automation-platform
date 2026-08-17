@@ -1,0 +1,230 @@
+[
+  {
+    "id": "bun-1.3.14-bun-image-1",
+    "feature": "Bun.Image",
+    "code": "await Bun.file(\"photo.jpg\").image().resize(1024, 1024, { fit: \"inside\" }).rotate(90).webp({ quality: 85 }).write(\"thumb.webp\");\nreturn new Response(new Bun.Image(upload).resize(200).jpeg());",
+    "purpose": "Chainable image processing pipeline — decode, transform, encode. Drop-in alternative to sharp.",
+    "status": "stable",
+    "notes": "ADOPTED in src/utils/image.ts and scripts/generate-assets.ts",
+    "api": [
+      "Bun.file",
+      "Bun.Image"
+    ],
+    "dependencies": [],
+    "runnable": false,
+    "added_in": "1.3.14"
+  },
+  {
+    "id": "bun-1.3.14-bun-image-metadata-placeholder-2",
+    "feature": "Bun.Image — metadata & placeholder",
+    "code": "const meta = await new Bun.Image(buf).metadata();\nconst placeholder = await Bun.file(\"hero.jpg\").image().placeholder();",
+    "purpose": "Extract image metadata and generate thumbhash blur-up placeholders.",
+    "status": "stable",
+    "notes": "Could adopt .placeholder() for PWA icon blur-up loading",
+    "api": [
+      "Bun.Image",
+      "Bun.file"
+    ],
+    "dependencies": [],
+    "runnable": false,
+    "added_in": "1.3.14"
+  },
+  {
+    "id": "bun-1.3.14-global-virtual-store-3",
+    "feature": "Global Virtual Store",
+    "code": "[install]\nglobalStore = true",
+    "purpose": "Shared global package store — symlink per-project instead of clonefileat per file.",
+    "status": "experimental",
+    "notes": "ADOPTED in bunfig.toml. 823ms → 115ms warm install",
+    "api": [],
+    "dependencies": [],
+    "runnable": false,
+    "added_in": "1.3.14"
+  },
+  {
+    "id": "bun-1.3.14-http-3-quic-in-bun-serve-4",
+    "feature": "HTTP/3 (QUIC) in Bun.serve",
+    "code": "Bun.serve({ port: 443, tls: { cert, key }, http3: true, fetch(req) { return new Response(\"hi\"); } });",
+    "purpose": "Serve HTTP/3 over QUIC alongside HTTP/1.1+2 on same port. 509K req/s.",
+    "status": "experimental",
+    "notes": "ADOPTED behind flag in src/server.ts. Requires ENABLE_TLS=1",
+    "api": [
+      "Bun.serve"
+    ],
+    "dependencies": [],
+    "runnable": true,
+    "added_in": "1.3.14"
+  },
+  {
+    "id": "bun-1.3.14-http-2-client-for-fetch-5",
+    "feature": "HTTP/2 Client for fetch()",
+    "code": "const res = await fetch(\"https://example.com\", { protocol: \"http2\" });",
+    "purpose": "HTTP/2 multiplexed fetch — concurrent requests share one TLS+TCP connection.",
+    "status": "experimental",
+    "notes": "NOT ADOPTED. Candidate for outbound API calls",
+    "api": [],
+    "dependencies": [],
+    "runnable": true,
+    "added_in": "1.3.14"
+  },
+  {
+    "id": "bun-1.3.14-http-3-client-for-fetch-6",
+    "feature": "HTTP/3 Client for fetch()",
+    "code": "const res = await fetch(\"https://example.com/\", { protocol: \"http3\" });",
+    "purpose": "HTTP/3 client via QUIC. Supports streaming, redirects, connection pooling.",
+    "status": "experimental",
+    "notes": "PARTIAL — render-mermaid.ts:120 uses protocol: \"http3\" with fallback",
+    "api": [],
+    "dependencies": [],
+    "runnable": true,
+    "added_in": "1.3.14"
+  },
+  {
+    "id": "bun-1.3.14-rewritten-fs-watch-7",
+    "feature": "Rewritten fs.watch()",
+    "code": "fs.watch(\"./src\", { recursive: true }, (event, filename) => { console.log(event, filename); });",
+    "purpose": "Direct OS file-watching (inotify/FSEvents/kqueue). Recursive, tracks new subdirs.",
+    "status": "stable",
+    "notes": "NOT ADOPTED. Candidate for config/manifest hot-reload",
+    "api": [
+      "fs.watch",
+      "console.log"
+    ],
+    "dependencies": [],
+    "runnable": true,
+    "added_in": "1.3.14"
+  },
+  {
+    "id": "bun-1.3.14-no-orphans-8",
+    "feature": "--no-orphans",
+    "code": "BUN_FEATURE_FLAG_NO_ORPHANS=1 bun run my-script",
+    "purpose": "Auto-exit when parent dies. Recursively SIGKILLs descendants.",
+    "status": "stable",
+    "notes": "ADOPTED in src/workers/pool.ts:145",
+    "api": [],
+    "dependencies": [
+      "BUN_FEATURE_FLAG_NO_ORPHANS"
+    ],
+    "runnable": true,
+    "added_in": "1.3.14"
+  },
+  {
+    "id": "bun-1.3.14-process-execve-9",
+    "feature": "process.execve()",
+    "code": "process.execve(\"/usr/bin/echo\", [\"echo\", \"hello\"], { PATH: process.env.PATH });",
+    "purpose": "Replace process image in-place. Never returns on success.",
+    "status": "experimental",
+    "notes": "NOT VIABLE — IPC fd is close-on-exec, breaks worker pool",
+    "api": [
+      "process.execve",
+      "process.env"
+    ],
+    "dependencies": [],
+    "runnable": false,
+    "added_in": "1.3.14"
+  },
+  {
+    "id": "bun-1.3.14-bun-terminal-windows-conpty-10",
+    "feature": "Bun.Terminal (Windows ConPTY)",
+    "code": "const terminal = new Bun.Terminal({ cols: 80, rows: 24, onData(data) { process.stdout.write(data); } });",
+    "purpose": "Pseudo-terminal on Windows via ConPTY.",
+    "status": "stable",
+    "notes": "NOT APPLICABLE — project targets macOS/Linux",
+    "api": [
+      "Bun.Terminal",
+      "process.stdout"
+    ],
+    "dependencies": [],
+    "runnable": true,
+    "added_in": "1.3.14"
+  },
+  {
+    "id": "bun-1.3.14-using-await-using-native-11",
+    "feature": "using / await using (native)",
+    "code": "using x = { [Symbol.dispose]() { /* ... */ } };",
+    "purpose": "Explicit Resource Management — no longer lowered to helper functions.",
+    "status": "stable",
+    "notes": "ADOPTED in task-worker.ts:203 — await using view = new Bun.WebView(...)",
+    "api": [],
+    "dependencies": [],
+    "runnable": false,
+    "added_in": "1.3.14"
+  },
+  {
+    "id": "bun-1.3.14-sighup-sigbreak-on-windows-12",
+    "feature": "SIGHUP/SIGBREAK on Windows",
+    "code": "process.on(\"SIGHUP\", () => { cleanup(); process.exit(); });",
+    "purpose": "Windows console-control events map to signals.",
+    "status": "stable",
+    "notes": "PARTIAL — SIGHUP in shutdown.ts:111, no SIGBREAK (Windows-only)",
+    "api": [
+      "process.on",
+      "process.exit"
+    ],
+    "dependencies": [],
+    "runnable": true,
+    "added_in": "1.3.14"
+  },
+  {
+    "id": "bun-1.3.14-websocket-permessagedeflate-false-13",
+    "feature": "WebSocket perMessageDeflate: false",
+    "code": "new WebSocket(\"ws://localhost:3000\", { perMessageDeflate: false });",
+    "purpose": "Correctly suppresses permessage-deflate extension header.",
+    "status": "stable",
+    "notes": "NOT ADOPTED. Candidate for /ws/task/:id and /ws/metrics",
+    "api": [],
+    "dependencies": [],
+    "runnable": true,
+    "added_in": "1.3.14"
+  },
+  {
+    "id": "bun-1.3.14-shared-ssl-ctx-cache-14",
+    "feature": "Shared SSL_CTX cache",
+    "code": "const db = new SQL(\"postgres://user:pass@host/db?sslmode=require\");",
+    "purpose": "All TLS APIs share single SSL_CTX per VM. ~50KB saved per connection.",
+    "status": "stable",
+    "notes": "AUTOMATIC — no code change needed",
+    "api": [],
+    "dependencies": [],
+    "runnable": true,
+    "added_in": "1.3.14"
+  },
+  {
+    "id": "bun-1.3.14-bun-publish-readme-15",
+    "feature": "bun publish README",
+    "code": "npm view @my-scope/my-package readme",
+    "purpose": "bun publish now sends README to registry.",
+    "status": "stable",
+    "notes": "AUTOMATIC — not relevant (not publishing to npm)",
+    "api": [],
+    "dependencies": [],
+    "runnable": true,
+    "added_in": "1.3.14"
+  },
+  {
+    "id": "bun-1.3.14-tls-getcacertificates-system-16",
+    "feature": "tls.getCACertificates('system')",
+    "code": "const systemCerts = tls.getCACertificates(\"system\");",
+    "purpose": "Returns OS trust store unconditionally without --use-system-ca.",
+    "status": "stable",
+    "notes": "AUTOMATIC — no code change needed",
+    "api": [
+      "tls.getCACertificates"
+    ],
+    "dependencies": [],
+    "runnable": true,
+    "added_in": "1.3.14"
+  },
+  {
+    "id": "bun-1.3.14-cli-terminal-restore-fix-17",
+    "feature": "CLI terminal restore fix",
+    "code": "bun app.js | less",
+    "purpose": "No longer breaks downstream pagers (less, fzf, fx).",
+    "status": "stable",
+    "notes": "AUTOMATIC — no code change needed",
+    "api": [],
+    "dependencies": [],
+    "runnable": true,
+    "added_in": "1.3.14"
+  }
+]

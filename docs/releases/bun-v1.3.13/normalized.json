@@ -1,0 +1,213 @@
+[
+  {
+    "id": "bun-1.3.13-bun-test-isolate-and-parallel-1",
+    "feature": "bun test --isolate and --parallel",
+    "code": "bun test --isolate ./tests\nbun test --parallel ./tests\nbun test --parallel=8 ./tests",
+    "purpose": "Run each test file in a fresh global environment (--isolate) or distribute across N worker processes (--parallel).",
+    "status": "stable",
+    "notes": "Available in bun test. Could adopt --parallel for CI to speed up 2451 tests.",
+    "api": [],
+    "dependencies": [],
+    "runnable": true,
+    "added_in": "1.3.13"
+  },
+  {
+    "id": "bun-1.3.13-bun-test-shard-m-n-2",
+    "feature": "bun test --shard=M/N",
+    "code": "bun test --shard=1/3\nbun test --shard=2/3\nbun test --shard=3/3",
+    "purpose": "Split test files across multiple CI runners. Round-robin distribution, 1-based index.",
+    "status": "stable",
+    "notes": "Could adopt for CI parallelization. Composes with --changed and --randomize.",
+    "api": [],
+    "dependencies": [],
+    "runnable": true,
+    "added_in": "1.3.13"
+  },
+  {
+    "id": "bun-1.3.13-bun-test-changed-3",
+    "feature": "bun test --changed",
+    "code": "bun test --changed\nbun test --changed=HEAD~1\nbun test --changed --watch",
+    "purpose": "Only run test files affected by git changes. Builds import graph, filters transitively.",
+    "status": "stable",
+    "notes": "Could adopt for faster local dev iteration. Composes with --watch.",
+    "api": [],
+    "dependencies": [],
+    "runnable": true,
+    "added_in": "1.3.13"
+  },
+  {
+    "id": "bun-1.3.13-bun-install-streams-tarballs-to-disk-4",
+    "feature": "bun install streams tarballs to disk",
+    "code": "BUN_FEATURE_FLAG_DISABLE_STREAMING_INSTALL=1 # to disable",
+    "purpose": "Extracts tarballs while downloading instead of buffering in memory. Enabled by default.",
+    "status": "stable",
+    "notes": "AUTOMATIC — no code change. Benefits all bun install runs.",
+    "api": [],
+    "dependencies": [
+      "BUN_FEATURE_FLAG_DISABLE_STREAMING_INSTALL"
+    ],
+    "runnable": true,
+    "added_in": "1.3.13"
+  },
+  {
+    "id": "bun-1.3.13-faster-bun-install-with-isolated-linker-5",
+    "feature": "Faster bun install with isolated linker",
+    "code": "bun install --linker=isolated",
+    "purpose": "8.5x faster installs in peer-heavy monorepos (20.5s → 2.4s). Byte-identical output.",
+    "status": "stable",
+    "notes": "Could adopt --linker=isolated in bunfig.toml for monorepo installs.",
+    "api": [],
+    "dependencies": [],
+    "runnable": true,
+    "added_in": "1.3.13"
+  },
+  {
+    "id": "bun-1.3.13-source-maps-use-up-to-8x-less-memory-6",
+    "feature": "Source maps use up to 8x less memory",
+    "code": "",
+    "purpose": "Bit-packed binary source map format. ~2.4 bytes/mapping vs 20 bytes. Zero decode on first access.",
+    "status": "stable",
+    "notes": "AUTOMATIC — no code change. Benefits error stack traces and bun build --compile.",
+    "api": [],
+    "dependencies": [],
+    "runnable": true,
+    "added_in": "1.3.13"
+  },
+  {
+    "id": "bun-1.3.13-bun-runtime-uses-5-less-memory-7",
+    "feature": "Bun runtime uses 5% less memory",
+    "code": "",
+    "purpose": "mimalloc v2→v3 upgrade, libpas scavenger for Windows & Linux. Reclaims memory faster.",
+    "status": "stable",
+    "notes": "AUTOMATIC — no code change. Fixes hangs/crashes in long-running processes.",
+    "api": [],
+    "dependencies": [],
+    "runnable": true,
+    "added_in": "1.3.13"
+  },
+  {
+    "id": "bun-1.3.13-upgraded-javascriptcore-engine-8",
+    "feature": "Upgraded JavaScriptCore engine",
+    "code": "",
+    "purpose": "1316 upstream commits. IC for array.length, toUpperCase intrinsic, SIMD string comparisons.",
+    "status": "stable",
+    "notes": "AUTOMATIC — no code change.",
+    "api": [],
+    "dependencies": [],
+    "runnable": true,
+    "added_in": "1.3.13"
+  },
+  {
+    "id": "bun-1.3.13-faster-addeventlistener-dispatchevent-and-dom-events-9",
+    "feature": "Faster addEventListener/dispatchEvent and DOM events",
+    "code": "",
+    "purpose": "270 upstream WebKit commits. File streaming on SSL/Windows, range request support.",
+    "status": "stable",
+    "notes": "AUTOMATIC. Range requests benefit Bun.serve file responses.",
+    "api": [],
+    "dependencies": [],
+    "runnable": true,
+    "added_in": "1.3.13"
+  },
+  {
+    "id": "bun-1.3.13-range-request-support-in-bun-serve-10",
+    "feature": "Range Request Support in Bun.serve()",
+    "code": "const res = await fetch(\"http://localhost:3000/video.mp4\", { headers: { Range: \"bytes=0-1023\" } });\n// res.status === 206",
+    "purpose": "Automatic Range: bytes= handling for file-backed responses. 206 Partial Content, 416 for invalid.",
+    "status": "stable",
+    "notes": "AUTOMATIC — benefits Bun.file() responses in src/server.ts. Suffix, open-ended, and RFC 9110 ranges supported.",
+    "api": [],
+    "dependencies": [],
+    "runnable": true,
+    "added_in": "1.3.13"
+  },
+  {
+    "id": "bun-1.3.13-5-5x-faster-gzip-compression-with-zlib-ng-11",
+    "feature": "5.5x faster gzip compression with zlib-ng",
+    "code": "",
+    "purpose": "zlib-ng 2.3.3 replaces Cloudflare zlib fork. SIMD acceleration for CRC32, Adler32, longest-match.",
+    "status": "stable",
+    "notes": "AUTOMATIC — no code change. Benefits node:zlib, fetch decompression.",
+    "api": [],
+    "dependencies": [],
+    "runnable": true,
+    "added_in": "1.3.13"
+  },
+  {
+    "id": "bun-1.3.13-faster-array-iteration-in-bun-internals-12",
+    "feature": "Faster array iteration in Bun internals",
+    "code": "",
+    "purpose": "1.43x faster array iteration for Int32/Contiguous storage. Reads directly from JSC butterfly.",
+    "status": "stable",
+    "notes": "AUTOMATIC — benefits expect().toContain(), Blob construction, etc.",
+    "api": [],
+    "dependencies": [],
+    "runnable": true,
+    "added_in": "1.3.13"
+  },
+  {
+    "id": "bun-1.3.13-sha3-support-in-webcrypto-and-node-crypto-13",
+    "feature": "SHA3 support in WebCrypto and node:crypto",
+    "code": "const hash = crypto.createHash(\"sha3-256\");\nhash.update(\"Hello, world!\");\nconsole.log(hash.digest(\"hex\"));",
+    "purpose": "SHA3-224, SHA3-256, SHA3-384, SHA3-512 in crypto.createHash, createHmac, subtle.digest, subtle.sign/verify.",
+    "status": "stable",
+    "notes": "Available for use. Could adopt for audit log hashing if needed.",
+    "api": [
+      "crypto.createHash",
+      "console.log"
+    ],
+    "dependencies": [],
+    "runnable": true,
+    "added_in": "1.3.13"
+  },
+  {
+    "id": "bun-1.3.13-x25519-derivebits-support-in-subtlecrypto-14",
+    "feature": "X25519 deriveBits support in SubtleCrypto",
+    "code": "const sharedSecret = await crypto.subtle.deriveBits({ name: \"X25519\", public: remoteKeyPair.publicKey }, keyPair.privateKey, 256);",
+    "purpose": "X25519 key agreement via crypto.subtle.deriveBits(). RFC 7748 §6.1 small-order rejection.",
+    "status": "stable",
+    "notes": "Available for use. Could adopt for E2E encryption if needed.",
+    "api": [
+      "crypto.subtle"
+    ],
+    "dependencies": [],
+    "runnable": true,
+    "added_in": "1.3.13"
+  },
+  {
+    "id": "bun-1.3.13-websocket-client-ws-unix-and-wss-unix-15",
+    "feature": "WebSocket client ws+unix:// and wss+unix://",
+    "code": "const ws = new WebSocket(\"ws+unix:///tmp/app.sock\");\nconst ws2 = new WebSocket(\"ws+unix:///tmp/app.sock:/api/stream?x=1\");",
+    "purpose": "WebSocket client over Unix domain sockets. Matches npm ws package convention.",
+    "status": "stable",
+    "notes": "Could adopt for internal IPC if WebSocket-based communication needed over Unix sockets.",
+    "api": [],
+    "dependencies": [],
+    "runnable": true,
+    "added_in": "1.3.13"
+  },
+  {
+    "id": "bun-1.3.13-standalone-html-inlines-file-loader-assets-16",
+    "feature": "Standalone HTML inlines file-loader assets",
+    "code": "",
+    "purpose": "bun build --compile now inlines file-loader assets (images, fonts) imported from JS into standalone HTML.",
+    "status": "stable",
+    "notes": "Not directly relevant — project uses Bun.serve routes, not standalone HTML compilation.",
+    "api": [],
+    "dependencies": [],
+    "runnable": true,
+    "added_in": "1.3.13"
+  },
+  {
+    "id": "bun-1.3.13-bunx-claude-fix-17",
+    "feature": "bunx claude fix",
+    "code": "",
+    "purpose": "Fixes bunx @anthropic-ai/claude-code execution.",
+    "status": "stable",
+    "notes": "Not relevant to this project.",
+    "api": [],
+    "dependencies": [],
+    "runnable": true,
+    "added_in": "1.3.13"
+  }
+]
