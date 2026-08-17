@@ -276,13 +276,29 @@ test("rate limit allows up to max", () => {
 
 **Current:** `src/workers/pool.ts` sets `BUN_FEATURE_FLAG_NO_ORPHANS: "1"` in the worker spawn environment. This ensures worker processes terminate automatically when the parent dies. Tracked in `src/features/registry.ts` as a stable feature ready for promotion. Tests in `tests/v1.3.14-fixes.test.ts` verify the flag is passed and workers don't inherit `--hot`.
 
-### I2. `process.execve()` for zero-overhead worker restart
+### I2. `process.execve()` for zero-overhead worker restart — [NOT VIABLE ❌]
 
 **Release note:** `process.execve()` replaces the current process image without fork+exec. Faster than spawning a new process.
 
 **Files:** `src/workers/pool.ts:104-110` (respawn logic — worker self-restart via execve instead of parent spawning new process)
 
-**Action:** In worker respawn logic (`pool.ts:106`), consider `process.execve()` in the worker instead of spawning a new process from the parent. Reduces respawn overhead from ~50ms to near-zero.
+**Action:** ~~In worker respawn logic (`pool.ts:106`), consider `process.execve()` in the worker instead of spawning a new process from the parent. Reduces respawn overhead from ~50ms to near-zero.~~
+
+**Not viable because:** The v1.3.14 blog states: "stdio is inherited — file descriptors 0/1/2 are preserved across the exec boundary, while all other descriptors are marked close-on-exec to prevent leaks." Bun's IPC channel uses a non-stdio file descriptor (a pipe between parent and child), so it is closed on execve. After `process.execve()`, the worker process restarts but the IPC channel is destroyed — the parent gets `Subprocess.send() can only be used if an IPC channel is open` when trying to dispatch tasks.
+
+The worker pool depends on IPC for:
+- Task dispatch (`{ type: "task", taskId }`)
+- Progress reporting (`{ type: "progress", ... }`)
+- Result delivery (`{ type: "result", ... }`)
+- Log relay (`{ type: "log", ... }` — added in G1)
+
+Without IPC, the worker is isolated and useless. The current `Bun.spawn()` respawn (fork+exec from the parent, which establishes a fresh IPC channel) is the correct mechanism.
+
+`process.execve()` would only become viable if Bun either:
+1. Made the IPC fd inheritable across exec (currently close-on-exec), or
+2. Provided a way to re-attach to the parent's IPC channel after execve
+
+**Verified:** Empirically tested on Bun v1.3.14 macOS arm64 — IPC is broken after `process.execve()`.
 
 **Ref:** [v1.3.14 blog — `process.execve()` support](https://bun.com/blog/bun-v1.3.14#process-execve-support)
 
@@ -372,7 +388,7 @@ var __callDispose = (stack, error, hasError) => { /* ... */ };
 | 6 | F1: Dashboard via HTML imports | Large | UX | ~1 day | Hard | ★★★☆☆ |
 | 7 | B3: Bun.secrets for credentials | Medium | Security | ~3 hrs | Medium | ★★★☆☆ |
 | 7 | I1: `--no-orphans` | Trivial | Reliability | ~5 min | Easy | ★★☆☆☆ |
-| 7 | I2: `process.execve()` restart | Small | Performance | ~30 min | Easy | ★★☆☆☆ |
+| 7 | I2: `process.execve()` restart | Small | Performance | ~30 min | Easy | ❌ NOT VIABLE |
 | 7 | I3: HTTP/3 support | Small | Performance | ~1 hr | Easy | ★★☆☆☆ |
 | 7 | I4: `using` for cleanup | Trivial | Code quality | ~15 min | Easy | ★★☆☆☆ |
 
