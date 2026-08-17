@@ -1,0 +1,183 @@
+{
+  "release": "bun-v1.3.14",
+  "published": "2026-05-13",
+  "source": "https://bun.com/blog/bun-v1.3.14",
+  "code_blocks": [
+    {
+      "id": 1,
+      "feature": "Bun.Image",
+      "code": "await Bun.file(\"photo.jpg\").image().resize(1024, 1024, { fit: \"inside\" }).rotate(90).webp({ quality: 85 }).write(\"thumb.webp\");\nreturn new Response(new Bun.Image(upload).resize(200).jpeg());",
+      "purpose": "Chainable image processing pipeline — decode, transform, encode. Drop-in alternative to sharp.",
+      "status": "stable",
+      "notes": "ADOPTED in src/utils/image.ts and scripts/generate-assets.ts"
+    },
+    {
+      "id": 2,
+      "feature": "Bun.Image — metadata & placeholder",
+      "code": "const meta = await new Bun.Image(buf).metadata();\nconst placeholder = await Bun.file(\"hero.jpg\").image().placeholder();",
+      "purpose": "Extract image metadata and generate thumbhash blur-up placeholders.",
+      "status": "stable",
+      "notes": "Could adopt .placeholder() for PWA icon blur-up loading"
+    },
+    {
+      "id": 3,
+      "feature": "Global Virtual Store",
+      "code": "[install]\nglobalStore = true",
+      "purpose": "Shared global package store — symlink per-project instead of clonefileat per file.",
+      "status": "experimental",
+      "notes": "ADOPTED in bunfig.toml. 823ms → 115ms warm install"
+    },
+    {
+      "id": 4,
+      "feature": "HTTP/3 (QUIC) in Bun.serve",
+      "code": "Bun.serve({ port: 443, tls: { cert, key }, http3: true, fetch(req) { return new Response(\"hi\"); } });",
+      "purpose": "Serve HTTP/3 over QUIC alongside HTTP/1.1+2 on same port. 509K req/s.",
+      "status": "experimental",
+      "notes": "ADOPTED behind flag in src/server.ts. Requires ENABLE_TLS=1"
+    },
+    {
+      "id": 5,
+      "feature": "HTTP/2 Client for fetch()",
+      "code": "const res = await fetch(\"https://example.com\", { protocol: \"http2\" });",
+      "purpose": "HTTP/2 multiplexed fetch — concurrent requests share one TLS+TCP connection.",
+      "status": "experimental",
+      "notes": "NOT ADOPTED. Candidate for outbound API calls"
+    },
+    {
+      "id": 6,
+      "feature": "HTTP/3 Client for fetch()",
+      "code": "const res = await fetch(\"https://example.com/\", { protocol: \"http3\" });",
+      "purpose": "HTTP/3 client via QUIC. Supports streaming, redirects, connection pooling.",
+      "status": "experimental",
+      "notes": "PARTIAL — render-mermaid.ts:120 uses protocol: \"http3\" with fallback"
+    },
+    {
+      "id": 7,
+      "feature": "Rewritten fs.watch()",
+      "code": "fs.watch(\"./src\", { recursive: true }, (event, filename) => { console.log(event, filename); });",
+      "purpose": "Direct OS file-watching (inotify/FSEvents/kqueue). Recursive, tracks new subdirs.",
+      "status": "stable",
+      "notes": "NOT ADOPTED. Candidate for config/manifest hot-reload"
+    },
+    {
+      "id": 8,
+      "feature": "--no-orphans",
+      "code": "BUN_FEATURE_FLAG_NO_ORPHANS=1 bun run my-script",
+      "purpose": "Auto-exit when parent dies. Recursively SIGKILLs descendants.",
+      "status": "stable",
+      "notes": "ADOPTED in src/workers/pool.ts:145"
+    },
+    {
+      "id": 9,
+      "feature": "process.execve()",
+      "code": "process.execve(\"/usr/bin/echo\", [\"echo\", \"hello\"], { PATH: process.env.PATH });",
+      "purpose": "Replace process image in-place. Never returns on success.",
+      "status": "experimental",
+      "notes": "NOT VIABLE — IPC fd is close-on-exec, breaks worker pool"
+    },
+    {
+      "id": 10,
+      "feature": "Bun.Terminal (Windows ConPTY)",
+      "code": "const terminal = new Bun.Terminal({ cols: 80, rows: 24, onData(data) { process.stdout.write(data); } });",
+      "purpose": "Pseudo-terminal on Windows via ConPTY.",
+      "status": "stable",
+      "notes": "NOT APPLICABLE — project targets macOS/Linux"
+    },
+    {
+      "id": 11,
+      "feature": "using / await using (native)",
+      "code": "using x = { [Symbol.dispose]() { /* ... */ } };",
+      "purpose": "Explicit Resource Management — no longer lowered to helper functions.",
+      "status": "stable",
+      "notes": "ADOPTED in task-worker.ts:203 — await using view = new Bun.WebView(...)"
+    },
+    {
+      "id": 12,
+      "feature": "SIGHUP/SIGBREAK on Windows",
+      "code": "process.on(\"SIGHUP\", () => { cleanup(); process.exit(); });",
+      "purpose": "Windows console-control events map to signals.",
+      "status": "stable",
+      "notes": "PARTIAL — SIGHUP in shutdown.ts:111, no SIGBREAK (Windows-only)"
+    },
+    {
+      "id": 13,
+      "feature": "WebSocket perMessageDeflate: false",
+      "code": "new WebSocket(\"ws://localhost:3000\", { perMessageDeflate: false });",
+      "purpose": "Correctly suppresses permessage-deflate extension header.",
+      "status": "stable",
+      "notes": "NOT ADOPTED. Candidate for /ws/task/:id and /ws/metrics"
+    },
+    {
+      "id": 14,
+      "feature": "Shared SSL_CTX cache",
+      "code": "const db = new SQL(\"postgres://user:pass@host/db?sslmode=require\");",
+      "purpose": "All TLS APIs share single SSL_CTX per VM. ~50KB saved per connection.",
+      "status": "stable",
+      "notes": "AUTOMATIC — no code change needed"
+    },
+    {
+      "id": 15,
+      "feature": "bun publish README",
+      "code": "npm view @my-scope/my-package readme",
+      "purpose": "bun publish now sends README to registry.",
+      "status": "stable",
+      "notes": "AUTOMATIC — not relevant (not publishing to npm)"
+    },
+    {
+      "id": 16,
+      "feature": "tls.getCACertificates('system')",
+      "code": "const systemCerts = tls.getCACertificates(\"system\");",
+      "purpose": "Returns OS trust store unconditionally without --use-system-ca.",
+      "status": "stable",
+      "notes": "AUTOMATIC — no code change needed"
+    },
+    {
+      "id": 17,
+      "feature": "CLI terminal restore fix",
+      "code": "bun app.js | less",
+      "purpose": "No longer breaks downstream pagers (less, fzf, fx).",
+      "status": "stable",
+      "notes": "AUTOMATIC — no code change needed"
+    }
+  ],
+  "integration_checklist": [
+    "Bun.Image: ADOPTED — verify src/utils/image.ts pipeline",
+    "Global Virtual Store: ADOPTED — verify bunfig.toml globalStore = true",
+    "HTTP/3 server: ADOPTED behind flag — test with curl --http3",
+    "HTTP/2 client: NOT ADOPTED — evaluate for outbound fetch()",
+    "HTTP/3 client: PARTIAL — verify render-mermaid.ts fallback",
+    "fs.watch(): NOT ADOPTED — build config/manifest hot-reload",
+    "--no-orphans: ADOPTED — verify pool.ts:145 worker env",
+    "process.execve(): NOT VIABLE — IPC breaks",
+    "Bun.Terminal: NOT APPLICABLE — macOS/Linux only",
+    "using/await using: ADOPTED — verify task-worker.ts:203",
+    "SIGHUP/SIGBREAK: PARTIAL — SIGHUP in shutdown.ts",
+    "WebSocket perMessageDeflate: NOT ADOPTED — enable for /ws endpoints",
+    "Shared SSL_CTX: AUTOMATIC",
+    "SQLite 3.53.0: AUTOMATIC",
+    "Event loop refactor: AUTOMATIC",
+    "Bugfixes: AUTOMATIC — node:http, node:zlib, Bun.spawn, Bun.serve fixes"
+  ],
+  "rollout_plan": [
+    {
+      "phase": 1,
+      "title": "Verify adopted features",
+      "items": ["typecheck + tests", "HTTP/3 live test", "--no-orphans env check", "using/await using compile check"]
+    },
+    {
+      "phase": 2,
+      "title": "Build remaining features",
+      "items": ["fs.watch() hot-reload in src/utils/watch.ts", "WebSocket perMessageDeflate in server.ts", "HTTP/2 client for outbound fetch()"]
+    },
+    {
+      "phase": 3,
+      "title": "Update documentation",
+      "items": ["Mark I4 RESOLVED in OPEN_TASKS.md", "Update BUN_API_REFERENCE.md", "Update ARCHITECTURE.md"]
+    },
+    {
+      "phase": 4,
+      "title": "Promote stable features",
+      "items": ["HTTP/3: keep experimental until Bun stable", "fs.watch: start as stable", "perMessageDeflate: start as stable"]
+    }
+  ]
+}
