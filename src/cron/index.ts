@@ -8,6 +8,7 @@
 
 import { write } from "../db";
 import { getPoolStatus } from "../workers/pool";
+import { log } from "../utils/log";
 
 const AUDIT_RETENTION_DAYS = 30;
 const HEALTH_LOG_MAX = 10_000;
@@ -29,7 +30,7 @@ export function registerCronJobs(): void {
       // Cap health_log to last 10k entries
       db.run(`DELETE FROM health_log WHERE id NOT IN (SELECT id FROM health_log ORDER BY ts DESC LIMIT ${HEALTH_LOG_MAX})`);
     });
-    console.log(`[cron] health check: ${pool.idle}/${pool.total} workers idle, uptime ${Math.floor(uptime)}s`);
+    log("cron", "info", `health check: ${pool.idle}/${pool.total} workers idle, uptime ${Math.floor(uptime)}s`);
   });
 
   // Log rotation — daily at 2 AM, purge audit logs older than 30 days
@@ -40,19 +41,19 @@ export function registerCronJobs(): void {
       .slice(0, 19);
     write((db) => {
       const result = db.run(`DELETE FROM audit_log WHERE created_at < ?`, [cutoff]);
-      console.log(`[cron] purged ${result.changes} audit log entries older than ${cutoff}`);
+      log("cron", "info", `purged ${result.changes} audit log entries older than ${cutoff}`);
     });
     // Vacuum to reclaim space
     write((db) => {
       db.run("VACUUM");
-      console.log("[cron] database vacuumed");
+      log("cron", "info", "database vacuumed");
     });
   });
 
   // Next scheduled health check time (for dashboard display)
   const nextHealth = Bun.cron.parse("*/15 * * * *");
   if (nextHealth) {
-    console.log(`[cron] next health check at ${nextHealth.toISOString()}`);
+    log("cron", "info", `next health check at ${nextHealth.toISOString()}`);
   }
 
   // S3 backup — daily at 3 AM, upload tar bundle to S3 if configured
@@ -67,15 +68,15 @@ export function registerCronJobs(): void {
       const { s3, write } = await import("bun");
       const file = s3.file(`backups/bun-dev-${bundle.date}.tar.gz`);
       await write(file, bundle.data);
-      console.log(`[cron] S3 backup uploaded: ${bundle.date}.tar.gz (${bundle.compressedSize} bytes, ratio: ${((bundle.compressedSize / bundle.originalSize) * 100).toFixed(1)}%)`);
+      log("cron", "info", `S3 backup uploaded: ${bundle.date}.tar.gz (${bundle.compressedSize} bytes, ratio: ${((bundle.compressedSize / bundle.originalSize) * 100).toFixed(1)}%)`);
     } catch (err) {
-      console.error(`[cron] S3 backup failed: ${err}`);
+      log("cron", "error", `S3 backup failed: ${err}`);
     }
   });
 
   const nextBackup = Bun.cron.parse("0 3 * * *");
   if (nextBackup && process.env.S3_BUCKET) {
-    console.log(`[cron] next S3 backup at ${nextBackup.toISOString()}`);
+    log("cron", "info", `next S3 backup at ${nextBackup.toISOString()}`);
   }
 }
 

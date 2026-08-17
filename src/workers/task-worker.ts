@@ -24,6 +24,32 @@ import type { TaskRow } from "../types/models";
 import { IPCChannel } from "../channels/ipc-channel";
 import type { Channel } from "../types/channel";
 
+// --- Worker log helper -----------------------------------------------------
+// G1: Workers run in a separate process and can't share the server's
+// logBuffer. Instead of console.log, we send structured log entries to the
+// server via IPC. The server's pool.ts "log" handler relays them into the
+// shared log() function so they appear in /api/logs.
+// Early logs (before the channel is created) fall back to console.* —
+// stdout/stderr are inherited, so they still appear in the terminal.
+// Ref: src/types/ipc.ts (WorkerToParentMessage "log" type)
+let logChannel: Channel<WorkerToParentMessage, ParentToWorkerMessage> | null = null;
+const workerSource = `worker:${process.pid}`;
+
+/**
+ * Send a structured log entry to the server via IPC.
+ * `sourceOverride` lets callers use a different namespace (e.g. "webview:42")
+ * while defaulting to "worker:PID".
+ */
+function workerLog(level: "info" | "warn" | "error", msg: string, data?: unknown, sourceOverride?: string): void {
+  const source = sourceOverride ?? workerSource;
+  if (logChannel && logChannel.send({ type: "log", source, level, msg, data })) {
+    return;
+  }
+  // Fallback: channel not ready or IPC closed — write to stdout (inherited)
+  const icon = level === "error" ? "❌" : level === "warn" ? "⚠️" : "ℹ️";
+  console.log(`${icon} [${new Date().toISOString()}] [${source}] ${msg}`, data ?? "");
+}
+
 // --- Config ----------------------------------------------------------------
 
 const PROFILE_DIR = resolve(process.env.PROFILE_DIR ?? "./data/profiles");
@@ -88,7 +114,7 @@ function loadTask(taskId: number): TaskRow | null {
 function updateProgress(taskId: number, progress: number): void {
   write((db) => {
     db.query("UPDATE tasks SET progress = ?, updated_at = datetime('now') WHERE id = ?").run(progress, taskId);
-  }).catch((e) => console.error(`[worker] updateProgress failed:`, e));
+  }).catch((e) => workerLog("error", "updateProgress failed", e));
 }
 
 function completeTask(taskId: number, result: string): void {
@@ -96,7 +122,7 @@ function completeTask(taskId: number, result: string): void {
     db.query(
       `UPDATE tasks SET status = 'completed', progress = 100, result = ?, completed_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`,
     ).run(result, taskId);
-  }).catch((e) => console.error(`[worker] completeTask failed:`, e));
+  }).catch((e) => workerLog("error", "completeTask failed", e));
 }
 
 function failTask(taskId: number, error: string): void {
@@ -104,7 +130,7 @@ function failTask(taskId: number, error: string): void {
     db.query(
       `UPDATE tasks SET status = 'failed', error = ?, updated_at = datetime('now') WHERE id = ?`,
     ).run(error, taskId);
-  }).catch((e) => console.error(`[worker] failTask failed:`, e));
+  }).catch((e) => workerLog("error", "failTask failed", e));
 }
 
 /** D9: Extract a meaningful site key from a URL for the circuit breaker. */
@@ -153,10 +179,12 @@ async function executeTask(task: TaskRow): Promise<string> {
     height: VIEWPORT_HEIGHT,
     // m8: Fall back to ephemeral on old macOS — sessions won't persist but task still runs
     dataStore: usePersistent ? { directory: agentProfileDir } : "ephemeral",
-    // m2: Capture page-side console output for debugging automation failures
+    // m2: Capture page-side console output for debugging automation failures.
+    // This is external page output, not worker logs — but we still relay it
+    // via IPC with a "webview:ID" source so it appears in /api/logs.
     console: (type, ...args) => {
       if (type === "error" || type === "warn") {
-        console.error(`[webview:${task.id}] page ${type}:`, ...args);
+        workerLog(type, `page ${type}: ${args.join(" ")}`, undefined, `webview:${task.id}`);
       }
     },
     // Note: We don't pass `url` here because we want to set onNavigated/
@@ -176,10 +204,10 @@ async function executeTask(task: TaskRow): Promise<string> {
 
   // m3: Set navigation callbacks for observability (fires before navigate() settles)
   view.onNavigated = (url, title) => {
-    console.log(`[webview:${task.id}] navigated to ${url} (${title})`);
+    workerLog("info", `navigated to ${url} (${title})`, undefined, `webview:${task.id}`);
   };
   view.onNavigationFailed = (error) => {
-    console.error(`[webview:${task.id}] navigation failed:`, error.message);
+    workerLog("error", `navigation failed: ${error.message}`, undefined, `webview:${task.id}`);
   };
 
   // Step 1: Navigate to the task URL (C2: with timeout to prevent hanging forever)
@@ -297,13 +325,16 @@ const channel: Channel<WorkerToParentMessage, ParentToWorkerMessage> = new IPCCh
   `worker-${process.pid}`,
   process,
 );
+// G1: Wire the channel into the workerLog helper so subsequent logs flow
+// into the server's ring buffer via IPC instead of just stdout.
+logChannel = channel;
 
 // Keep the process alive waiting for IPC messages.
 const keepAlive = setInterval(() => {}, 60_000);
 
 // C5: Register typed message handlers via channel.on() instead of process.on()
 channel.on("shutdown", (msg) => {
-  console.log(`[worker:${process.pid}] received shutdown signal${msg.reason ? `: ${msg.reason}` : ""}`);
+  workerLog("info", `received shutdown signal${msg.reason ? `: ${msg.reason}` : ""}`);
   clearInterval(keepAlive);
   // C3: Don't call Bun.WebView.closeAll() — `await using view` handles per-view
   // cleanup, and Bun automatically calls closeAll() at process exit.
@@ -327,7 +358,7 @@ channel.on("task", async (msg) => {
     // D4: Guard against duplicate processing — if the task is already running
     // (e.g. due to a dispatch race), skip it instead of processing twice.
     if (task.status === "running") {
-      console.warn(`[worker:${process.pid}] task ${taskId} is already running — skipping duplicate`);
+      workerLog("warn", `task ${taskId} is already running — skipping duplicate`);
       channel.send({ type: "error", taskId, error: "task already running" });
       return;
     }
@@ -346,7 +377,7 @@ channel.on("task", async (msg) => {
         return !errMsg.includes("not found") && !errMsg.includes("auth");
       },
       onRetry: (attempt, delay) => {
-        console.log(`[worker:${process.pid}] retry ${attempt} after ${delay}ms`);
+        workerLog("info", `retry ${attempt} after ${delay}ms`);
         channel.send({ type: "progress", taskId, progress: -1, retrying: attempt });
       },
     });
@@ -355,7 +386,7 @@ channel.on("task", async (msg) => {
     // E6: Catch circuit breaker write rejections — don't let them become
     // unhandled rejections that could crash the worker.
     recordSuccess(getSiteKey(task.url)).catch((e) =>
-      console.error(`[worker:${process.pid}] recordSuccess failed:`, e),
+      workerLog("error", "recordSuccess failed", e),
     );
     // D7: If IPC is closed, the task is still completed in the DB — just can't notify
     channel.send({ type: "result", taskId, result });
@@ -368,7 +399,7 @@ channel.on("task", async (msg) => {
       const task = loadTask(taskId);
       if (task) {
         recordFailure(getSiteKey(task.url)).catch((e) =>
-          console.error(`[worker:${process.pid}] recordFailure failed:`, e),
+          workerLog("error", "recordFailure failed", e),
         );
       }
     } catch {} // best-effort — don't mask the original error
@@ -378,4 +409,4 @@ channel.on("task", async (msg) => {
 
 // Notify parent that we're ready
 channel.send({ type: "ready", pid: process.pid });
-console.log(`[worker:${process.pid}] ready`);
+workerLog("info", "ready");

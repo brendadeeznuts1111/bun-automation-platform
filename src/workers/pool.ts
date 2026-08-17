@@ -20,6 +20,7 @@ import { trackWorker, isShuttingDown } from "../utils/shutdown";
 import type { WorkerToParentMessage, ParentToWorkerMessage } from "../types/ipc";
 import { IPCChannel } from "../channels/ipc-channel";
 import type { Channel } from "../types/channel";
+import { log } from "../utils/log";
 
 const POOL_SIZE = parseInt(process.env.WORKER_POOL_SIZE ?? "4", 10);
 const WORKER_SCRIPT = resolve(import.meta.dir, "../workers/task-worker.ts");
@@ -71,7 +72,7 @@ function publishToWebSocket(topic: string, msg: unknown): void {
     try {
       wsPublisher(topic, msg);
     } catch (err) {
-      console.error(`[workers] WebSocket publish failed for ${topic}:`, err);
+      log("workers", "error", `WebSocket publish failed for ${topic}`, err);
     }
   }
 }
@@ -82,7 +83,7 @@ export async function initWorkerPool(): Promise<void> {
     const slot = spawnWorker();
     pool.push(slot);
   }
-  console.log(`[workers] pool initialized with ${POOL_SIZE} workers`);
+  log("workers", "info", `pool initialized with ${POOL_SIZE} workers`);
 }
 
 function spawnWorker(): WorkerSlot {
@@ -102,6 +103,7 @@ function spawnWorker(): WorkerSlot {
     `worker-pending`,
     // JUSTIFIED: proc doesn't exist yet, but IPCChannel only uses it in send()
     // and handleMessage() which are called after proc is assigned below.
+    // JUSTIFIED: empty object cast to Subprocess — placeholder until proc is assigned
     {} as import("bun").Subprocess<"ignore", "inherit", "inherit">,
   );
   slot.channel = channel;
@@ -120,10 +122,10 @@ function spawnWorker(): WorkerSlot {
     // (proc.exited.then only provides exitCode)
     onExit(_proc, exitCode, signalCode, error) {
       if (error) {
-        console.error(`[workers] worker exited with error:`, error.message);
+        log("workers", "error", "worker exited with error", error.message);
       }
       if (signalCode) {
-        console.log(`[workers] worker killed by signal ${signalCode} (code=${exitCode})`);
+        log("workers", "warn", `worker killed by signal ${signalCode} (code=${exitCode})`);
       }
     },
     stdin: "ignore",
@@ -196,7 +198,7 @@ function spawnWorker(): WorkerSlot {
       const idx = pool.indexOf(slot);
       if (idx >= 0) {
         pool[idx] = spawnWorker();
-        console.log(`[workers] respawned worker at index ${idx} (code=${code})`);
+        log("workers", "info", `respawned worker at index ${idx} (code=${code})`);
         // D1: Dispatch queued tasks to the freshly respawned worker
         dispatchNext();
       }
@@ -216,7 +218,7 @@ function registerHandlers(slot: WorkerSlot): void {
   });
 
   channel.on("progress", (msg) => {
-    console.log(`[worker:${slot.proc.pid}] task ${msg.taskId} progress: ${msg.progress}%`);
+    log(`worker:${slot.proc.pid}`, "info", `task ${msg.taskId} progress: ${msg.progress}%`);
     // C7: Publish to WebSocket subscribers if enabled
     publishToWebSocket(`task:${msg.taskId}`, {
       type: "progress",
@@ -251,6 +253,14 @@ function registerHandlers(slot: WorkerSlot): void {
     });
     dispatchNext();
   });
+
+  // G1: Relay worker log entries into the server's ring buffer via the shared
+  // log() function. Workers run in separate processes and can't share the
+  // in-memory logBuffer — IPC is the aggregation mechanism. The `source`
+  // field (e.g. "worker:12345", "webview:42") preserves the namespace.
+  channel.on("log", (msg) => {
+    log(msg.source, msg.level, msg.msg, msg.data);
+  });
 }
 
 function dispatchNext(): void {
@@ -267,7 +277,7 @@ function dispatchNext(): void {
   // E7: channel.send() returns false if IPC is closed — reject the task
   const sent = idle.channel.send({ type: "task", taskId: task.taskId });
   if (!sent) {
-    console.error(`[workers] failed to send task to worker (IPC closed)`);
+    log("workers", "error", "failed to send task to worker (IPC closed)");
     idle.busy = false;
     idle.currentTask = null;
     task.reject(new Error("worker IPC channel closed"));

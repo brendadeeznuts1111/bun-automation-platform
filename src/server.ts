@@ -27,6 +27,7 @@ import { initWorkerPool, submitTask, getPoolStatus } from "./workers/pool";
 import { serveScreenshot } from "./utils/image";
 import { isFeatureEnabled, shouldActivate, markActive, markBlocked, listFeatures, getFeatureSummary } from "./features/registry";
 import { setWSPublisher } from "./workers/pool";
+import { log, getLogs, getLogCount } from "./utils/log";
 
 // --- Config ----------------------------------------------------------------
 
@@ -53,7 +54,7 @@ const NODE_ENV = getEnv("NODE_ENV", "development");
 
 // D4: HTTP/3 requested without TLS → fail loudly, don't silently disable.
 if (isFeatureEnabled("http3") && !isFeatureEnabled("tls")) {
-  console.error("[server] ENABLE_HTTP3=1 requires ENABLE_TLS=1 (HTTP/3 mandates TLS)");
+  log("server", "error", "ENABLE_HTTP3=1 requires ENABLE_TLS=1 (HTTP/3 mandates TLS)");
   process.exit(1);
 }
 
@@ -76,41 +77,39 @@ if (ENABLE_TLS) {
   const certFile = Bun.file(certPath);
   const keyFile = Bun.file(keyPath);
   if (!(await certFile.exists()) || !(await keyFile.exists())) {
-    console.error(
-      `[server] ENABLE_TLS=1 but cert/key not found at ${certPath}/${keyPath}.\n` +
-      `Generate with:\n` +
-      `  openssl req -x509 -newkey rsa:2048 -keyout dev-key.pem -out dev-cert.pem -days 365 -nodes -subj "/CN=localhost"`,
-    );
+    log("server", "error", `ENABLE_TLS=1 but cert/key not found at ${certPath}/${keyPath}`, {
+      hint: "Generate with: openssl req -x509 -newkey rsa:2048 -keyout dev-key.pem -out dev-cert.pem -days 365 -nodes -subj /CN=localhost",
+    });
     markBlocked("tls", `cert/key not found at ${certPath}/${keyPath}`);
     process.exit(1);
   }
   tlsConfig = { cert: await certFile.text(), key: await keyFile.text() };
   markActive("tls");
-  console.log(`[server] TLS enabled (cert: ${certPath})`);
+  log("server", "info", `TLS enabled (cert: ${certPath})`);
 }
 
 if (ENABLE_HTTP3) {
   if (!ENABLE_TLS) {
     markBlocked("http3", "requires tls to be enabled");
-    console.error("[server] ENABLE_HTTP3=1 requires ENABLE_TLS=1 (HTTP/3 mandates TLS)");
+    log("server", "error", "ENABLE_HTTP3=1 requires ENABLE_TLS=1 (HTTP/3 mandates TLS)");
     process.exit(1);
   }
   markActive("http3");
-  console.log("[server] HTTP/3 (QUIC) enabled — experimental, not for production yet");
-  console.log("         Ref: https://bun.sh/blog/bun-v1.3.14#http-3-quic-support-in-bun-serve");
+  log("server", "info", "HTTP/3 (QUIC) enabled — experimental, not for production yet");
+  log("server", "info", "Ref: https://bun.sh/blog/bun-v1.3.14#http-3-quic-support-in-bun-serve");
 }
 
 if (ENABLE_DEV_DASHBOARD) {
   markActive("devDashboard");
-  console.log("[server] Dev dashboard enabled at /dashboard");
+  log("server", "info", "Dev dashboard enabled at /dashboard");
 }
 
 if (ENABLE_WEBSOCKET) {
   markActive("websocket");
-  console.log("[server] WebSocket enabled — /ws/task/:id for live progress");
+  log("server", "info", "WebSocket enabled — /ws/task/:id for live progress");
 }
 
-console.log(`[server] feature flags: ${getFeatureSummary()}`);
+log("server", "info", `feature flags: ${getFeatureSummary()}`);
 
 // F7: Pre-compute a real Argon2id hash at startup for the login timing oracle
 // mitigation (E2). Using a real hash with the same parameters as
@@ -122,36 +121,16 @@ const DUMMY_PASSWORD_HASH = await Bun.password.hash("dummy-password-that-never-m
 // G10: Max request body size (1 MB). Prevents OOM from oversized payloads.
 const MAX_BODY_BYTES = 1_048_576;
 
-// G-structured: In-memory log ring buffer for structured logging
-// Ref: node_modules/bun-types/docs/runtime/console.mdx
-interface LogEntry {
-  ts: number;
-  level: "info" | "warn" | "error";
-  msg: string;
-  data?: unknown;
-}
-const LOG_BUFFER_MAX = 1000;
-const logBuffer: LogEntry[] = [];
-
-/** Structured logger — writes to stdout AND in-memory ring buffer. */
-function log(level: LogEntry["level"], msg: string, data?: unknown): void {
-  const entry: LogEntry = { ts: Date.now(), level, msg, data };
-  logBuffer.push(entry);
-  if (logBuffer.length > LOG_BUFFER_MAX) logBuffer.shift();
-  const prefix = level === "error" ? "❌" : level === "warn" ? "⚠️" : "ℹ️";
-  console.log(`${prefix} [${new Date(entry.ts).toISOString()}] ${msg}`, data ?? "");
-}
-
 // Log server startup
-log("info", "BUN-DEV server initializing", { version: Bun.version, pid: process.pid });
+log("server", "info", "BUN-DEV server initializing", { version: Bun.version, pid: process.pid });
 
 // --- Init ------------------------------------------------------------------
 
-console.log(`[server] starting in ${NODE_ENV} mode on ${HOST}:${PORT}`);
+log("server", "info", `starting in ${NODE_ENV} mode on ${HOST}:${PORT}`);
 
 // Run migrations
 await migrate();
-console.log("[server] database migrated");
+log("server", "info", "database migrated");
 
 // Initialize worker pool
 await initWorkerPool();
@@ -160,14 +139,14 @@ await initWorkerPool();
 // D11: Catch the promise rejection from write() — don't let it become an
 // unhandled rejection that crashes the process.
 setInterval(() => {
-  cleanupRateLimits().catch((e) => console.error("[server] rate limit cleanup failed:", e));
+  cleanupRateLimits().catch((e) => log("server", "error", "rate limit cleanup failed", e));
 }, 300_000); // every 5 min
 
 // E10: Periodic cleanup of expired auth sessions — prevents unbounded growth.
 setInterval(() => {
   write((db) => {
     db.query("DELETE FROM auth_sessions WHERE expires_at <= datetime('now')").run();
-  }).catch((e) => console.error("[server] session cleanup failed:", e));
+  }).catch((e) => log("server", "error", "session cleanup failed", e));
 }, 3_600_000); // every hour
 
 // --- Helpers ---------------------------------------------------------------
@@ -244,7 +223,7 @@ function withMiddleware<T extends string>(
     const duration = (performance.now() - start).toFixed(2);
 
     // Structured log for every request
-    log("info", `${req.method} ${path}`, { traceId, ip, status: res.status, duration: `${duration}ms` });
+    log("server", "info", `${req.method} ${path}`, { traceId, ip, status: res.status, duration: `${duration}ms` });
 
     // Add traceId + timing headers to response
     const headers = new Headers(res.headers);
@@ -399,7 +378,7 @@ const loginHandler = withMiddleware<"">(async (req) => {
     if (err instanceof SyntaxError) {
       return errorResponse("invalid request body", 400);
     }
-    console.error("[server] login error:", err);
+    log("server", "error", "login error", err);
     return errorResponse("internal server error", 500);
   }
 });
@@ -503,7 +482,7 @@ const createTaskHandler = withCsrf<"">(async (req, ctx) => {
     // D1: If the worker crashes, the task promise rejects. Mark the task as
     // failed in the DB so it doesn't stay "running" forever.
     submitTask(taskId).catch(async (err) => {
-      console.error(`[server] task ${taskId} failed:`, err);
+      log("server", "error", `task ${taskId} failed`, err);
       try {
         await write((db) => {
           db.query(
@@ -511,7 +490,7 @@ const createTaskHandler = withCsrf<"">(async (req, ctx) => {
           ).run(err instanceof Error ? err.message : String(err), taskId);
         });
       } catch (dbErr) {
-        console.error(`[server] failed to mark task ${taskId} as failed:`, dbErr);
+        log("server", "error", `failed to mark task ${taskId} as failed`, dbErr);
       }
     });
 
@@ -625,7 +604,7 @@ const getScreenshotHandler = withAuth<"/screenshot/:id">(async (req, ctx) => {
     return await serveScreenshot(session.screenshot_path, width, format);
   } catch (err) {
     // G9: Distinguish "file not found" from "invalid image" for debugging
-    console.error("[server] serveScreenshot error:", err);
+    log("server", "error", "serveScreenshot error", err);
     return errorResponse("screenshot unavailable", 404);
   }
 });
@@ -1070,9 +1049,7 @@ const s3BackupHandler = withAuth<"">(async (): Promise<Response> => {
 const logsHandler = withAuth<"">((req: BunRequest<"">): Response => {
   const url = new URL(req.url);
   const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "50", 10), 200);
-  // In-memory ring buffer of recent log entries
-  // JUSTIFIED: logBuffer is typed as unknown[]; narrowing to LogEntry[]
-  return json({ logs: logBuffer.slice(-limit), count: logBuffer.length });
+  return json({ logs: getLogs(limit), count: getLogCount() });
 });
 
 // Bun.streams — streaming file response for large files
@@ -1114,7 +1091,7 @@ const sqlQueryHandler = withAuth<"/api/sql">(async (req: BunRequest<"/api/sql">)
       // JUSTIFIED: .all() returns unknown[]; narrowing to record array
       return db.query(body.query).all() as Record<string, unknown>[];
     });
-    log("info", "SQL query executed", { rows: results.length });
+    log("server", "info", "SQL query executed", { rows: results.length });
     return json({ rows: results, count: results.length });
   } catch (err) {
     return json({ error: "query failed", details: String(err) }, 422);
@@ -1233,7 +1210,7 @@ const screenshotHandler = withAuth<"/api/screenshot">(async (req: BunRequest<"/a
     // Wait for page to render
     await Bun.sleep(1000);
     const screenshot = await view.screenshot();
-    log("info", "Screenshot captured", { url: targetUrl, size: screenshot.size });
+    log("server", "info", "Screenshot captured", { url: targetUrl, size: screenshot.size });
     return new Response(screenshot, {
       headers: {
         "Content-Type": "image/png",
@@ -1276,7 +1253,7 @@ const configWriteHandler = withCsrf<"/api/config/write">(async (req: BunRequest<
     const path = `./exports/${body.filename}.${body.format === "json5" ? "json5" : body.format}`;
     await Bun.write(path, content);
     await audit({ action: "config_write", resource: path, details: `format=${body.format}` });
-    log("info", "Config file written", { path, format: body.format });
+    log("server", "info", "Config file written", { path, format: body.format });
     return json({ ok: true, path, size: content.length });
   } catch (err) {
     return json({ error: "write failed", details: String(err) }, 500);
@@ -3096,7 +3073,7 @@ if (ENABLE_SITEMAP) {
 // existing HTML responses from /dashboard and /api/markdown)
 if (ENABLE_HTML_REWRITER) {
   markActive("htmlRewriter");
-  console.log("[server] HTMLRewriter enabled — injecting into HTML responses");
+  log("server", "info", "HTMLRewriter enabled — injecting into HTML responses");
 }
 
 // --- PWA manifest: committed base + runtime overrides ---------------------
@@ -3117,7 +3094,7 @@ async function readManifestOverrides(): Promise<Record<string, unknown>> {
     return await file.json() as Record<string, unknown>;
   } catch {
     // Corrupt override file must not break manifest serving.
-    log("warn", "manifest overrides unreadable — serving committed base");
+    log("server", "warn", "manifest overrides unreadable — serving committed base");
     return {};
   }
 }
@@ -3291,7 +3268,7 @@ if (ENABLE_PWA) {
           resource: MANIFEST_OVERRIDES_PATH,
           details: `${body.field}=${JSON.stringify(body.value)}`.slice(0, 200),
         });
-        log("info", "Manifest override written", { field: body.field, value: body.value });
+        log("server", "info", "Manifest override written", { field: body.field, value: body.value });
         return json({ ok: true, field: body.field, value: body.value, path: MANIFEST_OVERRIDES_PATH });
       } catch (err) {
         return json({ error: "manifest update failed", details: String(err) }, 500);
@@ -3342,7 +3319,7 @@ if (ENABLE_PWA) {
         resource: "pwa-share-target",
         details: `title=${title}`.slice(0, 200),
       });
-      log("info", "PWA share received", { title, url: sharedUrl });
+      log("server", "info", "PWA share received", { title, url: sharedUrl });
       return json({ ok: true, received: { title, text, url: sharedUrl } });
     }),
   };
@@ -3727,7 +3704,7 @@ if (ENABLE_PWA) {
     }),
   };
   markActive("pwa");
-  console.log("[server] PWA enabled — manifest at /manifest.json, install from Chrome");
+  log("server", "info", "PWA enabled — manifest at /manifest.json, install from Chrome");
 }
 
 // Markdown rendering chain — always available public API
@@ -3770,7 +3747,7 @@ const websocketConfig: Record<string, unknown> = {
       }
       wsChannels.get(ws.data.taskId)!.add(ws);
     }
-    console.log(`[ws] client connected to ${ws.data.channel}`);
+    log("ws", "info", `client connected to ${ws.data.channel}`);
   },
   message(ws: import("bun").ServerWebSocket<{ taskId: number; channel: string }>, msg: string | ArrayBuffer) {
     if (typeof msg === "string" && msg === "ping") {
@@ -3785,7 +3762,7 @@ const websocketConfig: Record<string, unknown> = {
         wsChannels.delete(ws.data.taskId);
       }
     }
-    console.log(`[ws] client disconnected from ${ws.data.channel}`);
+    log("ws", "info", `client disconnected from ${ws.data.channel}`);
   },
 };
 
@@ -3843,7 +3820,7 @@ const serveConfig: Record<string, unknown> = {
   // M3: Top-level error handler — catches unhandled exceptions in route handlers
   // that escape withMiddleware. Returns a structured 500 instead of Bun's default.
   error(error: Error) {
-    console.error("[server] unhandled error:", error);
+    log("server", "error", "unhandled error", error);
     return Response.json({ error: "internal server error" }, { status: 500 });
   },
 };
@@ -3887,7 +3864,7 @@ if (ENABLE_WEBSOCKET) {
       timestamp: Date.now(),
     }));
   }, 500).unref();
-  console.log("[ws] /ws/metrics live metrics publisher started (500ms interval)");
+  log("ws", "info", "/ws/metrics live metrics publisher started (500ms interval)");
 }
 
 // --- Cron jobs — scheduled health checks and log rotation ---
@@ -3900,11 +3877,11 @@ registerCronJobs();
 installShutdownHandlers(server);
 
 const protocol = ENABLE_TLS ? "https" : "http";
-console.log(`[server] listening on ${protocol}://${HOST}:${PORT}`);
+log("server", "info", `listening on ${protocol}://${HOST}:${PORT}`);
 if (ENABLE_HTTP3) {
-  console.log(`[server]   HTTP/1.1+2: TCP/${PORT}`);
-  console.log(`[server]   HTTP/3:    UDP/${PORT} (QUIC, experimental)`);
-  console.log(`[server]   Alt-Svc:   h3=":${PORT}"; ma=86400`);
+  log("server", "info", `  HTTP/1.1+2: TCP/${PORT}`);
+  log("server", "info", `  HTTP/3:    UDP/${PORT} (QUIC, experimental)`);
+  log("server", "info", `  Alt-Svc:   h3=":${PORT}"; ma=86400`);
 }
 console.log(`[server] endpoints:`);
 console.log(`  GET  /health         — health check + worker pool status (public)`);
