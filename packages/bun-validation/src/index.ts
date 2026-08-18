@@ -41,13 +41,13 @@ export {
   validateNormalizedCount,
   validateVersionsParallel,
   writeRegressionSnapshot,
-} from "./validate.ts";
+} from "./engine.ts";
 export {
   escapeXml,
   formatConsoleReport,
   generateJUnit,
   renderReport,
-} from "./report.ts";
+} from "./reporters.ts";
 export {
   USAGE,
   isReportFormat,

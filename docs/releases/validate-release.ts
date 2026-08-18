@@ -2,7 +2,7 @@
 // Implementation lives in packages/bun-validation.
 //
 // Usage:
-//   bun docs/releases/validate.ts <version> [--strict] [--report=json|junit]
+//   bun docs/releases/validate-release.ts <version> [--strict] [--report=json|junit]
 //
 // Ref: https://bun.com/docs/runtime/utils#import-meta
 

@@ -39,12 +39,12 @@ describe("bun-validation crate", () => {
   });
 });
 
-describe("init-with-validation", () => {
+describe("init-validation", () => {
   it("layers the crate onto bun init -y", async () => {
     const dest = await mkdtemp(join(tmpdir(), "init-val-"));
     try {
       const proc = Bun.spawn({
-        cmd: ["bun", "scripts/init-with-validation.ts", dest],
+        cmd: ["bun", "scripts/init-validation.ts", dest],
         cwd: join(import.meta.dir, ".."),
         stdout: "pipe",
         stderr: "pipe",

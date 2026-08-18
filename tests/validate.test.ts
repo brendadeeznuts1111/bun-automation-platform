@@ -30,7 +30,7 @@ import {
   type ExtractedRelease,
   type NormalizedBlock,
   type ValidationReport,
-} from "../docs/releases/validate.ts";
+} from "../docs/releases/validate-release.ts";
 
 const savedEnv = {
   STRICT_VALIDATION: process.env.STRICT_VALIDATION,

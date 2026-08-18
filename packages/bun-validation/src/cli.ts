@@ -1,7 +1,7 @@
 import { loadValidationEnv } from "./config.ts";
 import { CLI_VERSION } from "./version.ts";
-import { renderReport } from "./report.ts";
-import { validateAll } from "./validate.ts";
+import { renderReport } from "./reporters.ts";
+import { validateAll } from "./engine.ts";
 import type { CliOptions, ReportFormat } from "./types.ts";
 
 export function isReportFormat(value: string): value is ReportFormat {
