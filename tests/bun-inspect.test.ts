@@ -18,7 +18,7 @@
  * Ref: https://bun.com/docs/runtime/console
  */
 
-import { describe, expect, it } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 // Helper: build an N-level nested object
 function nestedObject(levels: number): unknown {
@@ -38,7 +38,7 @@ function lastVisibleLevel(html: string, maxLevel = 20): number {
 }
 
 describe("Bun.inspect() default depth (Bug 18)", () => {
-  it("console.log defaults to depth 2", () => {
+  test("console.log defaults to depth 2", () => {
     // Use a custom inspect probe to read the depth Bun passes
     class Probe {
       receivedDepth = -1;
@@ -54,7 +54,7 @@ describe("Bun.inspect() default depth (Bug 18)", () => {
     expect(p.receivedDepth).toBe(2);
   });
 
-  it("Bun.inspect() defaults to depth 8 (NOT 2, NOT Infinity)", () => {
+  test("Bun.inspect() defaults to depth 8 (NOT 2, NOT Infinity)", () => {
     class Probe {
       receivedDepth = -1;
       [Bun.inspect.custom](depth: number) {
@@ -67,7 +67,7 @@ describe("Bun.inspect() default depth (Bug 18)", () => {
     expect(p.receivedDepth).toBe(8);
   });
 
-  it("Bun.inspect({}) also defaults to depth 8", () => {
+  test("Bun.inspect({}) also defaults to depth 8", () => {
     class Probe {
       receivedDepth = -1;
       [Bun.inspect.custom](depth: number) {
@@ -80,7 +80,7 @@ describe("Bun.inspect() default depth (Bug 18)", () => {
     expect(p.receivedDepth).toBe(8);
   });
 
-  it("Bun.inspect({depth: Infinity}) caps to 65535", () => {
+  test("Bun.inspect({depth: Infinity}) caps to 65535", () => {
     class Probe {
       receivedDepth = -1;
       [Bun.inspect.custom](depth: number) {
@@ -93,7 +93,7 @@ describe("Bun.inspect() default depth (Bug 18)", () => {
     expect(p.receivedDepth).toBe(65535);
   });
 
-  it("Bun.inspect({depth: N}) passes N through", () => {
+  test("Bun.inspect({depth: N}) passes N through", () => {
     class Probe {
       receivedDepth = -1;
       [Bun.inspect.custom](depth: number) {
@@ -108,7 +108,7 @@ describe("Bun.inspect() default depth (Bug 18)", () => {
     }
   });
 
-  it("4-level object: console.log truncates, Bun.inspect does not", () => {
+  test("4-level object: console.log truncates, Bun.inspect does not", () => {
     const nested = { a: { b: { c: { d: "deep" } } } };
     const consoleOutput = Bun.inspect(nested, { depth: 2 });
     const inspectOutput = Bun.inspect(nested);
@@ -117,20 +117,20 @@ describe("Bun.inspect() default depth (Bug 18)", () => {
     expect(consoleOutput).not.toBe(inspectOutput);
   });
 
-  it("15-level object: Bun.inspect() truncates at l8 (default depth 8)", () => {
+  test("15-level object: Bun.inspect() truncates at l8 (default depth 8)", () => {
     const deep = nestedObject(15);
     const out = Bun.inspect(deep);
     expect(lastVisibleLevel(out, 14)).toBe(8);
     expect(out).toContain("[Object");
   });
 
-  it("15-level object: explicit depth 16 shows leaf", () => {
+  test("15-level object: explicit depth 16 shows leaf", () => {
     const deep = nestedObject(15);
     const out = Bun.inspect(deep, { depth: 16 });
     expect(out).toContain('"leaf"');
   });
 
-  it("15-level object: Infinity shows leaf (capped to 65535)", () => {
+  test("15-level object: Infinity shows leaf (capped to 65535)", () => {
     const deep = nestedObject(15);
     const out = Bun.inspect(deep, { depth: Infinity });
     expect(out).toContain('"leaf"');
@@ -145,7 +145,7 @@ describe("Bun.inspect.table() depth (Bug 17 — inverted)", () => {
   type TableDepthOptions = { colors?: boolean; depth?: number };
   const withDepth = (depth: number): TableDepthOptions => ({ depth });
 
-  it("depth: 0 shows the MOST levels (6)", () => {
+  test("depth: 0 shows the MOST levels (6)", () => {
     const data = [{ obj: nestedObject(8) }];
     const out = Bun.inspect.table(data, withDepth(0));
     // depth: 0 shows the most levels (inverted behavior)
@@ -153,7 +153,7 @@ describe("Bun.inspect.table() depth (Bug 17 — inverted)", () => {
     expect(out).toContain("l1");
   });
 
-  it("depth: 5 shows FEWER levels than depth: 0 (inverted)", () => {
+  test("depth: 5 shows FEWER levels than depth: 0 (inverted)", () => {
     const data = [{ obj: nestedObject(8) }];
     const out0 = Bun.inspect.table(data, withDepth(0));
     const out5 = Bun.inspect.table(data, withDepth(5));
@@ -163,22 +163,22 @@ describe("Bun.inspect.table() depth (Bug 17 — inverted)", () => {
     expect(levels0).toBeGreaterThan(levels5);
   });
 
-  it("depth: -1 throws TypeError", () => {
+  test("depth: -1 throws TypeError", () => {
     expect(() => Bun.inspect.table([{ a: 1 }], withDepth(-1))).toThrow();
   });
 
-  it("colors option works", () => {
+  test("colors option works", () => {
     const out = Bun.inspect.table([{ a: 1 }], { colors: true });
     // ANSI color codes present
     expect(out).toMatch(/\x1b\[/);
   });
 
-  it("no colors = no ANSI codes", () => {
+  test("no colors = no ANSI codes", () => {
     const out = Bun.inspect.table([{ a: 1 }]);
     expect(out).not.toMatch(/\x1b\[/);
   });
 
-  it("properties array filters columns", () => {
+  test("properties array filters columns", () => {
     const data = [
       { a: 1, b: 2, c: 3 },
       { a: 4, b: 5, c: 6 },
@@ -191,7 +191,7 @@ describe("Bun.inspect.table() depth (Bug 17 — inverted)", () => {
 });
 
 describe("Bun.inspect.custom", () => {
-  it("overrides console.log output", () => {
+  test("overrides console.log output", () => {
     class Foo {
       [Bun.inspect.custom]() {
         return "foo";
@@ -200,7 +200,7 @@ describe("Bun.inspect.custom", () => {
     expect(Bun.inspect(new Foo())).toBe("foo");
   });
 
-  it("can return object (recursively inspected)", () => {
+  test("can return object (recursively inspected)", () => {
     class Bar {
       [Bun.inspect.custom]() {
         return { custom: "representation" };
@@ -211,7 +211,7 @@ describe("Bun.inspect.custom", () => {
     expect(out).toContain("representation");
   });
 
-  it("can return number", () => {
+  test("can return number", () => {
     class Baz {
       [Bun.inspect.custom]() {
         return 42;
@@ -220,7 +220,7 @@ describe("Bun.inspect.custom", () => {
     expect(Bun.inspect(new Baz())).toBe("42");
   });
 
-  it("can return null", () => {
+  test("can return null", () => {
     class Qux {
       [Bun.inspect.custom]() {
         return null;
@@ -229,7 +229,7 @@ describe("Bun.inspect.custom", () => {
     expect(Bun.inspect(new Qux())).toBe("null");
   });
 
-  it("receives (depth, options) arguments", () => {
+  test("receives (depth, options) arguments", () => {
     class Deep {
       [Bun.inspect.custom](depth: number, options: { colors: boolean }) {
         return `d=${depth},c=${options.colors}`;
@@ -238,12 +238,12 @@ describe("Bun.inspect.custom", () => {
     expect(Bun.inspect(new Deep(), { depth: 5, colors: true })).toBe("d=5,c=true");
   });
 
-  it("is identical to Node.js util.inspect.custom", async () => {
+  test("is identical to Node.js util.inspect.custom", async () => {
     const util = await import("util");
     expect(Bun.inspect.custom).toBe(util.inspect.custom);
   });
 
-  it("custom inspect wins over Symbol.toStringTag", () => {
+  test("custom inspect wins over Symbol.toStringTag", () => {
     class Tagged {
       get [Symbol.toStringTag]() {
         return "MyTag";
@@ -255,7 +255,7 @@ describe("Bun.inspect.custom", () => {
     expect(Bun.inspect(new Tagged())).toBe("custom-wins");
   });
 
-  it("custom inspect applies inside Bun.inspect.table cells", () => {
+  test("custom inspect applies inside Bun.inspect.table cells", () => {
     class Cell {
       [Bun.inspect.custom]() {
         return "custom-cell";
@@ -267,33 +267,33 @@ describe("Bun.inspect.custom", () => {
 });
 
 describe("console as AsyncIterable (stdin reader)", () => {
-  it("console[Symbol.asyncIterator] is a function", () => {
+  test("console[Symbol.asyncIterator] is a function", () => {
     expect(typeof console[Symbol.asyncIterator]).toBe("function");
   });
 
-  it("console.write is a function", () => {
+  test("console.write is a function", () => {
     expect(typeof console.write).toBe("function");
   });
 
-  it("console.write returns byte count (number)", () => {
+  test("console.write returns byte count (number)", () => {
     const result = console.write("test\n");
     expect(typeof result).toBe("number");
     expect(result).toBe(5); // "test\n" = 5 bytes
   });
 
-  it("console.write accepts multiple string args", () => {
+  test("console.write accepts multiple string args", () => {
     const result = console.write("a", "b", "c");
     expect(typeof result).toBe("number");
     expect(result).toBe(3);
   });
 
-  it("console.write accepts Uint8Array", () => {
+  test("console.write accepts Uint8Array", () => {
     const bytes = new Uint8Array([72, 105, 10]); // "Hi\n"
     const result = console.write(bytes);
     expect(result).toBe(3);
   });
 
-  it("console.write accepts ArrayBuffer", () => {
+  test("console.write accepts ArrayBuffer", () => {
     const buf = new ArrayBuffer(3);
     const view = new Uint8Array(buf);
     view[0] = 72;
@@ -303,18 +303,18 @@ describe("console as AsyncIterable (stdin reader)", () => {
     expect(result).toBe(3);
   });
 
-  it("console.write with no args throws TypeError", () => {
+  test("console.write with no args throws TypeError", () => {
     expect(() => console.write()).toThrow();
   });
 
-  it("console.write with number throws TypeError", () => {
+  test("console.write with number throws TypeError", () => {
     // JUSTIFIED: console.write signature is (text: string | ArrayBufferView | ArrayBuffer) => number
     // We intentionally pass a number to verify the runtime TypeError. The `as never`
     // cast bypasses the type check because this is a negative test.
     expect(() => console.write(42 as never)).toThrow();
   });
 
-  it("reads stdin line by line via for-await", async () => {
+  test("reads stdin line by line via for-await", async () => {
     // We can't pipe stdin in a test, but we can verify the iterator
     // protocol works by calling it directly on an empty stream
     const iter = console[Symbol.asyncIterator]();
@@ -326,7 +326,7 @@ describe("console as AsyncIterable (stdin reader)", () => {
 });
 
 describe("Bun.escapeHTML (security mitigation)", () => {
-  it("escapes all 5 HTML special chars", () => {
+  test("escapes all 5 HTML special chars", () => {
     expect(Bun.escapeHTML("<")).toBe("&lt;");
     expect(Bun.escapeHTML(">")).toBe("&gt;");
     expect(Bun.escapeHTML("&")).toBe("&amp;");
@@ -334,18 +334,18 @@ describe("Bun.escapeHTML (security mitigation)", () => {
     expect(Bun.escapeHTML("'")).toBe("&#x27;");
   });
 
-  it("escapes combined string", () => {
+  test("escapes combined string", () => {
     const result = Bun.escapeHTML(`<a href="x" onclick='y'>`);
     expect(result).toBe("&lt;a href=&quot;x&quot; onclick=&#x27;y&#x27;&gt;");
   });
 
-  it("handles non-string types via toString", () => {
+  test("handles non-string types via toString", () => {
     expect(Bun.escapeHTML(42)).toBe("42");
     expect(Bun.escapeHTML(true)).toBe("true");
     expect(Bun.escapeHTML({ x: 1 })).toBe("[object Object]");
   });
 
-  it("escapes angle brackets in Bun.markdown.html() output", () => {
+  test("escapes angle brackets in Bun.markdown.html() output", () => {
     const vectors = [
       "<script>alert(1)</script>",
       "<img src=x onerror=alert(1)>",

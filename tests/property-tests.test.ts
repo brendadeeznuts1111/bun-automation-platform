@@ -32,8 +32,7 @@ import { describe, expect, test } from "bun:test";
 // Helpers for generating random test data
 // ============================================================================
 
-const randomInt = (min: number, max: number): number =>
-  Math.floor(Math.random() * (max - min + 1)) + min;
+const randomInt = (min: number, max: number): number => Math.floor(Math.random() * (max - min + 1)) + min;
 
 const randomString = (length: number): string => {
   const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -46,8 +45,7 @@ const randomString = (length: number): string => {
 
 const randomBool = (): boolean => Math.random() < 0.5;
 
-const randomArray = <T>(length: number, gen: () => T): T[] =>
-  Array.from({ length }, gen);
+const randomArray = <T>(length: number, gen: () => T): T[] => Array.from({ length }, gen);
 
 // ============================================================================
 // 1. Numeric invariants
@@ -61,34 +59,30 @@ describe("Property: numeric invariants", () => {
     },
   );
 
-  test.each(Array.from({ length: 20 }, () => [randomInt(-100, 100)]))(
-    "additive identity: %p + 0 = %p",
-    (n: number) => {
-      expect(n + 0).toBe(n);
+  test.each(Array.from({ length: 20 }, () => [randomInt(-100, 100)]))("additive identity: %p + 0 = %p", (n: number) => {
+    expect(n + 0).toBe(n);
+  });
+
+  test.each(Array.from({ length: 20 }, () => [randomInt(-100, 100), randomInt(-100, 100)]))(
+    "addition is commutative: %p + %p",
+    (a: number, b: number) => {
+      expect(a + b).toBe(b + a);
     },
   );
 
-  test.each(
-    Array.from({ length: 20 }, () => [randomInt(-100, 100), randomInt(-100, 100)]),
-  )("addition is commutative: %p + %p", (a: number, b: number) => {
-    expect(a + b).toBe(b + a);
-  });
+  test.each(Array.from({ length: 20 }, () => [randomInt(-100, 100), randomInt(-100, 100), randomInt(-100, 100)]))(
+    "addition is associative: (%p + %p) + %p",
+    (a: number, b: number, c: number) => {
+      expect(a + b + c).toBe(a + (b + c));
+    },
+  );
 
-  test.each(
-    Array.from({ length: 20 }, () => [
-      randomInt(-100, 100),
-      randomInt(-100, 100),
-      randomInt(-100, 100),
-    ]),
-  )("addition is associative: (%p + %p) + %p", (a: number, b: number, c: number) => {
-    expect((a + b) + c).toBe(a + (b + c));
-  });
-
-  test.each(
-    Array.from({ length: 20 }, () => [randomInt(-100, 100), randomInt(-100, 100)]),
-  )("multiplication is commutative: %p * %p", (a: number, b: number) => {
-    expect(a * b).toBe(b * a);
-  });
+  test.each(Array.from({ length: 20 }, () => [randomInt(-100, 100), randomInt(-100, 100)]))(
+    "multiplication is commutative: %p * %p",
+    (a: number, b: number) => {
+      expect(a * b).toBe(b * a);
+    },
+  );
 
   test.each(Array.from({ length: 20 }, () => [randomInt(1, 100)]))(
     "multiplicative identity: %p * 1 = %p",
@@ -131,11 +125,12 @@ describe("Property: string invariants", () => {
     },
   );
 
-  test.each(
-    Array.from({ length: 20 }, () => [randomString(randomInt(1, 20)), randomString(randomInt(1, 20))]),
-  )("concatenation length is additive: len(%p) + len(%p)", (a: string, b: string) => {
-    expect((a + b).length).toBe(a.length + b.length);
-  });
+  test.each(Array.from({ length: 20 }, () => [randomString(randomInt(1, 20)), randomString(randomInt(1, 20))]))(
+    "concatenation length is additive: len(%p) + len(%p)",
+    (a: string, b: string) => {
+      expect((a + b).length).toBe(a.length + b.length);
+    },
+  );
 
   test.each(Array.from({ length: 20 }, () => [randomString(randomInt(1, 50))]))(
     "toUpperCase then toLowerCase roundtrips for ASCII: %p",
@@ -610,21 +605,23 @@ describe("Property: idempotency", () => {
 // ============================================================================
 
 describe("Property: monotonicity", () => {
-  test.each(
-    Array.from({ length: 20 }, () => [randomInt(0, 100), randomInt(0, 100)]),
-  )("Math.sqrt is monotonic: sqrt(%p) <= sqrt(%p) when a <= b", (a: number, b: number) => {
-    if (a <= b) {
-      expect(Math.sqrt(a)).toBeLessThanOrEqual(Math.sqrt(b));
-    }
-  });
+  test.each(Array.from({ length: 20 }, () => [randomInt(0, 100), randomInt(0, 100)]))(
+    "Math.sqrt is monotonic: sqrt(%p) <= sqrt(%p) when a <= b",
+    (a: number, b: number) => {
+      if (a <= b) {
+        expect(Math.sqrt(a)).toBeLessThanOrEqual(Math.sqrt(b));
+      }
+    },
+  );
 
-  test.each(
-    Array.from({ length: 20 }, () => [randomInt(0, 100), randomInt(0, 100)]),
-  )("Math.abs is monotonic for non-negative: |%p| <= |%p| when a <= b (a,b >= 0)", (a: number, b: number) => {
-    if (a >= 0 && b >= 0 && a <= b) {
-      expect(Math.abs(a)).toBeLessThanOrEqual(Math.abs(b));
-    }
-  });
+  test.each(Array.from({ length: 20 }, () => [randomInt(0, 100), randomInt(0, 100)]))(
+    "Math.abs is monotonic for non-negative: |%p| <= |%p| when a <= b (a,b >= 0)",
+    (a: number, b: number) => {
+      if (a >= 0 && b >= 0 && a <= b) {
+        expect(Math.abs(a)).toBeLessThanOrEqual(Math.abs(b));
+      }
+    },
+  );
 
   test.each(Array.from({ length: 20 }, () => [randomInt(0, 1000)]))(
     "Bun.nanoseconds is monotonic: ns(%p) < ns(later)",

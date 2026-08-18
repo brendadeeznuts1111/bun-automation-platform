@@ -19,7 +19,7 @@
  * breakdowns, this test fails with the exact mismatch.
  */
 import { describe, expect, test } from "bun:test";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "..");
@@ -86,7 +86,7 @@ function parseBugBlocks(sec: string[]): Bug[] {
       continue;
     }
     if (!cur) continue;
-    const f = l.match(/^   - \*\*([A-Za-z]+)\*\*: (.*)$/);
+    const f = l.match(/^ {3}- \*\*([A-Za-z]+)\*\*: (.*)$/);
     if (!f) continue;
     const [, key, val] = f;
     if (key === "Status") cur.status = val ?? "";
@@ -100,7 +100,10 @@ function parseBugBlocks(sec: string[]): Bug[] {
 function expandIds(spec: string): string[] {
   const ids: string[] = [];
   for (let tok of spec.split(",")) {
-    tok = tok.trim().replace(/\(.*\)$/, "").trim();
+    tok = tok
+      .trim()
+      .replace(/\(.*\)$/, "")
+      .trim();
     if (!tok) continue;
     const range = tok.match(/^(C?)(\d+)\s*[–-]\s*(C?)(\d+)$/);
     if (range) {
@@ -174,9 +177,7 @@ describe("cross-reference chain: breakdowns match blocks", () => {
     const byStatus = new Map<string, string[]>();
     for (const b of bugs) byStatus.set(b.status, [...(byStatus.get(b.status) ?? []), b.id]);
 
-    const claimed = statusSec
-      .map(breakdownParts)
-      .filter((x): x is NonNullable<typeof x> => x !== null);
+    const claimed = statusSec.map(breakdownParts).filter((x): x is NonNullable<typeof x> => x !== null);
     expect(claimed.length).toBeGreaterThan(0);
 
     for (const c of claimed) {
@@ -194,9 +195,7 @@ describe("cross-reference chain: breakdowns match blocks", () => {
       bySev.set(sev, [...(bySev.get(sev) ?? []), b.id]);
     }
 
-    const claimed = sevSec
-      .map(breakdownParts)
-      .filter((x): x is NonNullable<typeof x> => x !== null);
+    const claimed = sevSec.map(breakdownParts).filter((x): x is NonNullable<typeof x> => x !== null);
     expect(claimed.length).toBeGreaterThan(0);
 
     for (const c of claimed) {
@@ -221,7 +220,7 @@ describe("cross-reference chain: breakdowns match blocks", () => {
     const claimedWithout = (label: string): { count: number; ids: string[] } | null => {
       const m = sumSec.find((l) => l.startsWith(`- Bugs without ${label}: `));
       if (!m) return null;
-      const parts = m.match(/^\- Bugs without .+: (\d+) — (.+)$/);
+      const parts = m.match(/^- Bugs without .+: (\d+) — (.+)$/);
       return parts ? { count: Number(parts[1]), ids: expandIds(parts[2] ?? "") } : null;
     };
 
@@ -265,17 +264,13 @@ describe("cross-reference chain: coverage map", () => {
 
   test("every bug test ref file appears in the map", () => {
     const mapped = mapEntries.map((e) => e.file).sort();
-    const missing = [
-      ...new Set(bugs.flatMap((b) => b.tests.map((t) => t.file))),
-    ].filter((f) => !mapped.includes(f));
+    const missing = [...new Set(bugs.flatMap((b) => b.tests.map((t) => t.file)))].filter((f) => !mapped.includes(f));
     expect(missing, `missing from coverage map: ${missing.join(", ")}`).toEqual([]);
   });
 
   test("'Test files covering bugs' matches the map", () => {
     const sumSec = subSection("### Summary Statistics", "### Test File");
-    const claimed = Number(
-      sumSec.find((l) => l.startsWith("- Test files covering bugs: "))?.match(/: (\d+)$/)?.[1],
-    );
+    const claimed = Number(sumSec.find((l) => l.startsWith("- Test files covering bugs: "))?.match(/: (\d+)$/)?.[1]);
     const bugIdToken = /(?:^|[,\s])(C[1-7]|[12][0-9]|3[0-9]|4[01])(?:[,\s]|$)/;
     const covering = mapEntries.filter((e) => bugIdToken.test(e.desc.split("(")[0] ?? "")).length;
     expect(covering, "files covering bugs").toBe(claimed);
@@ -284,9 +279,7 @@ describe("cross-reference chain: coverage map", () => {
 
 describe("cross-reference chain: XREF anchor contract", () => {
   test("the chain heading exists exactly as the XREF anchor expects", () => {
-    expect(lines.includes("## Cross-Reference Chain"), "missing `## Cross-Reference Chain`").toBe(
-      true,
-    );
+    expect(lines.includes("## Cross-Reference Chain"), "missing `## Cross-Reference Chain`").toBe(true);
   });
 
   test("every XREF comment points at docs/render-diagrams.ts#cross-reference-chain", () => {

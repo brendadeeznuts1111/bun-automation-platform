@@ -19,13 +19,12 @@
  */
 
 import {
-  afterEach,
   afterAll,
+  afterEach,
   beforeAll,
   beforeEach,
   describe,
   expect,
-  it,
   mock,
   onTestFinished,
   spyOn,
@@ -37,7 +36,7 @@ import {
 // ============================================================================
 
 describe("Basic test patterns", () => {
-  test("2 + 2", () => {
+  test("basic addition: 2 + 2", () => {
     expect(2 + 2).toBe(4);
   });
 
@@ -46,8 +45,8 @@ describe("Basic test patterns", () => {
     expect(result).toEqual(4);
   });
 
-  test("done callback", done => {
-    Promise.resolve(2 * 2).then(result => {
+  test("done callback", (done) => {
+    Promise.resolve(2 * 2).then((result) => {
       expect(result).toEqual(4);
       done();
     });
@@ -88,13 +87,21 @@ describe("Timeouts", () => {
 // ============================================================================
 
 describe("Retries and repeats", () => {
-  test("retry on failure", async () => {
-    expect(Math.random()).toBeGreaterThanOrEqual(0);
-  }, { retry: 3 });
+  test(
+    "retry on failure",
+    async () => {
+      expect(Math.random()).toBeGreaterThanOrEqual(0);
+    },
+    { retry: 3 },
+  );
 
-  test("repeats for stability", () => {
-    expect(Math.random()).toBeLessThan(1);
-  }, { repeats: 5, retry: 0 });
+  test(
+    "repeats for stability",
+    () => {
+      expect(Math.random()).toBeLessThan(1);
+    },
+    { repeats: 5, retry: 0 },
+  );
 });
 
 // ============================================================================
@@ -147,7 +154,7 @@ describe("Parametrized tests", () => {
   test.each([
     { a: 1, b: 2, expected: 3 },
     { a: 4, b: 5, expected: 9 },
-  ])("add($a, $b) = $expected", data => {
+  ])("add($a, $b) = $expected", (data) => {
     expect(data.a + data.b).toBe(data.expected);
   });
 
@@ -161,7 +168,7 @@ describe("Parametrized tests", () => {
   });
 
   // %# for index
-  test.each(["apple", "banana"])("fruit #%# is %s", fruit => {
+  test.each(["apple", "banana"])("fruit #%# is %s", (fruit) => {
     expect(typeof fruit).toBe("string");
   });
 });
@@ -327,7 +334,7 @@ describe("Snapshot testing", () => {
   });
 
   test("array snapshot", () => {
-    const numbers = [1, 2, 3, 4, 5].map(n => n * 2);
+    const numbers = [1, 2, 3, 4, 5].map((n) => n * 2);
     expect(numbers).toMatchSnapshot();
   });
 
@@ -707,8 +714,8 @@ describe("Runtime behavior", () => {
     expect(typeof describe).toBe("function");
   });
 
-  test("it is alias for test", () => {
-    expect(it).toBe(test);
+  test("test is defined", () => {
+    expect(typeof test).toBe("function");
   });
 });
 

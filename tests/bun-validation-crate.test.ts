@@ -2,23 +2,23 @@
  * Workspace crate + bun create / bun init integration.
  */
 
-import { describe, expect, it } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { validateAll, CLI_VERSION, normalizeVersion } from "bun-validation";
+import { CLI_VERSION, normalizeVersion, validateAll } from "bun-validation";
 
 const crateDir = join(import.meta.dir, "../packages/bun-validation");
 const templateDir = join(import.meta.dir, "../.bun-create/bun-validation");
 
 describe("bun-validation crate", () => {
-  it("resolves the public API from the package name", () => {
+  test("resolves the public API from the package name", () => {
     expect(typeof validateAll).toBe("function");
     expect(typeof CLI_VERSION).toBe("string");
     expect(normalizeVersion("bun-v1.2.3")).toBe("1.2.3");
   });
 
-  it("declares a bin and main entry", async () => {
+  test("declares a bin and main entry", async () => {
     const pkg = await Bun.file(`${crateDir}/package.json`).json();
     expect(pkg.name).toBe("bun-validation");
     expect(pkg.main).toBe("./src/index.ts");
@@ -26,7 +26,7 @@ describe("bun-validation crate", () => {
     expect(pkg.type).toBe("module");
   });
 
-  it("ships a bun create template with a passing sample release", async () => {
+  test("ships a bun create template with a passing sample release", async () => {
     const tmpl = await Bun.file(`${templateDir}/package.json`).json();
     expect(tmpl.scripts.validate).toBe("bun-validate");
     expect(tmpl.dependencies["bun-validation"]).toBeDefined();
@@ -40,7 +40,7 @@ describe("bun-validation crate", () => {
 });
 
 describe("init-validation", () => {
-  it("layers the crate onto bun init -y", async () => {
+  test("layers the crate onto bun init -y", async () => {
     const dest = await mkdtemp(join(tmpdir(), "init-val-"));
     try {
       const proc = Bun.spawn({

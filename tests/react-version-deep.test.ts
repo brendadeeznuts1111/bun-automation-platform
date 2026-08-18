@@ -21,7 +21,7 @@
  * Ref: node_modules/bun-types/docs/runtime/markdown.mdx (Bun.markdown.react() API)
  */
 
-import { describe, expect, it } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 // Reference ID for cross-referencing
 const REF_REACT_18 = "REF-REACT-18" as const;
@@ -44,28 +44,28 @@ function react(md: string, components?: unknown, opts?: Parameters<typeof Bun.ma
 }
 
 describe("REF-REACT-18: React version reference", () => {
-  it("prints reference ID REF-REACT-18", () => {
+  test("prints reference ID REF-REACT-18", () => {
     console.log(`[${REF_REACT_18}] React version reference ID printed`);
     console.log(`[${REF_REACT_18}] Pinned: React 18.3.1`);
     console.log(`[${REF_REACT_18}] Element symbol: Symbol(react.element)`);
     expect(REF_REACT_18).toBe("REF-REACT-18");
   });
 
-  it("React 18 uses Symbol(react.element)", () => {
+  test("React 18 uses Symbol(react.element)", () => {
     const el = react("# Test", undefined, { reactVersion: 18 });
     expect(String(el.$$typeof)).toBe("Symbol(react.element)");
     expect(el.$$typeof).toBe(Symbol.for("react.element"));
     console.log(`[${REF_REACT_18}] React 18 symbol: ${String(el.$$typeof)}`);
   });
 
-  it("React 19 uses Symbol(react.transitional.element)", () => {
+  test("React 19 uses Symbol(react.transitional.element)", () => {
     const el = react("# Test");
     expect(String(el.$$typeof)).toBe("Symbol(react.transitional.element)");
     expect(el.$$typeof).toBe(Symbol.for("react.transitional.element"));
     console.log(`[${REF_REACT_18}] React 19 symbol: ${String(el.$$typeof)}`);
   });
 
-  it("React 18 and 19 use different $$typeof symbols", () => {
+  test("React 18 and 19 use different $$typeof symbols", () => {
     const el18 = react("# Test", undefined, { reactVersion: 18 });
     const el19 = react("# Test");
     expect(el18.$$typeof).not.toBe(el19.$$typeof);
@@ -77,7 +77,7 @@ describe("reactVersion option threshold", () => {
   // Testing the threshold behavior requires values outside the type union.
   // The runtime checks `reactVersion >= 19` — values < 19 produce react.element.
 
-  it.each([
+  test.each([
     [16, "Symbol(react.element)"],
     [17, "Symbol(react.element)"],
     [18, "Symbol(react.element)"],
@@ -94,7 +94,7 @@ describe("reactVersion option threshold", () => {
     expect(String(el.$$typeof)).toBe(expected);
   });
 
-  it.each([
+  test.each([
     [19, "Symbol(react.transitional.element)"],
     [19.0, "Symbol(react.transitional.element)"],
     [19.1, "Symbol(react.transitional.element)"],
@@ -107,12 +107,16 @@ describe("reactVersion option threshold", () => {
     expect(String(el.$$typeof)).toBe(expected);
   });
 
-  it("threshold is exactly 19: < 19 → element, >= 19 → transitional", () => {
+  test("threshold is exactly 19: < 19 → element, >= 19 → transitional", () => {
     // JUSTIFIED: 18.999 and 19.001 are not in the 18|19 type union — testing runtime threshold
-    const below = react("# T", undefined, { reactVersion: 18.999 } as unknown as Parameters<typeof Bun.markdown.react>[2]);
+    const below = react("# T", undefined, { reactVersion: 18.999 } as unknown as Parameters<
+      typeof Bun.markdown.react
+    >[2]);
     const at = react("# T", undefined, { reactVersion: 19 });
     // JUSTIFIED: 19.001 not in 18|19 type union — testing above-threshold
-    const above = react("# T", undefined, { reactVersion: 19.001 } as unknown as Parameters<typeof Bun.markdown.react>[2]);
+    const above = react("# T", undefined, { reactVersion: 19.001 } as unknown as Parameters<
+      typeof Bun.markdown.react
+    >[2]);
     expect(String(below.$$typeof)).toBe("Symbol(react.element)");
     expect(String(at.$$typeof)).toBe("Symbol(react.transitional.element)");
     expect(String(above.$$typeof)).toBe("Symbol(react.transitional.element)");
@@ -120,7 +124,7 @@ describe("reactVersion option threshold", () => {
 });
 
 describe("reactVersion non-number → default (transitional)", () => {
-  it.each([
+  test.each([
     ["18", "string"],
     ["19", "string"],
     [null, "null"],
@@ -132,7 +136,7 @@ describe("reactVersion non-number → default (transitional)", () => {
     expect(String(el.$$typeof)).toBe("Symbol(react.transitional.element)");
   });
 
-  it("missing reactVersion option → default (transitional)", () => {
+  test("missing reactVersion option → default (transitional)", () => {
     const el = react("# Test");
     expect(String(el.$$typeof)).toBe("Symbol(react.transitional.element)");
   });
@@ -153,7 +157,7 @@ describe("All nested elements share root $$typeof", () => {
     return results;
   }
 
-  it("React 19: all elements are transitional.element", () => {
+  test("React 19: all elements are transitional.element", () => {
     const el = react(md);
     const symbols = collectSymbols(el);
     expect(symbols.length).toBeGreaterThan(1);
@@ -162,7 +166,7 @@ describe("All nested elements share root $$typeof", () => {
     }
   });
 
-  it("React 18: all elements are react.element", () => {
+  test("React 18: all elements are react.element", () => {
     const el = react(md, undefined, { reactVersion: 18 });
     const symbols = collectSymbols(el);
     expect(symbols.length).toBeGreaterThan(1);
@@ -171,7 +175,7 @@ describe("All nested elements share root $$typeof", () => {
     }
   });
 
-  it("both versions have same number of elements", () => {
+  test("both versions have same number of elements", () => {
     const el19 = react(md);
     const el18 = react(md, undefined, { reactVersion: 18 });
     const syms19 = collectSymbols(el19);
@@ -196,29 +200,35 @@ describe("Element structure identical (only $$typeof differs)", () => {
       return diffs;
     }
     if (typeof a === "object") {
-      const keysA = Object.keys(a as object).filter(k => k !== "$$typeof");
-      const keysB = Object.keys(b as object).filter(k => k !== "$$typeof");
+      const keysA = Object.keys(a as object).filter((k) => k !== "$$typeof");
+      const keysB = Object.keys(b as object).filter((k) => k !== "$$typeof");
       if (keysA.length !== keysB.length) {
         diffs.push(`${path}: keys [${keysA}] vs [${keysB}]`);
       }
       for (const k of keysA) {
         // JUSTIFIED: narrowing unknown to object/Record for property access in deep compare
-        if (!(k in (b as object))) { diffs.push(`${path}.${k}: missing in 18`); continue; }
+        if (!(k in (b as object))) {
+          diffs.push(`${path}.${k}: missing in 18`);
+          continue;
+        }
         // JUSTIFIED: same narrowing for recursive deepCompare call
-        diffs.push(...deepCompare((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k], `${path}.${k}`));
+        diffs.push(
+          // JUSTIFIED: narrowing a/b to Record for recursive deepCompare call
+          ...deepCompare((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k], `${path}.${k}`),
+        );
       }
     }
     return diffs;
   }
 
-  it("no structural differences between React 18 and 19 (excluding $$typeof)", () => {
+  test("no structural differences between React 18 and 19 (excluding $$typeof)", () => {
     const el19 = react(md);
     const el18 = react(md, undefined, { reactVersion: 18 });
     const diffs = deepCompare(el19, el18);
     expect(diffs).toEqual([]);
   });
 
-  it("same element types in both versions", () => {
+  test("same element types in both versions", () => {
     function collectTypes(el: unknown, types = new Set<string>()): Set<string> {
       if (!el || typeof el !== "object") return types;
       // JUSTIFIED: narrowing unknown to ReactEl for property access in tree walker
@@ -242,7 +252,7 @@ describe("Element structure identical (only $$typeof differs)", () => {
 });
 
 describe("Fragment type symbol is shared", () => {
-  it("both versions use Symbol(react.fragment) as root type", () => {
+  test("both versions use Symbol(react.fragment) as root type", () => {
     const el19 = react("# Test");
     const el18 = react("# Test", undefined, { reactVersion: 18 });
     expect(String(el19.type)).toBe("Symbol(react.fragment)");
@@ -253,7 +263,7 @@ describe("Fragment type symbol is shared", () => {
 });
 
 describe("structuredClone fails on both versions (Bug 14)", () => {
-  it("React 19: structuredClone throws DOMException", () => {
+  test("React 19: structuredClone throws DOMException", () => {
     const el = Bun.markdown.react("# Test");
     expect(() => structuredClone(el)).toThrow();
     try {
@@ -264,7 +274,7 @@ describe("structuredClone fails on both versions (Bug 14)", () => {
     }
   });
 
-  it("React 18: structuredClone throws DOMException", () => {
+  test("React 18: structuredClone throws DOMException", () => {
     const el = Bun.markdown.react("# Test", undefined, { reactVersion: 18 });
     expect(() => structuredClone(el)).toThrow();
     try {
@@ -282,7 +292,7 @@ describe("JSON.stringify with symbol replacer", () => {
     return v;
   }
 
-  it("React 18 and 19 produce different JSON (symbol names differ)", () => {
+  test("React 18 and 19 produce different JSON (symbol names differ)", () => {
     const el19 = react("# Test");
     const el18 = react("# Test", undefined, { reactVersion: 18 });
     const json19 = JSON.stringify(el19, replacer);
@@ -292,7 +302,7 @@ describe("JSON.stringify with symbol replacer", () => {
     expect(json18).toContain("react.element");
   });
 
-  it("JSON roundtrip loses $$typeof (Symbol not in JSON)", () => {
+  test("JSON roundtrip loses $$typeof (Symbol not in JSON)", () => {
     const el = react("# Test");
     const json = JSON.stringify(el, replacer);
     const parsed = JSON.parse(json);
@@ -302,17 +312,17 @@ describe("JSON.stringify with symbol replacer", () => {
 });
 
 describe("Element object properties", () => {
-  it("React 19 element has 5 own keys: $$typeof, type, key, ref, props", () => {
+  test("React 19 element has 5 own keys: $$typeof, type, key, ref, props", () => {
     const el = react("# Test");
     expect(Object.keys(el).sort()).toEqual(["$$typeof", "key", "props", "ref", "type"]);
   });
 
-  it("React 18 element has same 5 own keys", () => {
+  test("React 18 element has same 5 own keys", () => {
     const el = react("# Test", undefined, { reactVersion: 18 });
     expect(Object.keys(el).sort()).toEqual(["$$typeof", "key", "props", "ref", "type"]);
   });
 
-  it("no _owner field (React internal)", () => {
+  test("no _owner field (React internal)", () => {
     // JUSTIFIED: ReactEl doesn't include _owner; extending to check React internal field
     const el19 = react("# Test") as unknown as ReactEl & { _owner?: unknown };
     // JUSTIFIED: same cast for React 18 variant
@@ -321,7 +331,7 @@ describe("Element object properties", () => {
     expect(el18._owner).toBeUndefined();
   });
 
-  it("no _store field (React internal)", () => {
+  test("no _store field (React internal)", () => {
     // JUSTIFIED: ReactEl doesn't include _store; extending to check React internal field
     const el19 = react("# Test") as unknown as ReactEl & { _store?: unknown };
     // JUSTIFIED: same cast for React 18 variant
@@ -330,7 +340,7 @@ describe("Element object properties", () => {
     expect(el18._store).toBeUndefined();
   });
 
-  it("key and ref are null", () => {
+  test("key and ref are null", () => {
     const el19 = react("# Test");
     const el18 = react("# Test", undefined, { reactVersion: 18 });
     expect(el19.key).toBeNull();
@@ -339,7 +349,7 @@ describe("Element object properties", () => {
     expect(el18.ref).toBeNull();
   });
 
-  it("elements are not frozen", () => {
+  test("elements are not frozen", () => {
     const el19 = react("# Test");
     const el18 = react("# Test", undefined, { reactVersion: 18 });
     expect(Object.isFrozen(el19)).toBe(false);
@@ -350,19 +360,19 @@ describe("Element object properties", () => {
 });
 
 describe("Symbol registration (global)", () => {
-  it("react.element is globally registered via Symbol.for()", () => {
+  test("react.element is globally registered via Symbol.for()", () => {
     const el = react("# T", undefined, { reactVersion: 18 });
     expect(el.$$typeof).toBe(Symbol.for("react.element"));
     expect(Symbol.keyFor(el.$$typeof as symbol)).toBe("react.element");
   });
 
-  it("react.transitional.element is globally registered via Symbol.for()", () => {
+  test("react.transitional.element is globally registered via Symbol.for()", () => {
     const el = react("# T");
     expect(el.$$typeof).toBe(Symbol.for("react.transitional.element"));
     expect(Symbol.keyFor(el.$$typeof as symbol)).toBe("react.transitional.element");
   });
 
-  it("react.fragment is globally registered via Symbol.for()", () => {
+  test("react.fragment is globally registered via Symbol.for()", () => {
     const el = react("# T");
     expect(el.type).toBe(Symbol.for("react.fragment"));
     expect(Symbol.keyFor(el.type as symbol)).toBe("react.fragment");
@@ -374,12 +384,18 @@ describe("Custom component $$typeof normalization", () => {
   // JUSTIFIED: custom components are used as the `type` field by Bun.markdown.react.
   // The component function is NOT called by Bun — it's called by React during rendering.
   // Bun creates: { $$typeof: <tree symbol>, type: componentFn, props: { children }, ... }
-  type CustomEl = { $$typeof?: symbol; type: unknown; props: { children?: unknown; [k: string]: unknown }; key: unknown; ref: unknown };
+  type CustomEl = {
+    $$typeof?: symbol;
+    type: unknown;
+    props: { children?: unknown; [k: string]: unknown };
+    key: unknown;
+    ref: unknown;
+  };
 
   // JUSTIFIED: custom component — Bun uses it as type field, doesn't call it
   const customComp = (props: { children?: unknown }) => ({ type: "div", props: { children: props.children } });
 
-  it("React 19 tree: custom component element gets transitional.element $$typeof", () => {
+  test("React 19 tree: custom component element gets transitional.element $$typeof", () => {
     const tree = react("# Test", { h1: customComp as never });
     // JUSTIFIED: children is an array; first element is the h1 custom component
     const h1 = (tree.props.children as unknown[])[0] as unknown as CustomEl;
@@ -388,7 +404,7 @@ describe("Custom component $$typeof normalization", () => {
     console.log(`[${REF_REACT_18}] Custom comp element $$typeof: ${String(h1.$$typeof)}`);
   });
 
-  it("React 18 tree: custom component element gets react.element $$typeof", () => {
+  test("React 18 tree: custom component element gets react.element $$typeof", () => {
     const tree = react("# Test", { h1: customComp as never }, { reactVersion: 18 });
     // JUSTIFIED: children is an array; first element is the h1 custom component
     const h1 = (tree.props.children as unknown[])[0] as unknown as CustomEl;
@@ -396,10 +412,13 @@ describe("Custom component $$typeof normalization", () => {
     expect(typeof h1.type).toBe("function");
   });
 
-  it("custom component type field is the function reference (not called by Bun)", () => {
+  test("custom component type field is the function reference (not called by Bun)", () => {
     let called = false;
     // JUSTIFIED: tracking if Bun calls the component — it should NOT
-    const trackingComp = (_props: { children?: unknown }) => { called = true; return null; };
+    const trackingComp = (_props: { children?: unknown }) => {
+      called = true;
+      return null;
+    };
     const tree = react("# Test", { h1: trackingComp as never });
     // JUSTIFIED: children is an array; first element is the custom component element
     const h1 = (tree.props.children as unknown[])[0] as unknown as CustomEl;
@@ -407,7 +426,7 @@ describe("Custom component $$typeof normalization", () => {
     expect(h1.type).toBe(trackingComp);
   });
 
-  it("custom component element shares tree $$typeof (no mixing)", () => {
+  test("custom component element shares tree $$typeof (no mixing)", () => {
     const tree19 = react("# Test", { h1: customComp as never });
     const tree18 = react("# Test", { h1: customComp as never }, { reactVersion: 18 });
     // JUSTIFIED: children is an array; first element is the custom component element
@@ -420,20 +439,20 @@ describe("Custom component $$typeof normalization", () => {
 });
 
 describe("React.isValidElement compatibility", () => {
-  it("React 19 isValidElement accepts react.transitional.element (default)", () => {
+  test("React 19 isValidElement accepts react.transitional.element (default)", () => {
     const React = require("react");
     const el = react("# Test");
     expect(React.isValidElement(el)).toBe(true);
   });
 
-  it("React 19 isValidElement rejects react.element (reactVersion: 18)", () => {
+  test("React 19 isValidElement rejects react.element (reactVersion: 18)", () => {
     const React = require("react");
     const el = react("# Test", undefined, { reactVersion: 18 });
     expect(React.isValidElement(el)).toBe(false);
     console.log(`[${REF_REACT_18}] React 19 isValidElement(react.element) = false — version mismatch`);
   });
 
-  it("React 19 isValidElement checks only $$typeof (not _owner/_store)", () => {
+  test("React 19 isValidElement checks only $$typeof (not _owner/_store)", () => {
     const React = require("react");
     // JUSTIFIED: manually constructing element-like object to test isValidElement criteria
     const fake19 = {
@@ -458,7 +477,7 @@ describe("React.isValidElement compatibility", () => {
 });
 
 describe("React 19 renderToString compatibility", () => {
-  it("React 19 SSR renders default Bun.markdown.react output", () => {
+  test("React 19 SSR renders default Bun.markdown.react output", () => {
     const { renderToString } = require("react-dom/server");
     const el = react("# Hello **world**");
     const html = renderToString(el);
@@ -466,14 +485,14 @@ describe("React 19 renderToString compatibility", () => {
     expect(html).toContain("<strong>world</strong>");
   });
 
-  it("React 19 SSR fails on reactVersion: 18 output", () => {
+  test("React 19 SSR fails on reactVersion: 18 output", () => {
     const { renderToString } = require("react-dom/server");
     const el = react("# Hello", undefined, { reactVersion: 18 });
     expect(() => renderToString(el)).toThrow();
     console.log(`[${REF_REACT_18}] renderToString(react.element) throws — React 19 can't render React 18 elements`);
   });
 
-  it("React 19 SSR works with custom components using React.createElement", () => {
+  test("React 19 SSR works with custom components using React.createElement", () => {
     const React = require("react");
     const { renderToString } = require("react-dom/server");
     // JUSTIFIED: custom component uses React.createElement — narrowing for renderToString
@@ -488,7 +507,7 @@ describe("React 19 renderToString compatibility", () => {
 });
 
 describe("Performance: React 18 vs 19", () => {
-  it("React 18 and 19 have similar performance (< 20% difference)", () => {
+  test("React 18 and 19 have similar performance (< 20% difference)", () => {
     const bigMd = "# Hello\n\n" + "Paragraph ".repeat(50) + "\n\n- " + "item\n- ".repeat(30);
     const iterations = 500;
 
@@ -507,7 +526,9 @@ describe("Performance: React 18 vs 19", () => {
     const time18 = performance.now() - start18;
 
     const ratio = time19 / time18;
-    console.log(`[${REF_REACT_18}] Performance: React 19 ${time19.toFixed(2)}ms vs React 18 ${time18.toFixed(2)}ms (ratio: ${ratio.toFixed(2)})`);
+    console.log(
+      `[${REF_REACT_18}] Performance: React 19 ${time19.toFixed(2)}ms vs React 18 ${time18.toFixed(2)}ms (ratio: ${ratio.toFixed(2)})`,
+    );
     // React 19 should be within 20% of React 18 (usually slightly faster)
     expect(ratio).toBeGreaterThan(0.5);
     expect(ratio).toBeLessThan(2.0);
@@ -515,9 +536,10 @@ describe("Performance: React 18 vs 19", () => {
 });
 
 describe("Structure identical across versions (comprehensive)", () => {
-  const complexMd = "# Title\n\n**bold** *italic* `code`\n\n- a\n- b\n- c\n\n| H1 | H2 |\n|----|----|\n| 1 | 2 |\n\n> quote\n\n[link](https://x.com)\n\n![img](https://x.com/i.png)";
+  const complexMd =
+    "# Title\n\n**bold** *italic* `code`\n\n- a\n- b\n- c\n\n| H1 | H2 |\n|----|----|\n| 1 | 2 |\n\n> quote\n\n[link](https://x.com)\n\n![img](https://x.com/i.png)";
 
-  it("element count matches between React 18 and 19", () => {
+  test("element count matches between React 18 and 19", () => {
     function count(el: unknown): number {
       if (!el || typeof el !== "object") return 0;
       // JUSTIFIED: narrowing unknown to ReactEl for tree traversal
@@ -534,7 +556,7 @@ describe("Structure identical across versions (comprehensive)", () => {
     expect(count(el19)).toBe(count(el18));
   });
 
-  it("element types match between React 18 and 19", () => {
+  test("element types match between React 18 and 19", () => {
     function types(el: unknown, acc: string[] = []): string[] {
       if (!el || typeof el !== "object") return acc;
       // JUSTIFIED: narrowing unknown to ReactEl for tree traversal
@@ -561,33 +583,33 @@ describe("Element types and props (comprehensive)", () => {
     return (el.props.children as unknown[])[0] as unknown as El;
   }
 
-  it("empty markdown → fragment with empty children array", () => {
+  test("empty markdown → fragment with empty children array", () => {
     const tree = react("");
     expect(String(tree.type)).toBe("Symbol(react.fragment)");
     expect(Array.isArray(tree.props.children)).toBe(true);
     expect((tree.props.children as unknown[]).length).toBe(0);
   });
 
-  it("whitespace-only markdown → fragment with empty children", () => {
+  test("whitespace-only markdown → fragment with empty children", () => {
     const tree = react("   \n\n  \n  ");
     expect((tree.props.children as unknown[]).length).toBe(0);
   });
 
-  it("paragraph → p element with text children", () => {
+  test("paragraph → p element with text children", () => {
     const tree = react("hello");
     const p = firstChild(tree);
     expect(p.type).toBe("p");
   });
 
-  it("headings h1-h6 → correct type", () => {
+  test("headings h1-h6 → correct type", () => {
     const tree = react("# H1\n## H2\n### H3\n#### H4\n##### H5\n###### H6");
     const children = tree.props.children as unknown[];
     // JUSTIFIED: narrowing children array elements to El for type checking
-    const types = children.map(c => (c as unknown as El).type);
+    const types = children.map((c) => (c as unknown as El).type);
     expect(types).toEqual(["h1", "h2", "h3", "h4", "h5", "h6"]);
   });
 
-  it("bold → strong element", () => {
+  test("bold → strong element", () => {
     const tree = react("**bold**");
     const p = firstChild(tree);
     // JUSTIFIED: narrowing p.children array to first element
@@ -595,7 +617,7 @@ describe("Element types and props (comprehensive)", () => {
     expect(strong.type).toBe("strong");
   });
 
-  it("italic → em element", () => {
+  test("italic → em element", () => {
     const tree = react("*italic*");
     const p = firstChild(tree);
     // JUSTIFIED: narrowing p.children array to first element
@@ -603,7 +625,7 @@ describe("Element types and props (comprehensive)", () => {
     expect(em.type).toBe("em");
   });
 
-  it("inline code → code element", () => {
+  test("inline code → code element", () => {
     const tree = react("`code`");
     const p = firstChild(tree);
     // JUSTIFIED: narrowing p.children array to first element
@@ -611,7 +633,7 @@ describe("Element types and props (comprehensive)", () => {
     expect(code.type).toBe("code");
   });
 
-  it("link → a element with href prop", () => {
+  test("link → a element with href prop", () => {
     const tree = react("[text](https://x.com)");
     const p = firstChild(tree);
     // JUSTIFIED: narrowing p.children array to first element
@@ -620,7 +642,7 @@ describe("Element types and props (comprehensive)", () => {
     expect(a.props.href).toBe("https://x.com");
   });
 
-  it("image → img element with src and alt props", () => {
+  test("image → img element with src and alt props", () => {
     const tree = react("![alt text](https://x.com/i.png)");
     const p = firstChild(tree);
     // JUSTIFIED: narrowing p.children array to first element
@@ -630,7 +652,7 @@ describe("Element types and props (comprehensive)", () => {
     expect(img.props.alt).toBe("alt text");
   });
 
-  it("unordered list → ul with li children", () => {
+  test("unordered list → ul with li children", () => {
     const tree = react("- a\n- b");
     const ul = firstChild(tree);
     expect(ul.type).toBe("ul");
@@ -642,14 +664,14 @@ describe("Element types and props (comprehensive)", () => {
     expect((items[1] as unknown as El).type).toBe("li");
   });
 
-  it("ordered list → ol with start prop and li children", () => {
+  test("ordered list → ol with start prop and li children", () => {
     const tree = react("1. first\n2. second");
     const ol = firstChild(tree);
     expect(ol.type).toBe("ol");
     expect(ol.props.start).toBe(1);
   });
 
-  it("task list → li with checked prop", () => {
+  test("task list → li with checked prop", () => {
     const tree = react("- [ ] todo\n- [x] done");
     const ul = firstChild(tree);
     const items = ul.props.children as unknown[];
@@ -659,7 +681,7 @@ describe("Element types and props (comprehensive)", () => {
     expect((items[1] as unknown as El).props.checked).toBe(true);
   });
 
-  it("blockquote → blockquote with p child", () => {
+  test("blockquote → blockquote with p child", () => {
     const tree = react("> quoted text");
     const bq = firstChild(tree);
     expect(bq.type).toBe("blockquote");
@@ -668,27 +690,27 @@ describe("Element types and props (comprehensive)", () => {
     expect(p.type).toBe("p");
   });
 
-  it("code block → pre with language prop", () => {
+  test("code block → pre with language prop", () => {
     const tree = react("```js\nconsole.log(1)\n```");
     const pre = firstChild(tree);
     expect(pre.type).toBe("pre");
     expect(pre.props.language).toBe("js");
   });
 
-  it("code block without language → pre with language=undefined", () => {
+  test("code block without language → pre with language=undefined", () => {
     const tree = react("```\ncode\n```");
     const pre = firstChild(tree);
     expect(pre.type).toBe("pre");
     expect(pre.props.language).toBeUndefined();
   });
 
-  it("hr → hr element", () => {
+  test("hr → hr element", () => {
     const tree = react("---");
     const hr = firstChild(tree);
     expect(hr.type).toBe("hr");
   });
 
-  it("table → table/thead/tbody/tr/th/td structure", () => {
+  test("table → table/thead/tbody/tr/th/td structure", () => {
     const tree = react("| H1 | H2 |\n|----|----|\n| 1 | 2 |");
     const table = firstChild(tree);
     expect(table.type).toBe("table");
@@ -700,7 +722,7 @@ describe("Element types and props (comprehensive)", () => {
     expect(tbody.type).toBe("tbody");
   });
 
-  it("nested list → ul/li/ul/li structure", () => {
+  test("nested list → ul/li/ul/li structure", () => {
     const tree = react("- a\n  - b\n- d");
     const ul = firstChild(tree);
     const items = ul.props.children as unknown[];
@@ -717,34 +739,44 @@ describe("Element types and props (comprehensive)", () => {
 });
 
 describe("headings.ids option with react()", () => {
-  it("headings.ids: true → h1 gets id prop", () => {
+  test("headings.ids: true → h1 gets id prop", () => {
     // JUSTIFIED: headings option type not in react's third arg type — testing runtime
-    const tree = react("# Hello World", undefined, { headings: { ids: true } } as unknown as Parameters<typeof Bun.markdown.react>[2]);
+    const tree = react("# Hello World", undefined, { headings: { ids: true } } as unknown as Parameters<
+      typeof Bun.markdown.react
+    >[2]);
     // JUSTIFIED: narrowing children array to first element for id prop check
-    const h1 = (tree.props.children as unknown[])[0] as unknown as { type: unknown; props: { id?: string; children?: unknown } };
+    const h1 = (tree.props.children as unknown[])[0] as unknown as {
+      type: unknown;
+      props: { id?: string; children?: unknown };
+    };
     expect(h1.props.id).toBe("hello-world");
   });
 
-  it("default (no headings.ids) → h1 has no id prop", () => {
+  test("default (no headings.ids) → h1 has no id prop", () => {
     const tree = react("# Hello World");
     // JUSTIFIED: narrowing children array to first element for id prop check
-    const h1 = (tree.props.children as unknown[])[0] as unknown as { type: unknown; props: { id?: string; children?: unknown } };
+    const h1 = (tree.props.children as unknown[])[0] as unknown as {
+      type: unknown;
+      props: { id?: string; children?: unknown };
+    };
     expect(h1.props.id).toBeUndefined();
   });
 });
 
 describe("allowDangerousHtml option with react()", () => {
-  it("default: raw HTML → html element wrapper", () => {
+  test("default: raw HTML → html element wrapper", () => {
     const tree = react("<div>raw</div>");
     // JUSTIFIED: narrowing children array to first element for type check
     const child = (tree.props.children as unknown[])[0] as unknown as { type: unknown; props: Record<string, unknown> };
     expect(String(child.type)).toBe("html");
   });
 
-  it("noHtmlBlocks: true → HTML wrapped in p", () => {
+  test("noHtmlBlocks: true → HTML wrapped in p", () => {
     // JUSTIFIED: noHtmlBlocks option type — testing runtime behavior
     // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
-    const tree = react("<div>raw</div>", undefined, { noHtmlBlocks: true } as unknown as Parameters<typeof Bun.markdown.react>[2]);
+    const tree = react("<div>raw</div>", undefined, { noHtmlBlocks: true } as unknown as Parameters<
+      typeof Bun.markdown.react
+    >[2]);
     // JUSTIFIED: narrowing children array to first element for type check
     const p = (tree.props.children as unknown[])[0] as unknown as { type: unknown; props: Record<string, unknown> };
     expect(p.type).toBe("p");
@@ -752,22 +784,22 @@ describe("allowDangerousHtml option with react()", () => {
 });
 
 describe("Edge cases: input types", () => {
-  it("null input throws", () => {
+  test("null input throws", () => {
     // JUSTIFIED: testing runtime error handling — null is not a valid input type
     expect(() => Bun.markdown.react(null as never)).toThrow("Expected a string or buffer");
   });
 
-  it("number input throws", () => {
+  test("number input throws", () => {
     // JUSTIFIED: testing runtime error handling — number is not a valid input type
     expect(() => Bun.markdown.react(42 as never)).toThrow("Expected a string or buffer");
   });
 
-  it("object input throws", () => {
+  test("object input throws", () => {
     // JUSTIFIED: testing runtime error handling — object is not a valid input type
     expect(() => Bun.markdown.react({ a: 1 } as never)).toThrow("Expected a string or buffer");
   });
 
-  it("Uint8Array input works", () => {
+  test("Uint8Array input works", () => {
     const buf = new TextEncoder().encode("# Hello");
     // JUSTIFIED: Uint8Array is accepted at runtime but not in type signature
     const tree = Bun.markdown.react(buf as unknown as string) as unknown as ReactEl;
@@ -776,7 +808,7 @@ describe("Edge cases: input types", () => {
     expect(h1.type).toBe("h1");
   });
 
-  it("ArrayBuffer input works", () => {
+  test("ArrayBuffer input works", () => {
     const buf = new TextEncoder().encode("# Hello");
     // JUSTIFIED: ArrayBuffer is accepted at runtime but not in type signature
     const tree = Bun.markdown.react(buf.buffer as unknown as string) as unknown as ReactEl;
@@ -787,33 +819,33 @@ describe("Edge cases: input types", () => {
 });
 
 describe("Edge cases: malformed markdown", () => {
-  it("7+ hashes → paragraph (not heading)", () => {
+  test("7+ hashes → paragraph (not heading)", () => {
     const tree = react("####### H7");
     // JUSTIFIED: narrowing children array to first element for type check
     const child = (tree.props.children as unknown[])[0] as unknown as { type: unknown };
     expect(child.type).toBe("p");
   });
 
-  it("malformed table (no separator row) → paragraph", () => {
+  test("malformed table (no separator row) → paragraph", () => {
     const tree = react("| Col |\n| no separator |\n| val |");
     // JUSTIFIED: narrowing children array to first element for type check
     const child = (tree.props.children as unknown[])[0] as unknown as { type: unknown };
     expect(child.type).toBe("p");
   });
 
-  it("unclosed code block → pre element (auto-closed)", () => {
+  test("unclosed code block → pre element (auto-closed)", () => {
     const tree = react("```\ncode without end");
     // JUSTIFIED: narrowing children array to first element for type check
     const child = (tree.props.children as unknown[])[0] as unknown as { type: unknown };
     expect(child.type).toBe("pre");
   });
 
-  it("empty string → fragment with empty children", () => {
+  test("empty string → fragment with empty children", () => {
     const tree = react("");
     expect((tree.props.children as unknown[]).length).toBe(0);
   });
 
-  it("very long input (100k chars) → single paragraph", () => {
+  test("very long input (100k chars) → single paragraph", () => {
     const long = "paragraph ".repeat(10000);
     const tree = react(long);
     expect((tree.props.children as unknown[]).length).toBe(1);
@@ -821,7 +853,7 @@ describe("Edge cases: malformed markdown", () => {
 });
 
 describe("Edge cases: unicode and special content", () => {
-  it("CJK content renders correctly", () => {
+  test("CJK content renders correctly", () => {
     const tree = react("# 日本語\n\nこんにちは世界");
     // JUSTIFIED: narrowing children array to first element for type/props check
     const h1 = (tree.props.children as unknown[])[0] as unknown as { type: unknown; props: { children?: unknown } };
@@ -830,7 +862,7 @@ describe("Edge cases: unicode and special content", () => {
     expect(children[0]).toBe("日本語");
   });
 
-  it("emoji content renders correctly", () => {
+  test("emoji content renders correctly", () => {
     const tree = react("# 🎉 Title\n\nHello 👋");
     // JUSTIFIED: narrowing children array to first element for type/props check
     const h1 = (tree.props.children as unknown[])[0] as unknown as { type: unknown; props: { children?: unknown } };
@@ -839,7 +871,7 @@ describe("Edge cases: unicode and special content", () => {
     expect(children[0]).toContain("🎉");
   });
 
-  it("mixed line endings (\\r\\n) handled correctly", () => {
+  test("mixed line endings (\\r\\n) handled correctly", () => {
     const tree = react("# Title\r\n\r\nParagraph\r\n\r\n- item\r\n- item");
     const children = tree.props.children as unknown[];
     // JUSTIFIED: narrowing children for type checking
@@ -852,7 +884,7 @@ describe("Edge cases: unicode and special content", () => {
 });
 
 describe("GFM extensions in react()", () => {
-  it("strikethrough → del element", () => {
+  test("strikethrough → del element", () => {
     const tree = react("~~deleted~~");
     // JUSTIFIED: narrowing children array to first element for type/props check
     const p = (tree.props.children as unknown[])[0] as unknown as { type: unknown; props: { children?: unknown } };
@@ -861,7 +893,7 @@ describe("GFM extensions in react()", () => {
     expect(del.type).toBe("del");
   });
 
-  it("autolink URL → plain text (not autolinked by default in react)", () => {
+  test("autolink URL → plain text (not autolinked by default in react)", () => {
     const tree = react("Visit https://bun.com");
     // JUSTIFIED: narrowing children array to first element for type/props check
     const p = (tree.props.children as unknown[])[0] as unknown as { type: unknown; props: { children?: unknown } };
@@ -871,7 +903,7 @@ describe("GFM extensions in react()", () => {
     expect(children[0]).toContain("https://bun.com");
   });
 
-  it("footnote-like syntax → a element with href", () => {
+  test("footnote-like syntax → a element with href", () => {
     const tree = react("Text[^1]\n\n[^1]: footnote");
     // JUSTIFIED: narrowing children array to first element for type/props check
     const p = (tree.props.children as unknown[])[0] as unknown as { type: unknown; props: { children?: unknown } };
@@ -887,7 +919,10 @@ describe("Key field: all elements have key=null", () => {
   // JUSTIFIED: narrowing to access key field for all elements in tree
   type KeyEl = { $$typeof?: symbol; type: unknown; key: unknown; ref: unknown; props: { children?: unknown } };
 
-  function collectAllKeys(el: unknown, results: { type: string; key: unknown }[] = []): { type: string; key: unknown }[] {
+  function collectAllKeys(
+    el: unknown,
+    results: { type: string; key: unknown }[] = [],
+  ): { type: string; key: unknown }[] {
     if (!el || typeof el !== "object") return results;
     // JUSTIFIED: narrowing unknown to KeyEl for key field inspection
     const e = el as KeyEl;
@@ -904,14 +939,15 @@ describe("Key field: all elements have key=null", () => {
     return results;
   }
 
-  it("root element key is null (not undefined)", () => {
+  test("root element key is null (not undefined)", () => {
     const tree = react("# Test");
     expect(tree.key).toBeNull();
     expect(typeof tree.key).toBe("object"); // null is type "object"
   });
 
-  it("all elements in complex tree have key=null", () => {
-    const md = "# H1\n\n**bold**\n\n- a\n- b\n- c\n\n| H1 | H2 |\n|----|----|\n| 1 | 2 |\n\n> quote\n\n```\ncode\n```\n\n---";
+  test("all elements in complex tree have key=null", () => {
+    const md =
+      "# H1\n\n**bold**\n\n- a\n- b\n- c\n\n| H1 | H2 |\n|----|----|\n| 1 | 2 |\n\n> quote\n\n```\ncode\n```\n\n---";
     const tree = react(md);
     const allKeys = collectAllKeys(tree);
     expect(allKeys.length).toBeGreaterThan(10);
@@ -920,7 +956,7 @@ describe("Key field: all elements have key=null", () => {
     }
   });
 
-  it("list items all have key=null (no auto-keying by Bun)", () => {
+  test("list items all have key=null (no auto-keying by Bun)", () => {
     const tree = react("- a\n- b\n- c");
     // JUSTIFIED: narrowing root children to first element (ul)
     const ul = (tree.props.children as unknown[])[0] as unknown as KeyEl;
@@ -932,7 +968,7 @@ describe("Key field: all elements have key=null", () => {
     }
   });
 
-  it("table cells all have key=null", () => {
+  test("table cells all have key=null", () => {
     const tree = react("| H1 | H2 |\n|----|----|\n| 1 | 2 |");
     // JUSTIFIED: narrowing root children to first element (table)
     const table = (tree.props.children as unknown[])[0] as unknown as KeyEl;
@@ -942,7 +978,7 @@ describe("Key field: all elements have key=null", () => {
     }
   });
 
-  it("custom component elements have key=null", () => {
+  test("custom component elements have key=null", () => {
     // JUSTIFIED: custom component — Bun uses it as type field
     const comp = (props: { children?: unknown }) => ({ type: "div", props: { children: props.children } });
     const tree = react("# Test", { h1: comp as never });
@@ -951,7 +987,7 @@ describe("Key field: all elements have key=null", () => {
     expect(h1.key).toBeNull();
   });
 
-  it("repeated elements (multiple paragraphs) all have key=null", () => {
+  test("repeated elements (multiple paragraphs) all have key=null", () => {
     const tree = react("text\n\ntext\n\ntext");
     const children = tree.props.children as unknown[];
     // JUSTIFIED: narrowing children for key check
@@ -961,7 +997,7 @@ describe("Key field: all elements have key=null", () => {
     }
   });
 
-  it("React 18 and 19 both assign key=null", () => {
+  test("React 18 and 19 both assign key=null", () => {
     const tree19 = react("# Test");
     const tree18 = react("# Test", undefined, { reactVersion: 18 });
     expect(tree19.key).toBeNull();
@@ -970,7 +1006,7 @@ describe("Key field: all elements have key=null", () => {
 });
 
 describe("React.Children.toArray auto-keys", () => {
-  it("React.Children.toArray assigns keys (.0, .1, .2) to array children", () => {
+  test("React.Children.toArray assigns keys (.0, .1, .2) to array children", () => {
     const React = require("react");
     const tree = react("- a\n- b\n- c");
     // JUSTIFIED: narrowing root children to first element (ul)
@@ -982,7 +1018,7 @@ describe("React.Children.toArray auto-keys", () => {
     expect(arr[2].key).toBe(".2");
   });
 
-  it("React.Children.toArray fails on React 18 elements (isValidElement rejects them)", () => {
+  test("React.Children.toArray fails on React 18 elements (isValidElement rejects them)", () => {
     const React = require("react");
     const tree = react("- a\n- b", undefined, { reactVersion: 18 });
     // JUSTIFIED: narrowing root children to first element (ul)
@@ -1009,20 +1045,21 @@ describe("ref field: all elements have ref=null", () => {
     return results;
   }
 
-  it("root element ref is null", () => {
+  test("root element ref is null", () => {
     const tree = react("# Test");
     expect(tree.ref).toBeNull();
   });
 
-  it("all elements in complex tree have ref=null", () => {
-    const md = "# H1\n\n[link](https://x.com)\n\n![img](https://x.com/i.png)\n\n- a\n- b\n\n> quote\n\n```\ncode\n```\n\n---\n\n| H1 | H2 |\n|----|----|\n| 1 | 2 |";
+  test("all elements in complex tree have ref=null", () => {
+    const md =
+      "# H1\n\n[link](https://x.com)\n\n![img](https://x.com/i.png)\n\n- a\n- b\n\n> quote\n\n```\ncode\n```\n\n---\n\n| H1 | H2 |\n|----|----|\n| 1 | 2 |";
     const tree = react(md);
     const refs = collectRefs(tree);
     expect(refs.length).toBeGreaterThan(5);
     for (const { ref } of refs) expect(ref).toBeNull();
   });
 
-  it("React 18 and 19 both assign ref=null", () => {
+  test("React 18 and 19 both assign ref=null", () => {
     const tree19 = react("# Test");
     const tree18 = react("# Test", undefined, { reactVersion: 18 });
     expect(tree19.ref).toBeNull();
@@ -1039,33 +1076,33 @@ describe("Props: comprehensive per-element-type", () => {
     return (el.props.children as unknown[])[0] as unknown as PropsEl;
   }
 
-  it("fragment has no props (only children)", () => {
+  test("fragment has no props (only children)", () => {
     const tree = react("# Test");
-    const propKeys = Object.keys(tree.props).filter(k => k !== "children");
+    const propKeys = Object.keys(tree.props).filter((k) => k !== "children");
     expect(propKeys).toEqual([]);
   });
 
-  it("h1-h6 have no props (only children)", () => {
+  test("h1-h6 have no props (only children)", () => {
     const tree = react("# H1\n## H2");
     const children = tree.props.children as unknown[];
     // JUSTIFIED: narrowing children for props check
     const h1 = children[0] as unknown as PropsEl;
     // JUSTIFIED: narrowing for property access in test assertion
     const h2 = children[1] as unknown as PropsEl;
-    const h1Props = Object.keys(h1.props).filter(k => k !== "children");
-    const h2Props = Object.keys(h2.props).filter(k => k !== "children");
+    const h1Props = Object.keys(h1.props).filter((k) => k !== "children");
+    const h2Props = Object.keys(h2.props).filter((k) => k !== "children");
     expect(h1Props).toEqual([]);
     expect(h2Props).toEqual([]);
   });
 
-  it("p has no props (only children)", () => {
+  test("p has no props (only children)", () => {
     const tree = react("hello");
     const p = firstChild(tree);
-    const propKeys = Object.keys(p.props).filter(k => k !== "children");
+    const propKeys = Object.keys(p.props).filter((k) => k !== "children");
     expect(propKeys).toEqual([]);
   });
 
-  it("strong, em, code have no props (only children)", () => {
+  test("strong, em, code have no props (only children)", () => {
     const tree = react("**bold** *italic* `code`");
     const p = firstChild(tree);
     const children = p.props.children as unknown[];
@@ -1073,13 +1110,13 @@ describe("Props: comprehensive per-element-type", () => {
     for (const child of children) {
       if (typeof child === "object" && child !== null) {
         // JUSTIFIED: narrowing unknown child to PropsEl for props check
-        const propKeys = Object.keys((child as PropsEl).props).filter(k => k !== "children");
+        const propKeys = Object.keys((child as PropsEl).props).filter((k) => k !== "children");
         expect(propKeys).toEqual([]);
       }
     }
   });
 
-  it("a has href prop (and optional title)", () => {
+  test("a has href prop (and optional title)", () => {
     const tree = react("[text](https://x.com)");
     const p = firstChild(tree);
     // JUSTIFIED: narrowing p.children to first element
@@ -1087,7 +1124,7 @@ describe("Props: comprehensive per-element-type", () => {
     expect(a.props.href).toBe("https://x.com");
   });
 
-  it("a with title → title prop", () => {
+  test("a with title → title prop", () => {
     const tree = react('[text](https://x.com "title here")');
     const p = firstChild(tree);
     // JUSTIFIED: narrowing p.children to first element
@@ -1096,7 +1133,7 @@ describe("Props: comprehensive per-element-type", () => {
     expect(a.props.title).toBe("title here");
   });
 
-  it("img has src and alt props (and optional title)", () => {
+  test("img has src and alt props (and optional title)", () => {
     const tree = react("![alt text](https://x.com/i.png)");
     const p = firstChild(tree);
     // JUSTIFIED: narrowing p.children to first element
@@ -1105,7 +1142,7 @@ describe("Props: comprehensive per-element-type", () => {
     expect(img.props.alt).toBe("alt text");
   });
 
-  it("img with title → title prop", () => {
+  test("img with title → title prop", () => {
     const tree = react('![alt](https://x.com/i.png "title")');
     const p = firstChild(tree);
     // JUSTIFIED: narrowing p.children to first element
@@ -1113,20 +1150,20 @@ describe("Props: comprehensive per-element-type", () => {
     expect(img.props.title).toBe("title");
   });
 
-  it("ol has start prop", () => {
+  test("ol has start prop", () => {
     const tree = react("1. first\n2. second");
     const ol = firstChild(tree);
     expect(ol.props.start).toBe(1);
   });
 
-  it("ul has no props", () => {
+  test("ul has no props", () => {
     const tree = react("- a\n- b");
     const ul = firstChild(tree);
-    const propKeys = Object.keys(ul.props).filter(k => k !== "children");
+    const propKeys = Object.keys(ul.props).filter((k) => k !== "children");
     expect(propKeys).toEqual([]);
   });
 
-  it("task list li has checked prop", () => {
+  test("task list li has checked prop", () => {
     const tree = react("- [x] done");
     const ul = firstChild(tree);
     // JUSTIFIED: narrowing ul.children to first element
@@ -1134,7 +1171,7 @@ describe("Props: comprehensive per-element-type", () => {
     expect(li.props.checked).toBe(true);
   });
 
-  it("non-task li has no checked prop", () => {
+  test("non-task li has no checked prop (firstChild API)", () => {
     const tree = react("- regular item");
     const ul = firstChild(tree);
     // JUSTIFIED: narrowing ul.children to first element
@@ -1142,33 +1179,33 @@ describe("Props: comprehensive per-element-type", () => {
     expect(li.props.checked).toBeUndefined();
   });
 
-  it("pre has language prop (when specified)", () => {
+  test("pre has language prop (when specified)", () => {
     const tree = react("```js\ncode\n```");
     const pre = firstChild(tree);
     expect(pre.props.language).toBe("js");
   });
 
-  it("pre has language=undefined (when not specified)", () => {
+  test("pre has language=undefined (when not specified)", () => {
     const tree = react("```\ncode\n```");
     const pre = firstChild(tree);
     expect(pre.props.language).toBeUndefined();
   });
 
-  it("blockquote has no props", () => {
+  test("blockquote has no props", () => {
     const tree = react("> quote");
     const bq = firstChild(tree);
-    const propKeys = Object.keys(bq.props).filter(k => k !== "children");
+    const propKeys = Object.keys(bq.props).filter((k) => k !== "children");
     expect(propKeys).toEqual([]);
   });
 
-  it("hr has no props (empty props object)", () => {
+  test("hr has no props (empty props object)", () => {
     const tree = react("---");
     const hr = firstChild(tree);
-    const propKeys = Object.keys(hr.props).filter(k => k !== "children");
+    const propKeys = Object.keys(hr.props).filter((k) => k !== "children");
     expect(propKeys).toEqual([]);
   });
 
-  it("table, thead, tbody, tr, th, td have no props", () => {
+  test("table, thead, tbody, tr, th, td have no props", () => {
     const tree = react("| H1 | H2 |\n|----|----|\n| 1 | 2 |");
     const table = firstChild(tree);
     // JUSTIFIED: narrowing table children for thead/tbody check
@@ -1180,15 +1217,21 @@ describe("Props: comprehensive per-element-type", () => {
     // JUSTIFIED: narrowing tr children for th check
     const th = (tr.props.children as unknown[])[0] as unknown as PropsEl;
 
-    for (const [, el] of [["table", table], ["thead", thead], ["tbody", tbody], ["tr", tr], ["th", th]] as [string, PropsEl][]) {
-      const propKeys = Object.keys(el.props).filter(k => k !== "children");
+    for (const [, el] of [
+      ["table", table],
+      ["thead", thead],
+      ["tbody", tbody],
+      ["tr", tr],
+      ["th", th],
+    ] as [string, PropsEl][]) {
+      const propKeys = Object.keys(el.props).filter((k) => k !== "children");
       expect(propKeys).toEqual([]);
     }
   });
 });
 
 describe("Text nodes: string children", () => {
-  it("text nodes are plain strings (not elements)", () => {
+  test("text nodes are plain strings (not elements)", () => {
     const tree = react("# Hello");
     // JUSTIFIED: narrowing for property access in test assertion
     const h1 = (tree.props.children as unknown[])[0] as unknown as { props: { children: unknown[] } };
@@ -1197,7 +1240,7 @@ describe("Text nodes: string children", () => {
     expect(first).toBe("Hello");
   });
 
-  it("whitespace between inline elements is preserved as string children", () => {
+  test("whitespace between inline elements is preserved as string children", () => {
     const tree = react("**bold** *italic*");
     // JUSTIFIED: narrowing for property access in test assertion
     const p = (tree.props.children as unknown[])[0] as unknown as { props: { children: unknown[] } };
@@ -1208,7 +1251,7 @@ describe("Text nodes: string children", () => {
     expect(children[1]).toBe(" ");
   });
 
-  it("trailing newline in code block is preserved as string child", () => {
+  test("trailing newline in code block is preserved as string child", () => {
     const tree = react("```\ncode\n```");
     // JUSTIFIED: narrowing for property access in test assertion
     const pre = (tree.props.children as unknown[])[0] as unknown as { props: { children: unknown[] } };
@@ -1218,7 +1261,7 @@ describe("Text nodes: string children", () => {
     expect(children[1]).toBe("\n");
   });
 
-  it("multi-line code block: each line and newline is separate string child", () => {
+  test("multi-line code block: each line and newline is separate string child", () => {
     const tree = react("```\nline1\nline2\nline3\n```");
     // JUSTIFIED: narrowing for property access in test assertion
     const pre = (tree.props.children as unknown[])[0] as unknown as { props: { children: unknown[] } };
@@ -1230,7 +1273,7 @@ describe("Text nodes: string children", () => {
     expect(children[2]).toBe("line2");
   });
 
-  it("multiple spaces in text are preserved", () => {
+  test("multiple spaces in text are preserved", () => {
     const tree = react("Hello   world");
     // JUSTIFIED: narrowing for property access in test assertion
     const p = (tree.props.children as unknown[])[0] as unknown as { props: { children: unknown[] } };
@@ -1241,7 +1284,7 @@ describe("Text nodes: string children", () => {
 });
 
 describe("Hard line breaks: br element", () => {
-  it("soft break (\\n) → no br element", () => {
+  test("soft break (\\n) → no br element", () => {
     const tree = react("line1\nline2");
     // JUSTIFIED: narrowing for property access in test assertion
     const p = (tree.props.children as unknown[])[0] as unknown as { props: { children: unknown[] } };
@@ -1250,7 +1293,7 @@ describe("Hard line breaks: br element", () => {
     expect(hasBr).toBe(false);
   });
 
-  it("hard break (2 trailing spaces + \\n) → br element", () => {
+  test("hard break (2 trailing spaces + \\n) → br element", () => {
     const tree = react("line1  \nline2");
     // JUSTIFIED: narrowing for property access in test assertion
     const p = (tree.props.children as unknown[])[0] as unknown as { props: { children: unknown[] } };
@@ -1259,7 +1302,7 @@ describe("Hard line breaks: br element", () => {
     expect(hasBr).toBe(true);
   });
 
-  it("hard break (backslash + \\n) → br element", () => {
+  test("hard break (backslash + \\n) → br element", () => {
     const tree = react("line1\\\nline2");
     // JUSTIFIED: narrowing for property access in test assertion
     const p = (tree.props.children as unknown[])[0] as unknown as { props: { children: unknown[] } };
@@ -1268,65 +1311,83 @@ describe("Hard line breaks: br element", () => {
     expect(hasBr).toBe(true);
   });
 
-  it("br element has empty props (no children)", () => {
+  test("br element has empty props (no children)", () => {
     const tree = react("line1  \nline2");
     // JUSTIFIED: narrowing for property access in test assertion
     const p = (tree.props.children as unknown[])[0] as unknown as { props: { children: unknown[] } };
     // JUSTIFIED: narrowing to find br element
-    const br = p.props.children.find((c: unknown) => (c as { type?: unknown })?.type === "br") as unknown as { type: string; props: Record<string, unknown> };
+    const br = p.props.children.find((c: unknown) => (c as { type?: unknown })?.type === "br") as unknown as {
+      type: string;
+      props: Record<string, unknown>;
+    };
     expect(br.props.children).toBeUndefined();
     const propKeys = Object.keys(br.props);
     expect(propKeys).toEqual([]);
   });
 
-  it("br element has key=null and ref=null", () => {
+  test("br element has key=null and ref=null", () => {
     const tree = react("line1  \nline2");
     // JUSTIFIED: narrowing for property access in test assertion
     const p = (tree.props.children as unknown[])[0] as unknown as { props: { children: unknown[] } };
     // JUSTIFIED: narrowing to find br element
-    const br = p.props.children.find((c: unknown) => (c as { type?: unknown })?.type === "br") as unknown as { key: unknown; ref: unknown };
+    const br = p.props.children.find((c: unknown) => (c as { type?: unknown })?.type === "br") as unknown as {
+      key: unknown;
+      ref: unknown;
+    };
     expect(br.key).toBeNull();
     expect(br.ref).toBeNull();
   });
 });
 
 describe("Link and image edge cases", () => {
-  it("auto-link <url> → a element with href", () => {
+  test("auto-link <url> → a element with href", () => {
     const tree = react("<https://bun.com>");
     // JUSTIFIED: narrowing for property access in test assertion
     const p = (tree.props.children as unknown[])[0] as unknown as { props: { children: unknown[] } };
     // JUSTIFIED: narrowing to find a element
-    const a = p.props.children.find((c: unknown) => (c as { type?: unknown })?.type === "a") as unknown as { type: string; props: { href?: string } };
+    const a = p.props.children.find((c: unknown) => (c as { type?: unknown })?.type === "a") as unknown as {
+      type: string;
+      props: { href?: string };
+    };
     expect(a).toBeDefined();
     expect(a.props.href).toBe("https://bun.com");
   });
 
-  it("empty link text → a element with empty children", () => {
+  test("empty link text → a element with empty children", () => {
     const tree = react("[](https://x.com)");
     // JUSTIFIED: narrowing for property access in test assertion
     const p = (tree.props.children as unknown[])[0] as unknown as { props: { children: unknown[] } };
     // JUSTIFIED: narrowing to find a element
-    const a = p.props.children.find((c: unknown) => (c as { type?: unknown })?.type === "a") as unknown as { type: string; props: { href?: string; children?: unknown[] } };
+    const a = p.props.children.find((c: unknown) => (c as { type?: unknown })?.type === "a") as unknown as {
+      type: string;
+      props: { href?: string; children?: unknown[] };
+    };
     expect(a).toBeDefined();
     expect(a.props.href).toBe("https://x.com");
   });
 
-  it("reference link [text][ref] → a element with href from definition", () => {
+  test("reference link [text][ref] → a element with href from definition", () => {
     const tree = react("[text][ref]\n\n[ref]: https://x.com");
     // JUSTIFIED: narrowing for property access in test assertion
     const p = (tree.props.children as unknown[])[0] as unknown as { props: { children: unknown[] } };
     // JUSTIFIED: narrowing to find a element
-    const a = p.props.children.find((c: unknown) => (c as { type?: unknown })?.type === "a") as unknown as { type: string; props: { href?: string } };
+    const a = p.props.children.find((c: unknown) => (c as { type?: unknown })?.type === "a") as unknown as {
+      type: string;
+      props: { href?: string };
+    };
     expect(a).toBeDefined();
     expect(a.props.href).toBe("https://x.com");
   });
 
-  it("nested formatting: bold containing italic → strong>em", () => {
+  test("nested formatting: bold containing italic → strong>em", () => {
     const tree = react("**bold *italic* bold**");
     // JUSTIFIED: narrowing for property access in test assertion
     const p = (tree.props.children as unknown[])[0] as unknown as { props: { children: unknown[] } };
     // JUSTIFIED: narrowing to find strong element
-    const strong = p.props.children.find((c: unknown) => (c as { type?: unknown })?.type === "strong") as unknown as { type: string; props: { children: unknown[] } };
+    const strong = p.props.children.find((c: unknown) => (c as { type?: unknown })?.type === "strong") as unknown as {
+      type: string;
+      props: { children: unknown[] };
+    };
     expect(strong).toBeDefined();
     // strong should contain an em element
     // JUSTIFIED: narrowing unknown child to check for em type
@@ -1341,7 +1402,7 @@ describe("Custom component props: what React passes during rendering", () => {
   const React = require("react");
   const { renderToString } = require("react-dom/server");
 
-  it("a component receives href, title, children", () => {
+  test("a component receives href, title, children", () => {
     let capturedProps: Record<string, any> | null = null;
     const components = {
       a: (props: Record<string, unknown>) => {
@@ -1357,7 +1418,7 @@ describe("Custom component props: what React passes during rendering", () => {
     expect(capturedProps!["children"]).toEqual(["text"]);
   });
 
-  it("img component receives src, alt, title", () => {
+  test("img component receives src, alt, title", () => {
     let capturedProps: Record<string, any> | null = null;
     const components = {
       img: (props: Record<string, unknown>) => {
@@ -1373,7 +1434,7 @@ describe("Custom component props: what React passes during rendering", () => {
     expect(capturedProps!["title"]).toBe("title");
   });
 
-  it("li task component receives checked + children", () => {
+  test("li task component receives checked + children", () => {
     let capturedProps: Record<string, any> | null = null;
     const components = {
       li: (props: Record<string, unknown>) => {
@@ -1388,7 +1449,7 @@ describe("Custom component props: what React passes during rendering", () => {
     expect(capturedProps!["children"]).toEqual(["done"]);
   });
 
-  it("pre component receives language + children", () => {
+  test("pre component receives language + children", () => {
     let capturedProps: Record<string, any> | null = null;
     const components = {
       pre: (props: Record<string, unknown>) => {
@@ -1403,7 +1464,7 @@ describe("Custom component props: what React passes during rendering", () => {
     expect(capturedProps!["children"]).toEqual(["code", "\n"]);
   });
 
-  it("h1 component receives only children (no id without headings.ids)", () => {
+  test("h1 component receives only children (no id without headings.ids)", () => {
     let capturedProps: Record<string, any> | null = null;
     const components = {
       h1: (props: Record<string, unknown>) => {
@@ -1418,7 +1479,7 @@ describe("Custom component props: what React passes during rendering", () => {
     expect(capturedProps!["id"]).toBeUndefined();
   });
 
-  it("h1 component receives id with headings.ids: true", () => {
+  test("h1 component receives id with headings.ids: true", () => {
     let capturedProps: Record<string, any> | null = null;
     const components = {
       h1: (props: Record<string, unknown>) => {
@@ -1427,13 +1488,19 @@ describe("Custom component props: what React passes during rendering", () => {
       },
     };
     // JUSTIFIED: headings option not in type signature — testing runtime
-    const tree = react("# Hello World", { h1: components.h1 as never } as unknown, { headings: { ids: true } } as unknown as Parameters<typeof Bun.markdown.react>[2]);
+    const tree = react(
+      "# Hello World",
+      // JUSTIFIED: components.h1 as never — testing runtime component override
+      { h1: components.h1 as never } as unknown,
+      // JUSTIFIED: headings option not in type signature — testing runtime
+      { headings: { ids: true } } as unknown as Parameters<typeof Bun.markdown.react>[2],
+    );
     renderToString(tree);
     expect(capturedProps).not.toBeNull();
     expect(capturedProps!["id"]).toBe("hello-world");
   });
 
-  it("props object is extensible (not frozen)", () => {
+  test("props object is extensible (not frozen)", () => {
     let capturedProps: Record<string, any> | null = null;
     const components = {
       a: (props: Record<string, unknown>) => {
@@ -1455,7 +1522,7 @@ describe("Custom component props: what React passes during rendering", () => {
     expect(capturedProps!["href"]).toBeUndefined();
   });
 
-  it("children is always an array (even single child)", () => {
+  test("children is always an array (even single child)", () => {
     let capturedChildren: unknown = null;
     const components = {
       a: (props: Record<string, unknown>) => {
@@ -1470,7 +1537,7 @@ describe("Custom component props: what React passes during rendering", () => {
     expect((capturedChildren as unknown[])[0]).toBe("text");
   });
 
-  it("image inside link: a children contains img element", () => {
+  test("image inside link: a children contains img element", () => {
     let capturedAChildren: unknown[] | null = null;
     let capturedImg: Record<string, unknown> | null = null;
     const components = {
@@ -1483,7 +1550,10 @@ describe("Custom component props: what React passes during rendering", () => {
         return React.createElement("img", { src: props.src, alt: props.alt });
       },
     };
-    const tree = react("[![alt](https://x.com/i.png)](https://x.com)", { a: components.a as never, img: components.img as never });
+    const tree = react("[![alt](https://x.com/i.png)](https://x.com)", {
+      a: components.a as never,
+      img: components.img as never,
+    });
     renderToString(tree);
     expect(capturedAChildren).not.toBeNull();
     expect(Array.isArray(capturedAChildren)).toBe(true);
@@ -1495,7 +1565,7 @@ describe("Custom component props: what React passes during rendering", () => {
     expect(capturedImg!["src"]).toBe("https://x.com/i.png");
   });
 
-  it("custom component can return a string", () => {
+  test("custom component can return a string", () => {
     const components = {
       h1: () => "custom string",
     };
@@ -1504,7 +1574,7 @@ describe("Custom component props: what React passes during rendering", () => {
     expect(html).toContain("custom string");
   });
 
-  it("custom component can return an array of strings", () => {
+  test("custom component can return an array of strings", () => {
     const components = {
       h1: () => ["A", "B", "C"],
     };
@@ -1515,9 +1585,35 @@ describe("Custom component props: what React passes during rendering", () => {
     expect(html).toContain("C");
   });
 
-  it("all built-in markdown tags can be customized", () => {
-    const types = ["h1", "h2", "h3", "h4", "h5", "h6", "p", "strong", "em", "code", "a", "img", "ul", "ol", "li", "blockquote", "pre", "hr", "table", "thead", "tbody", "tr", "th", "td"];
-    const md = "# H1\n## H2\n### H3\n#### H4\n##### H5\n###### H6\n\n**strong** *em* `code`\n\n[link](https://x.com)\n\n![img](https://x.com/i.png)\n\n- li\n\n1. ol\n\n> quote\n\n```\ncode\n```\n\n---\n\n| H | H |\n|----|----|\n| 1 | 2 |";
+  test("all built-in markdown tags can be customized", () => {
+    const types = [
+      "h1",
+      "h2",
+      "h3",
+      "h4",
+      "h5",
+      "h6",
+      "p",
+      "strong",
+      "em",
+      "code",
+      "a",
+      "img",
+      "ul",
+      "ol",
+      "li",
+      "blockquote",
+      "pre",
+      "hr",
+      "table",
+      "thead",
+      "tbody",
+      "tr",
+      "th",
+      "td",
+    ];
+    const md =
+      "# H1\n## H2\n### H3\n#### H4\n##### H5\n###### H6\n\n**strong** *em* `code`\n\n[link](https://x.com)\n\n![img](https://x.com/i.png)\n\n- li\n\n1. ol\n\n> quote\n\n```\ncode\n```\n\n---\n\n| H | H |\n|----|----|\n| 1 | 2 |";
 
     const capturedTypes = new Set<string>();
     const components: Record<string, (props: Record<string, unknown>) => any> = {};
@@ -1539,7 +1635,7 @@ describe("Custom component props: what React passes during rendering", () => {
 
 // Ref: node_modules/bun-types/docs/runtime/markdown.mdx#options
 describe("React markdown parser options (real options per bun-types)", () => {
-  it("strikethrough: false → literal ~~ as text", () => {
+  test("strikethrough: false → literal ~~ as text", () => {
     // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
     const tree = react("~~deleted~~", undefined, { strikethrough: false } as unknown as ReactOpts);
     // JUSTIFIED: narrowing for React element property access in option test
@@ -1547,7 +1643,7 @@ describe("React markdown parser options (real options per bun-types)", () => {
     expect(p.props.children).toContain("~~deleted~~");
   });
 
-  it("strikethrough: true → del element", () => {
+  test("strikethrough: true → del element", () => {
     // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
     const tree = react("~~deleted~~", undefined, { strikethrough: true } as unknown as ReactOpts);
     // JUSTIFIED: narrowing for React element property access in option test
@@ -1557,7 +1653,7 @@ describe("React markdown parser options (real options per bun-types)", () => {
     expect(del).toBeDefined();
   });
 
-  it("tables: false → table as text", () => {
+  test("tables: false → table as text", () => {
     // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
     const tree = react("| H | H |\n|----|----|\n| 1 | 2 |", undefined, { tables: false } as unknown as ReactOpts);
     // JUSTIFIED: narrowing for React element property access in option test
@@ -1565,7 +1661,7 @@ describe("React markdown parser options (real options per bun-types)", () => {
     expect(p.type).toBe("p");
   });
 
-  it("tables: true → table element", () => {
+  test("tables: true → table element", () => {
     // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
     const tree = react("| H | H |\n|----|----|\n| 1 | 2 |", undefined, { tables: true } as unknown as ReactOpts);
     // JUSTIFIED: narrowing for React element property access in option test
@@ -1573,7 +1669,7 @@ describe("React markdown parser options (real options per bun-types)", () => {
     expect(child.type).toBe("table");
   });
 
-  it("tasklists: false → checkbox as text", () => {
+  test("tasklists: false → checkbox as text", () => {
     // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
     const tree = react("- [x] done", undefined, { tasklists: false } as unknown as ReactOpts);
     // JUSTIFIED: narrowing for React element property access in option test
@@ -1583,7 +1679,7 @@ describe("React markdown parser options (real options per bun-types)", () => {
     expect(li.props.checked).toBeUndefined();
   });
 
-  it("tasklists: true → li has checked prop", () => {
+  test("tasklists: true → li has checked prop", () => {
     // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
     const tree = react("- [x] done", undefined, { tasklists: true } as unknown as ReactOpts);
     // JUSTIFIED: narrowing for React element property access in option test
@@ -1593,7 +1689,7 @@ describe("React markdown parser options (real options per bun-types)", () => {
     expect(li.props.checked).toBe(true);
   });
 
-  it("autolinks: false → URL as plain text", () => {
+  test("autolinks: false → URL as plain text", () => {
     // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
     const tree = react("Visit https://x.com", undefined, { autolinks: false } as unknown as ReactOpts);
     // JUSTIFIED: narrowing for React element property access in option test
@@ -1603,7 +1699,7 @@ describe("React markdown parser options (real options per bun-types)", () => {
     expect(hasA).toBe(false);
   });
 
-  it("autolinks: true → URL as a element", () => {
+  test("autolinks: true → URL as a element", () => {
     // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
     const tree = react("Visit https://x.com", undefined, { autolinks: true } as unknown as ReactOpts);
     // JUSTIFIED: narrowing for React element property access in option test
@@ -1615,7 +1711,7 @@ describe("React markdown parser options (real options per bun-types)", () => {
     expect((a as { props: { href: string } }).props.href).toBe("https://x.com");
   });
 
-  it("wikiLinks: true → [[target]] becomes a element", () => {
+  test("wikiLinks: true → [[target]] becomes a element", () => {
     // JUSTIFIED: narrowing for React element property access in option test
     const tree = react("[[Wiki Link]]", undefined, { wikiLinks: true } as unknown as ReactOpts);
     // JUSTIFIED: narrowing for React element property access in option test
@@ -1627,7 +1723,7 @@ describe("React markdown parser options (real options per bun-types)", () => {
     expect((a as { props: { children: string } }).props.children).toContain("Wiki Link");
   });
 
-  it("noIndentedCodeBlocks: false → indented text becomes pre", () => {
+  test("noIndentedCodeBlocks: false → indented text becomes pre", () => {
     // JUSTIFIED: narrowing for React element property access in option test
     const tree = react("     code", undefined, { noIndentedCodeBlocks: false } as unknown as ReactOpts);
     // JUSTIFIED: narrowing for React element property access in option test
@@ -1635,7 +1731,7 @@ describe("React markdown parser options (real options per bun-types)", () => {
     expect(child.type).toBe("pre");
   });
 
-  it("noIndentedCodeBlocks: true → indented text becomes p", () => {
+  test("noIndentedCodeBlocks: true → indented text becomes p", () => {
     // JUSTIFIED: narrowing for React element property access in option test
     const tree = react("     code", undefined, { noIndentedCodeBlocks: true } as unknown as ReactOpts);
     // JUSTIFIED: narrowing for React element property access in option test
@@ -1643,7 +1739,7 @@ describe("React markdown parser options (real options per bun-types)", () => {
     expect(child.type).toBe("p");
   });
 
-  it("noHtmlBlocks: true → block HTML wrapped in p (not escaped)", () => {
+  test("noHtmlBlocks: true → block HTML wrapped in p (not escaped)", () => {
     // JUSTIFIED: narrowing for React element property access in option test
     // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
     const tree = react("<div>block</div>", undefined, { noHtmlBlocks: true } as unknown as ReactOpts);
@@ -1652,7 +1748,7 @@ describe("React markdown parser options (real options per bun-types)", () => {
     expect(p.type).toBe("p");
   });
 
-  it("headings.autolink: true → heading wrapped in self-link", () => {
+  test("headings.autolink: true → heading wrapped in self-link", () => {
     // JUSTIFIED: narrowing for React element property access in option test
     const tree = react("# Hello", undefined, { headings: { ids: true, autolink: true } } as unknown as ReactOpts);
     // JUSTIFIED: narrowing for React element property access in option test
@@ -1662,11 +1758,14 @@ describe("React markdown parser options (real options per bun-types)", () => {
     expect(h1.props.children).toBeDefined();
   });
 
-  it("headings: true → both ids and autolink enabled", () => {
+  test("headings: true → both ids and autolink enabled", () => {
     // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
     const tree = react("# Hello", undefined, { headings: true } as unknown as ReactOpts);
     // JUSTIFIED: narrowing for React element property access in option test
-    const h1 = (tree.props.children as unknown[])[0] as unknown as { type: unknown; props: { id?: string; children: unknown } };
+    const h1 = (tree.props.children as unknown[])[0] as unknown as {
+      type: unknown;
+      props: { id?: string; children: unknown };
+    };
     expect(h1.type).toBe("h1");
     expect(h1.props.id).toBe("hello");
   });
@@ -1683,7 +1782,7 @@ describe("SSR output: renderToString for all element types", () => {
     return renderToString(tree);
   }
 
-  it("h1-h6 render correct tags", () => {
+  test("h1-h6 render correct tags", () => {
     const html = toHTML("# H1\n## H2\n### H3\n#### H4\n##### H5\n###### H6");
     expect(html).toContain("<h1>");
     expect(html).toContain("</h1>");
@@ -1691,44 +1790,44 @@ describe("SSR output: renderToString for all element types", () => {
     expect(html).toContain("<h6>");
   });
 
-  it("paragraph renders", () => {
+  test("paragraph renders", () => {
     const html = toHTML("hello");
     expect(html).toContain("<p>");
     expect(html).toContain("hello");
   });
 
-  it("strong, em, code render", () => {
+  test("strong, em, code render", () => {
     const html = toHTML("**b** *i* `c`");
     expect(html).toContain("<strong>");
     expect(html).toContain("<em>");
     expect(html).toContain("<code>");
   });
 
-  it("link renders with href", () => {
+  test("link renders with href", () => {
     const html = toHTML("[text](https://x.com)");
     expect(html).toContain('<a href="https://x.com"');
     expect(html).toContain("text");
   });
 
-  it("image renders as self-closing img with src and alt", () => {
+  test("image renders as self-closing img with src and alt", () => {
     const html = toHTML("![alt](https://x.com/i.png)");
     expect(html).toContain('<img src="https://x.com/i.png"');
     expect(html).toContain('alt="alt"');
   });
 
-  it("unordered list renders", () => {
+  test("unordered list renders", () => {
     const html = toHTML("- a\n- b");
     expect(html).toContain("<ul>");
     expect(html).toContain("<li>");
   });
 
-  it("ordered list renders with start", () => {
+  test("ordered list renders with start", () => {
     const html = toHTML("1. first\n2. second");
     expect(html).toContain('<ol start="1">');
     expect(html).toContain("<li>");
   });
 
-  it("task list li checked attribute is not rendered (invalid on li)", () => {
+  test("task list li checked attribute is not rendered (invalid on li)", () => {
     const html = toHTML("- [x] done");
     expect(html).toContain("<ul>");
     expect(html).toContain("done");
@@ -1736,25 +1835,25 @@ describe("SSR output: renderToString for all element types", () => {
     expect(html).not.toContain('checked="true"');
   });
 
-  it("blockquote renders", () => {
+  test("blockquote renders", () => {
     const html = toHTML("> quote");
     expect(html).toContain("<blockquote>");
     expect(html).toContain("quote");
   });
 
-  it("pre renders with language attribute", () => {
+  test("pre renders with language attribute", () => {
     const html = toHTML("```js\ncode\n```");
     expect(html).toContain("<pre");
     expect(html).toContain('language="js"');
     expect(html).toContain("code");
   });
 
-  it("hr renders", () => {
+  test("hr renders", () => {
     const html = toHTML("---");
     expect(html).toContain("<hr");
   });
 
-  it("table renders full structure", () => {
+  test("table renders full structure", () => {
     const html = toHTML("| H | H |\n|----|----|\n| 1 | 2 | 3 |");
     expect(html).toContain("<table>");
     expect(html).toContain("<thead>");
@@ -1764,61 +1863,61 @@ describe("SSR output: renderToString for all element types", () => {
     expect(html).toContain("<td>");
   });
 
-  it("hard line break renders as br", () => {
+  test("hard line break renders as br", () => {
     const html = toHTML("line1  \nline2");
     expect(html).toContain("<br");
   });
 
-  it("strikethrough renders as del", () => {
+  test("strikethrough renders as del", () => {
     const html = toHTML("~~deleted~~");
     expect(html).toContain("<del>");
     expect(html).toContain("deleted");
   });
 
-  it("nested list renders", () => {
+  test("nested list renders", () => {
     const html = toHTML("- a\n  - b\n- c");
     expect(html).toContain("<ul>");
     expect(html).toMatch(/<li[^>]*>.*<ul>.*<\/ul>.*<\/li>/s);
   });
 
-  it("CJK and emoji content preserved in output", () => {
+  test("CJK and emoji content preserved in output", () => {
     const html = toHTML("# 日本語 👋");
     expect(html).toContain("日本語");
     expect(html).toContain("👋");
   });
 
-  it("raw HTML blocks are escaped inside a custom html element", () => {
-    const html = toHTML("<div class=\"foo\">block</div>");
+  test("raw HTML blocks are escaped inside a custom html element", () => {
+    const html = toHTML('<div class="foo">block</div>');
     // React 19 renders the raw HTML string as escaped text inside <html>...</html>
     expect(html).toContain("<html>");
     expect(html).toContain("&lt;div class=&quot;foo&quot;&gt;");
     expect(html).toContain("block");
   });
 
-  it("headings with ids render id attribute", () => {
+  test("headings with ids render id attribute", () => {
     const html = toHTML("# Hello World", { headings: { ids: true } });
     expect(html).toContain('<h1 id="hello-world"');
   });
 
-  it("autolinks render when enabled", () => {
+  test("autolinks render when enabled", () => {
     const html = toHTML("Visit https://x.com", { autolinks: true });
     expect(html).toContain('<a href="https://x.com"');
   });
 
-  it("wiki links render with target attribute", () => {
+  test("wiki links render with target attribute", () => {
     const html = toHTML("[[Wiki Link]]", { wikiLinks: true });
     expect(html).toContain('<a target="Wiki Link"');
     expect(html).toContain("Wiki Link");
   });
 
-  it("custom components affect rendered output", () => {
+  test("custom components affect rendered output", () => {
     const tree = react("# Hello", { h1: () => React.createElement("h1", { className: "custom" }, "Custom") });
     const html = renderToString(tree);
     expect(html).toContain('<h1 class="custom">');
     expect(html).toContain("Custom");
   });
 
-  it("custom component can return a string and it appears in output", () => {
+  test("custom component can return a string and it appears in output", () => {
     const tree = react("# Hello", { h1: () => "plain text" });
     const html = renderToString(tree);
     expect(html).toContain("plain text");
@@ -1834,7 +1933,7 @@ describe("Tags, lists, and meta-as-props", () => {
     return (el.props.children as unknown[])[idx] as any;
   }
 
-  it("ordered list with start=5", () => {
+  test("ordered list with start=5", () => {
     const tree = react("5. first\n6. second");
     const ol = childAt(tree, 0);
     expect(ol.props.start).toBe(5);
@@ -1842,21 +1941,21 @@ describe("Tags, lists, and meta-as-props", () => {
     expect(html).toContain('<ol start="5">');
   });
 
-  it("task list li receives checked=true", () => {
+  test("task list li receives checked=true", () => {
     const tree = react("- [x] done");
     const ul = childAt(tree, 0);
     const li = childAt(ul, 0);
     expect(li.props.checked).toBe(true);
   });
 
-  it("non-task li has no checked prop", () => {
+  test("non-task li has no checked prop (childAt API)", () => {
     const tree = react("- regular");
     const ul = childAt(tree, 0);
     const li = childAt(ul, 0);
     expect(li.props.checked).toBeUndefined();
   });
 
-  it("nested list: li contains nested ul", () => {
+  test("nested list: li contains nested ul", () => {
     const tree = react("- a\n  - b\n- c");
     const ul = childAt(tree, 0);
     const li = childAt(ul, 0);
@@ -1864,7 +1963,7 @@ describe("Tags, lists, and meta-as-props", () => {
     expect(nestedUl).toBeDefined();
   });
 
-  it("table cell alignment: right", () => {
+  test("table cell alignment: right", () => {
     const tree = react("| H |\n|--:|\n| a |");
     const table = childAt(tree, 0);
     const thead = childAt(table, 0);
@@ -1875,7 +1974,7 @@ describe("Tags, lists, and meta-as-props", () => {
     expect(html).toContain('align="right"');
   });
 
-  it("table cell alignment: center", () => {
+  test("table cell alignment: center", () => {
     const tree = react("| H |\n|:---:|\n| a |");
     const table = childAt(tree, 0);
     const thead = childAt(table, 0);
@@ -1886,7 +1985,7 @@ describe("Tags, lists, and meta-as-props", () => {
     expect(html).toContain('align="center"');
   });
 
-  it("table cell alignment: left", () => {
+  test("table cell alignment: left", () => {
     const tree = react("| H |\n|:---|\n| a |");
     const table = childAt(tree, 0);
     const thead = childAt(table, 0);
@@ -1903,7 +2002,7 @@ describe("Tags, lists, and meta-as-props", () => {
     return Array.isArray(children) ? children.join("") : String(children ?? "");
   }
 
-  it("tagFilter: true still allows <script> (not escaped)", () => {
+  test("tagFilter: true still allows <script> (not escaped)", () => {
     // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
     const tree = react("<script>alert(1)</script>", undefined, { tagFilter: true } as unknown as ReactOpts);
     const htmlEl = childAt(tree, 0);
@@ -1912,7 +2011,7 @@ describe("Tags, lists, and meta-as-props", () => {
     expect(rawText(htmlEl)).toContain("alert(1)");
   });
 
-  it("tagFilter: true still allows <style>", () => {
+  test("tagFilter: true still allows <style>", () => {
     // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
     const tree = react("<style>body{}</style>", undefined, { tagFilter: true } as unknown as ReactOpts);
     const htmlEl = childAt(tree, 0);
@@ -1920,7 +2019,7 @@ describe("Tags, lists, and meta-as-props", () => {
     expect(rawText(htmlEl)).toContain("body{}");
   });
 
-  it("tagFilter: true still allows <iframe>", () => {
+  test("tagFilter: true still allows <iframe>", () => {
     // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
     const tree = react("<iframe src=x></iframe>", undefined, { tagFilter: true } as unknown as ReactOpts);
     const htmlEl = childAt(tree, 0);
@@ -1928,7 +2027,7 @@ describe("Tags, lists, and meta-as-props", () => {
     expect(rawText(htmlEl)).toContain("src=x");
   });
 
-  it("noHtmlBlocks: true wraps <div> in <p> but keeps attributes", () => {
+  test("noHtmlBlocks: true wraps <div> in <p> but keeps attributes", () => {
     // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
     const tree = react('<div class="foo">block</div>', undefined, { noHtmlBlocks: true } as unknown as ReactOpts);
     const p = childAt(tree, 0);
@@ -1937,16 +2036,19 @@ describe("Tags, lists, and meta-as-props", () => {
     expect(rawText(p)).toContain("block");
   });
 
-  it("noHtmlSpans: true wraps inline <span> in <p>", () => {
+  test("noHtmlSpans: true wraps inline <span> in <p>", () => {
     // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
-    const tree = react('text <span class="x">span</span> more', undefined, { noHtmlSpans: true } as unknown as ReactOpts);
+    const tree = react('text <span class="x">span</span> more', undefined, {
+      noHtmlSpans: true,
+      // JUSTIFIED: parser options not in ReactOptions type — testing runtime
+    } as unknown as ReactOpts);
     const p = childAt(tree, 0);
     expect(p.type).toBe("p");
     expect(rawText(p)).toContain('class="x"');
     expect(rawText(p)).toContain("span");
   });
 
-  it("HTML block with multiple attributes preserved", () => {
+  test("HTML block with multiple attributes preserved", () => {
     const tree = react('<div class="foo" id="bar" data-x="1">text</div>');
     const htmlEl = childAt(tree, 0);
     expect(htmlEl.type).toBe("html");
@@ -1956,7 +2058,7 @@ describe("Tags, lists, and meta-as-props", () => {
     expect(rawText(htmlEl)).toContain("text");
   });
 
-  it("list with multiple paragraphs in one item", () => {
+  test("list with multiple paragraphs in one item", () => {
     const tree = react("- para1\n\n  para2");
     const ul = childAt(tree, 0);
     const li = childAt(ul, 0);
@@ -1965,7 +2067,7 @@ describe("Tags, lists, and meta-as-props", () => {
     expect(pCount).toBe(2);
   });
 
-  it("link meta: href, title passed as props", () => {
+  test("link meta: href, title passed as props", () => {
     const tree = react('[text](https://x.com "title")');
     const p = childAt(tree, 0);
     const a = (p.props.children as any[]).find((c: any) => c.type === "a");
@@ -1974,7 +2076,7 @@ describe("Tags, lists, and meta-as-props", () => {
     expect(a.props.title).toBe("title");
   });
 
-  it("image meta: src, alt, title passed as props", () => {
+  test("image meta: src, alt, title passed as props", () => {
     const tree = react('![alt](https://x.com/i.png "title")');
     const p = childAt(tree, 0);
     const img = (p.props.children as any[]).find((c: any) => c.type === "img");
@@ -2003,7 +2105,7 @@ describe("React 18 vs 19 cross-verification across all features", () => {
       .replace(/react\.fragment/g, "FRAGMENT_SYMBOL");
   }
 
-  it("headings with ids", () => {
+  test("headings with ids", () => {
     const md = "# Hello World";
     const opts = { headings: { ids: true } };
     const t19 = reactWithOpts(md, opts);
@@ -2012,7 +2114,7 @@ describe("React 18 vs 19 cross-verification across all features", () => {
     expect(normalizedJSON(t18)).toBe(normalizedJSON(t19));
   });
 
-  it("tables with alignment", () => {
+  test("tables with alignment", () => {
     const md = "| H |\n|--:|\n| a |";
     const t19 = reactWithOpts(md, {});
     const t18 = reactWithOpts(md, { reactVersion: 18 });
@@ -2020,7 +2122,7 @@ describe("React 18 vs 19 cross-verification across all features", () => {
     expect(normalizedJSON(t18)).toBe(normalizedJSON(t19));
   });
 
-  it("task lists", () => {
+  test("task lists", () => {
     const md = "- [x] done\n- [ ] todo";
     const t19 = reactWithOpts(md, {});
     const t18 = reactWithOpts(md, { reactVersion: 18 });
@@ -2028,7 +2130,7 @@ describe("React 18 vs 19 cross-verification across all features", () => {
     expect(normalizedJSON(t18)).toBe(normalizedJSON(t19));
   });
 
-  it("autolinks", () => {
+  test("autolinks", () => {
     const md = "Visit https://x.com";
     const t19 = reactWithOpts(md, { autolinks: true });
     const t18 = reactWithOpts(md, { autolinks: true, reactVersion: 18 });
@@ -2036,7 +2138,7 @@ describe("React 18 vs 19 cross-verification across all features", () => {
     expect(normalizedJSON(t18)).toBe(normalizedJSON(t19));
   });
 
-  it("strikethrough", () => {
+  test("strikethrough", () => {
     const md = "~~deleted~~";
     const t19 = reactWithOpts(md, {});
     const t18 = reactWithOpts(md, { reactVersion: 18 });
@@ -2044,7 +2146,7 @@ describe("React 18 vs 19 cross-verification across all features", () => {
     expect(normalizedJSON(t18)).toBe(normalizedJSON(t19));
   });
 
-  it("wikiLinks", () => {
+  test("wikiLinks", () => {
     const md = "[[Wiki Link]]";
     const t19 = reactWithOpts(md, { wikiLinks: true });
     const t18 = reactWithOpts(md, { wikiLinks: true, reactVersion: 18 });
@@ -2052,7 +2154,7 @@ describe("React 18 vs 19 cross-verification across all features", () => {
     expect(normalizedJSON(t18)).toBe(normalizedJSON(t19));
   });
 
-  it("nested lists", () => {
+  test("nested lists", () => {
     const md = "- a\n  - b\n- c";
     const t19 = reactWithOpts(md, {});
     const t18 = reactWithOpts(md, { reactVersion: 18 });
@@ -2060,7 +2162,7 @@ describe("React 18 vs 19 cross-verification across all features", () => {
     expect(normalizedJSON(t18)).toBe(normalizedJSON(t19));
   });
 
-  it("noHtmlBlocks", () => {
+  test("noHtmlBlocks", () => {
     const md = '<div class="foo">block</div>';
     const t19 = reactWithOpts(md, { noHtmlBlocks: true });
     const t18 = reactWithOpts(md, { noHtmlBlocks: true, reactVersion: 18 });
@@ -2068,7 +2170,7 @@ describe("React 18 vs 19 cross-verification across all features", () => {
     expect(normalizedJSON(t18)).toBe(normalizedJSON(t19));
   });
 
-  it("raw HTML with attributes", () => {
+  test("raw HTML with attributes", () => {
     const md = '<div class="foo" id="bar" data-x="1">text</div>';
     const t19 = reactWithOpts(md, {});
     const t18 = reactWithOpts(md, { reactVersion: 18 });
@@ -2076,7 +2178,7 @@ describe("React 18 vs 19 cross-verification across all features", () => {
     expect(normalizedJSON(t18)).toBe(normalizedJSON(t19));
   });
 
-  it("indented code blocks disabled", () => {
+  test("indented code blocks disabled", () => {
     const md = "     code";
     const t19 = reactWithOpts(md, { noIndentedCodeBlocks: true });
     const t18 = reactWithOpts(md, { noIndentedCodeBlocks: true, reactVersion: 18 });
@@ -2099,7 +2201,7 @@ describe("tagFilter deep dive: 5 dangerous tags (Bun v1.3.14 gap)", () => {
     return Array.isArray(children) ? children.join("") : String(children ?? "");
   }
 
-  it("<script> not escaped when tagFilter: true", () => {
+  test("<script> not escaped when tagFilter: true", () => {
     const md = "<script>alert(1)</script>";
     // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
     const tDefault = react(md, undefined, {} as unknown as ReactOpts);
@@ -2112,7 +2214,7 @@ describe("tagFilter deep dive: 5 dangerous tags (Bun v1.3.14 gap)", () => {
     expect(filterText).toBe(defaultText);
   });
 
-  it("<style> not escaped when tagFilter: true", () => {
+  test("<style> not escaped when tagFilter: true", () => {
     const md = "<style>body{}</style>";
     // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
     const tDefault = react(md, undefined, {} as unknown as ReactOpts);
@@ -2125,7 +2227,7 @@ describe("tagFilter deep dive: 5 dangerous tags (Bun v1.3.14 gap)", () => {
     expect(filterText).toBe(defaultText);
   });
 
-  it("<iframe> not escaped when tagFilter: true", () => {
+  test("<iframe> not escaped when tagFilter: true", () => {
     const md = '<iframe src="x"></iframe>';
     // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
     const tDefault = react(md, undefined, {} as unknown as ReactOpts);
@@ -2138,7 +2240,7 @@ describe("tagFilter deep dive: 5 dangerous tags (Bun v1.3.14 gap)", () => {
     expect(filterText).toBe(defaultText);
   });
 
-  it("<script> inline block not escaped when tagFilter: true", () => {
+  test("<script> inline block not escaped when tagFilter: true", () => {
     const md = "<div>ok</div>\n\n<script>alert(1)</script>";
     // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
     const tFilter = react(md, undefined, { tagFilter: true } as unknown as ReactOpts);
@@ -2150,7 +2252,7 @@ describe("tagFilter deep dive: 5 dangerous tags (Bun v1.3.14 gap)", () => {
     expect(html1).toContain("alert(1)");
   });
 
-  it("allowed <div> and disallowed <script> both unchanged when tagFilter: true", () => {
+  test("allowed <div> and disallowed <script> both unchanged when tagFilter: true", () => {
     const md = "<div>ok</div>\n<script>bad</script>";
     // JUSTIFIED: parser options not in ReactOptions type — casting to test runtime
     const tFilter = react(md, undefined, { tagFilter: true } as unknown as ReactOpts);
@@ -2165,7 +2267,7 @@ describe("tagFilter deep dive: 5 dangerous tags (Bun v1.3.14 gap)", () => {
 describe("html() vs react() rendering differences", () => {
   const { renderToString } = require("react-dom/server");
 
-  it("tagFilter: true escapes <script> in html() output, react() tree keeps raw string", () => {
+  test("tagFilter: true escapes <script> in html() output, react() tree keeps raw string", () => {
     const md = "<script>alert(1)</script>";
     // JUSTIFIED: parser options not in HtmlOptions type — casting to test runtime
     const htmlOut = Bun.markdown.html(md, { tagFilter: true } as unknown as HtmlOpts);
@@ -2178,7 +2280,7 @@ describe("html() vs react() rendering differences", () => {
     expect(htmlOut).not.toContain("<script>alert(1)</script>");
   });
 
-  it("noHtmlBlocks: true wraps <div> in <p> in both html() and react()", () => {
+  test("noHtmlBlocks: true wraps <div> in <p> in both html() and react()", () => {
     const md = '<div class="foo">block</div>';
     // JUSTIFIED: parser options not in HtmlOptions type — casting to test runtime
     const htmlOut = Bun.markdown.html(md, { noHtmlBlocks: true } as unknown as HtmlOpts);
@@ -2192,7 +2294,7 @@ describe("html() vs react() rendering differences", () => {
     expect(reactOut).toContain("foo");
   });
 
-  it("noHtmlSpans: true escapes <span> in both html() and react()", () => {
+  test("noHtmlSpans: true escapes <span> in both html() and react()", () => {
     const md = 'text <span class="x">span</span> more';
     // JUSTIFIED: parser options not in HtmlOptions type — casting to test runtime
     const htmlOut = Bun.markdown.html(md, { noHtmlSpans: true } as unknown as HtmlOpts);
@@ -2203,7 +2305,7 @@ describe("html() vs react() rendering differences", () => {
     expect(reactOut).toContain("&lt;span");
   });
 
-  it("autolinks: true produces <a> in both html() and react()", () => {
+  test("autolinks: true produces <a> in both html() and react()", () => {
     const md = "Visit https://x.com";
     // JUSTIFIED: parser options not in HtmlOptions type — casting to test runtime
     const htmlOut = Bun.markdown.html(md, { autolinks: true } as unknown as HtmlOpts);
@@ -2214,7 +2316,7 @@ describe("html() vs react() rendering differences", () => {
     expect(reactOut).toContain('<a href="https://x.com"');
   });
 
-  it("headings with ids: true adds id in both html() and react()", () => {
+  test("headings with ids: true adds id in both html() and react()", () => {
     const md = "# Hello World";
     // JUSTIFIED: parser options not in HtmlOptions type — casting to test runtime
     const htmlOut = Bun.markdown.html(md, { headings: { ids: true } } as unknown as HtmlOpts);

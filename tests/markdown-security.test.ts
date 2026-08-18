@@ -15,7 +15,7 @@
  * like DOMPurify on the rendered HTML output.
  */
 
-import { describe, expect, it } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 // Detect dangerous patterns in rendered HTML output.
 // Uses attribute-scoped regexes to avoid false positives on legitimate
@@ -72,7 +72,7 @@ describe("Bun.markdown.html() XSS audit", () => {
     };
 
     for (const [name, md] of Object.entries(dangerousVectors)) {
-      it(`⚠️  "${name}" passes through dangerous HTML`, () => {
+      test(`⚠️  "${name}" passes through dangerous HTML`, () => {
         const html = Bun.markdown.html(md, { autolinks: true });
         // These vectors are KNOWN to be dangerous — we assert they ARE
         // dangerous so the test fails if Bun ever fixes the XSS (at which
@@ -94,7 +94,7 @@ describe("Bun.markdown.html() XSS audit", () => {
     };
 
     for (const [name, md] of Object.entries(safeVectors)) {
-      it(`✅ "${name}" is safe`, () => {
+      test(`✅ "${name}" is safe`, () => {
         const html = Bun.markdown.html(md, { autolinks: true });
         expect(isDangerous(html)).toBe(false);
       });
@@ -110,7 +110,7 @@ describe("Bun.markdown.html() XSS audit", () => {
       "heading injection": "# <script>alert(1)</script>",
     };
 
-    it("default (no options) — all 5 vectors dangerous", () => {
+    test("default (no options) — all 5 vectors dangerous", () => {
       let dangerous = 0;
       for (const md of Object.values(mitigationVectors)) {
         if (isDangerous(Bun.markdown.html(md, { autolinks: true }))) dangerous++;
@@ -118,7 +118,7 @@ describe("Bun.markdown.html() XSS audit", () => {
       expect(dangerous).toBe(5);
     });
 
-    it("tagFilter — partially blocks (script + iframe)", () => {
+    test("tagFilter — partially blocks (script + iframe)", () => {
       let dangerous = 0;
       for (const md of Object.values(mitigationVectors)) {
         if (isDangerous(Bun.markdown.html(md, { autolinks: true, tagFilter: true }))) dangerous++;
@@ -129,7 +129,7 @@ describe("Bun.markdown.html() XSS audit", () => {
       expect(dangerous).toBeGreaterThan(0);
     });
 
-    it("noHtmlBlocks — broken (no effect)", () => {
+    test("noHtmlBlocks — broken (no effect)", () => {
       let dangerous = 0;
       for (const md of Object.values(mitigationVectors)) {
         if (isDangerous(Bun.markdown.html(md, { autolinks: true, noHtmlBlocks: true }))) dangerous++;
@@ -138,7 +138,7 @@ describe("Bun.markdown.html() XSS audit", () => {
       expect(dangerous).toBe(5);
     });
 
-    it("noHtmlSpans — blocks heading injection only", () => {
+    test("noHtmlSpans — blocks heading injection only", () => {
       let dangerous = 0;
       for (const md of Object.values(mitigationVectors)) {
         if (isDangerous(Bun.markdown.html(md, { autolinks: true, noHtmlSpans: true }))) dangerous++;
@@ -147,7 +147,7 @@ describe("Bun.markdown.html() XSS audit", () => {
       expect(dangerous).toBeLessThan(5);
     });
 
-    it("all three combined — best available mitigation", () => {
+    test("all three combined — best available mitigation", () => {
       let dangerous = 0;
       for (const md of Object.values(mitigationVectors)) {
         if (
@@ -166,7 +166,7 @@ describe("Bun.markdown.html() XSS audit", () => {
       expect(dangerous).toBeGreaterThan(0);
     });
 
-    it("Bun.escapeHTML escapes angle brackets and quotes (partial sanitization)", () => {
+    test("Bun.escapeHTML escapes angle brackets and quotes (partial sanitization)", () => {
       // Bun.escapeHTML escapes <>&"' but does NOT remove event handler
       // attributes like onerror= or javascript: URLs. It prevents
       // <script> tags from rendering but is NOT a complete XSS sanitizer.
@@ -185,27 +185,27 @@ describe("Bun.markdown.html() XSS audit", () => {
   });
 
   describe("URL scheme filtering", () => {
-    it("javascript: scheme allowed in link href (XSS)", () => {
+    test("javascript: scheme allowed in link href (XSS)", () => {
       const html = Bun.markdown.html("[click](javascript:alert(1))");
       expect(html).toContain("javascript:alert(1)");
     });
 
-    it("javascript: scheme allowed in image src (XSS)", () => {
+    test("javascript: scheme allowed in image src (XSS)", () => {
       const html = Bun.markdown.html("![x](javascript:alert(1))");
       expect(html).toContain("javascript:alert(1)");
     });
 
-    it("data:text/html allowed in link href (XSS)", () => {
+    test("data:text/html allowed in link href (XSS)", () => {
       const html = Bun.markdown.html("[click](data:text/html,<script>)");
       expect(html).toContain("data:text/html");
     });
 
-    it("https: scheme works normally", () => {
+    test("https: scheme works normally", () => {
       const html = Bun.markdown.html("[click](https://example.com)");
       expect(html).toContain('href="https://example.com"');
     });
 
-    it("mailto: scheme works normally", () => {
+    test("mailto: scheme works normally", () => {
       const html = Bun.markdown.html("[email](mailto:test@example.com)");
       expect(html).toContain('href="mailto:test@example.com"');
     });

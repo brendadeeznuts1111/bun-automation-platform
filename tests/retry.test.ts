@@ -1,8 +1,8 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { withRetry } from "../src/utils/retry";
 
 describe("withRetry", () => {
-  it("resolves immediately when function succeeds", async () => {
+  test("resolves immediately when function succeeds", async () => {
     let calls = 0;
     const result = await withRetry(async () => {
       calls++;
@@ -12,7 +12,7 @@ describe("withRetry", () => {
     expect(calls).toBe(1);
   });
 
-  it("retries on failure up to maxAttempts", async () => {
+  test("retries on failure up to maxAttempts", async () => {
     let attempts = 0;
     const result = await withRetry(
       async () => {
@@ -29,7 +29,7 @@ describe("withRetry", () => {
     expect(attempts).toBe(3);
   });
 
-  it("throws last error when exceeding maxAttempts", async () => {
+  test("throws last error when exceeding maxAttempts", async () => {
     let attempts = 0;
     expect(
       withRetry(
@@ -42,7 +42,7 @@ describe("withRetry", () => {
     ).rejects.toThrow("failure 2");
   });
 
-  it("respects retryable predicate", async () => {
+  test("respects retryable predicate", async () => {
     let attempts = 0;
     expect(
       withRetry(

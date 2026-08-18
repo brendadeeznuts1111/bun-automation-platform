@@ -1,4 +1,4 @@
-import { beforeAll, beforeEach, describe, expect, it } from "bun:test";
+import { beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { migrate, read, write } from "../src/db";
 import { audit, getAuditLog } from "../src/db/audit";
 
@@ -12,12 +12,14 @@ describe("Database & Audit Layer", () => {
   // but this ensures exact counts for assertions.
   beforeEach(async () => {
     await write((db) => {
-      db.exec("DELETE FROM audit_log WHERE action LIKE 'test_%' OR action LIKE 'zero-agent-%' OR action LIKE 'other-agent-%'");
+      db.exec(
+        "DELETE FROM audit_log WHERE action LIKE 'test_%' OR action LIKE 'zero-agent-%' OR action LIKE 'other-agent-%'",
+      );
       db.exec("DELETE FROM circuit_breakers WHERE site LIKE 'db-mutex-%'");
     });
   });
 
-  it("performs concurrent reads via read pool", async () => {
+  test("performs concurrent reads via read pool", async () => {
     const promises = Array.from({ length: 8 }, (_, i) =>
       Promise.resolve().then(() =>
         read((db) => {
@@ -34,7 +36,7 @@ describe("Database & Audit Layer", () => {
     expect(results[7]).toBe(8);
   });
 
-  it("serializes writes atomically through write mutex queue", async () => {
+  test("serializes writes atomically through write mutex queue", async () => {
     const site = `db-mutex-${Date.now()}`;
 
     const p1 = write((db) => {
@@ -52,7 +54,7 @@ describe("Database & Audit Layer", () => {
     expect(r2).toBe(2);
   });
 
-  it("records and queries audit log entries with agent filtering", async () => {
+  test("records and queries audit log entries with agent filtering", async () => {
     const uniqueAgentId = Math.floor(Date.now() % 100000);
 
     await audit({
@@ -73,7 +75,7 @@ describe("Database & Audit Layer", () => {
     expect(logs[0]?.action).toBe("test_audit_event");
   });
 
-  it("filters by agent_id=0 without returning all rows (regression)", async () => {
+  test("filters by agent_id=0 without returning all rows (regression)", async () => {
     // getAuditLog previously used `if (agentId)` which is falsy for 0,
     // skipping the filter and returning all logs. agent_id=0 is a valid
     // value (audit_log.agent_id is a nullable INTEGER, no FK constraint).

@@ -28,8 +28,8 @@
  * 14. Buffer.from — bounds-checking fix
  */
 
-import { describe, expect, it } from "bun:test";
 import { Database } from "bun:sqlite";
+import { describe, expect, test } from "bun:test";
 import { processScreenshot, serveScreenshot } from "../src/utils/image";
 import { withRetry } from "../src/utils/retry";
 
@@ -41,15 +41,21 @@ function createTestPng(width = 64, height = 64, r = 120, g = 150, b = 200): Uint
     raw[y * rowSize] = 0; // filter byte
     for (let x = 0; x < width; x++) {
       const off = y * rowSize + 1 + x * 4;
-      raw[off] = r; raw[off + 1] = g; raw[off + 2] = b; raw[off + 3] = 255;
+      raw[off] = r;
+      raw[off + 1] = g;
+      raw[off + 2] = b;
+      raw[off + 3] = 255;
     }
   }
   const sig = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
   const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(width, 0); ihdr.writeUInt32BE(height, 4);
-  ihdr[8] = 8; ihdr[9] = 6; // bit depth 8, color type RGBA
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 6; // bit depth 8, color type RGBA
   function chunk(type: string, data: Buffer): Buffer {
-    const len = Buffer.alloc(4); len.writeUInt32BE(data.length, 0);
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length, 0);
     const t = Buffer.from(type, "ascii");
     const crc = Buffer.alloc(4);
     crc.writeUInt32BE(Bun.hash.crc32(Buffer.concat([t, data])), 0);
@@ -61,9 +67,9 @@ function createTestPng(width = 64, height = 64, r = 120, g = 150, b = 200): Uint
   // JUSTIFIED: raw.buffer is a real ArrayBuffer backing the Uint8Array
   adler.writeUInt32BE(Bun.hash.adler32(raw.buffer as ArrayBuffer), 0);
   const zlibStream = Buffer.concat([Buffer.from([0x78, 0x9c]), deflated, adler]);
-  return new Uint8Array(Buffer.concat([
-    sig, chunk("IHDR", ihdr), chunk("IDAT", zlibStream), chunk("IEND", Buffer.alloc(0)),
-  ]));
+  return new Uint8Array(
+    Buffer.concat([sig, chunk("IHDR", ihdr), chunk("IDAT", zlibStream), chunk("IEND", Buffer.alloc(0))]),
+  );
 }
 
 // ===========================================================================
@@ -72,7 +78,7 @@ function createTestPng(width = 64, height = 64, r = 120, g = 150, b = 200): Uint
 //    Our fix: each parallel branch gets its own Bun.Image instance
 // ===========================================================================
 describe("v1.3.14 — Bun.Image chainable transforms (K1 race fix)", () => {
-  it("parallel branches don't corrupt each other's state", async () => {
+  test("parallel branches don't corrupt each other's state", async () => {
     // Use a larger image with pixel variation so full and thumb differ in size
     const png = createTestPng(500, 500);
     const result = await processScreenshot(png, "v1314-race-test");
@@ -88,7 +94,7 @@ describe("v1.3.14 — Bun.Image chainable transforms (K1 race fix)", () => {
     expect(result.fullSize).toBeGreaterThan(result.thumbSize);
   });
 
-  it("all 5 operations run in parallel (single Promise.all round trip)", async () => {
+  test("all 5 operations run in parallel (single Promise.all round trip)", async () => {
     const png = createTestPng(64, 64);
     const start = Date.now();
     const result = await processScreenshot(png, "v1314-parallel-test");
@@ -110,7 +116,7 @@ describe("v1.3.14 — Bun.Image chainable transforms (K1 race fix)", () => {
 //    Our fix: use write() return value instead of Bun.file().size
 // ===========================================================================
 describe("v1.3.14 — Bun.Image terminal .write() returns bytes written (M2)", () => {
-  it("processScreenshot returns correct file sizes from write()", async () => {
+  test("processScreenshot returns correct file sizes from write()", async () => {
     const png = createTestPng(80, 80);
     const result = await processScreenshot(png, "v1314-write-bytes-test");
 
@@ -129,7 +135,7 @@ describe("v1.3.14 — Bun.Image terminal .write() returns bytes written (M2)", (
 //    Our fix: reverted manual .blob() + Content-Type, use direct return
 // ===========================================================================
 describe("v1.3.14 — Bun.Image body integration (H9 revert)", () => {
-  it("serveScreenshot returns Response with automatic Content-Type", async () => {
+  test("serveScreenshot returns Response with automatic Content-Type", async () => {
     const png = createTestPng(48, 48);
     const result = await processScreenshot(png, "v1314-body-integration-test");
 
@@ -144,7 +150,7 @@ describe("v1.3.14 — Bun.Image body integration (H9 revert)", () => {
     expect(body.byteLength).toBeGreaterThan(0);
   });
 
-  it("serveScreenshot with jpeg format sets image/jpeg Content-Type", async () => {
+  test("serveScreenshot with jpeg format sets image/jpeg Content-Type", async () => {
     const png = createTestPng(48, 48);
     const result = await processScreenshot(png, "v1314-jpeg-test");
 
@@ -159,7 +165,7 @@ describe("v1.3.14 — Bun.Image body integration (H9 revert)", () => {
 //    Our fix: thumbnail uses mks2013 filter
 // ===========================================================================
 describe("v1.3.14 — Bun.Image mks2013 resize filter (K2)", () => {
-  it("thumbnail uses mks2013 filter for downscaling quality", async () => {
+  test("thumbnail uses mks2013 filter for downscaling quality", async () => {
     const png = createTestPng(2000, 2000);
     const result = await processScreenshot(png, "v1314-mks2013-test");
 
@@ -186,7 +192,7 @@ describe("v1.3.14 — Bun.Image mks2013 resize filter (K2)", () => {
 //    exceed maxPixels"
 // ===========================================================================
 describe("v1.3.14 — Bun.Image maxPixels guard", () => {
-  it("maxPixels option is respected (4096x4096 cap)", () => {
+  test("maxPixels option is respected (4096x4096 cap)", () => {
     // Our code uses maxPixels: 4096 * 4096 = 16,777,216
     // A valid 64x64 image should work fine
     const png = createTestPng(64, 64);
@@ -194,7 +200,7 @@ describe("v1.3.14 — Bun.Image maxPixels guard", () => {
     expect(img).toBeDefined();
   });
 
-  it("maxPixels rejects oversized images on terminal call", async () => {
+  test("maxPixels rejects oversized images on terminal call", async () => {
     // Create a valid PNG header that claims huge dimensions
     // but has no actual pixel data — maxPixels check runs after
     // header read but before pixel buffer allocation, when a terminal is called.
@@ -202,17 +208,19 @@ describe("v1.3.14 — Bun.Image maxPixels guard", () => {
     const ihdr = Buffer.alloc(13);
     ihdr.writeUInt32BE(50000, 0); // width = 50000
     ihdr.writeUInt32BE(50000, 4); // height = 50000
-    ihdr[8] = 8; ihdr[9] = 6;
+    ihdr[8] = 8;
+    ihdr[9] = 6;
     function chunk(type: string, data: Buffer): Buffer {
-      const len = Buffer.alloc(4); len.writeUInt32BE(data.length, 0);
+      const len = Buffer.alloc(4);
+      len.writeUInt32BE(data.length, 0);
       const t = Buffer.from(type, "ascii");
       const crc = Buffer.alloc(4);
       crc.writeUInt32BE(Bun.hash.crc32(Buffer.concat([t, data])), 0);
       return Buffer.concat([len, t, data, crc]);
     }
-    const fakePng = new Uint8Array(Buffer.concat([
-      sig, chunk("IHDR", ihdr), chunk("IDAT", Buffer.alloc(0)), chunk("IEND", Buffer.alloc(0)),
-    ]));
+    const fakePng = new Uint8Array(
+      Buffer.concat([sig, chunk("IHDR", ihdr), chunk("IDAT", Buffer.alloc(0)), chunk("IEND", Buffer.alloc(0))]),
+    );
 
     // maxPixels check runs when a terminal is called (metadata or encode).
     // With maxPixels = 100, this should reject (50000*50000 = 2.5B >> 100)
@@ -227,7 +235,7 @@ describe("v1.3.14 — Bun.Image maxPixels guard", () => {
 //    Our implementation: resize to 1x1, encode as PNG, parse IDAT
 // ===========================================================================
 describe("v1.3.14 — extractDominantColor via .bytes() terminal (K3)", () => {
-  it("extracts dominant color from a solid-color image", async () => {
+  test("extracts dominant color from a solid-color image", async () => {
     const png = createTestPng(32, 32, 255, 0, 0); // solid red
     const result = await processScreenshot(png, "v1314-color-red");
     // Should be close to red (#ff0000) — 1x1 resize averages all pixels
@@ -240,7 +248,7 @@ describe("v1.3.14 — extractDominantColor via .bytes() terminal (K3)", () => {
     expect(r).toBeGreaterThan(b);
   });
 
-  it("extracts dominant color from a blue image", async () => {
+  test("extracts dominant color from a blue image", async () => {
     const png = createTestPng(32, 32, 0, 0, 255); // solid blue
     const result = await processScreenshot(png, "v1314-color-blue");
     const r = parseInt(result.dominantColor.slice(1, 3), 16);
@@ -248,7 +256,7 @@ describe("v1.3.14 — extractDominantColor via .bytes() terminal (K3)", () => {
     expect(b).toBeGreaterThan(r);
   });
 
-  it("extractDominantColor is not the stub default (#1f2020)", async () => {
+  test("extractDominantColor is not the stub default (#1f2020)", async () => {
     const png = createTestPng(32, 32, 120, 150, 200);
     const result = await processScreenshot(png, "v1314-color-not-stub");
     expect(result.dominantColor).not.toBe("#1f2020");
@@ -262,7 +270,7 @@ describe("v1.3.14 — extractDominantColor via .bytes() terminal (K3)", () => {
 //    Our code: pool.ts uses Bun.spawn({ ipc }) — the fix makes this safe
 // ===========================================================================
 describe("v1.3.14 — Bun.spawn IPC subprocess GC leak fix", () => {
-  it("IPC subprocess is GC'd after exit (no leak)", async () => {
+  test("IPC subprocess is GC'd after exit (no leak)", async () => {
     // Spawn a child that immediately exits via IPC
     const proc = Bun.spawn({
       cmd: [process.execPath, "-e", "process.send?.('done'); process.exit(0)"],
@@ -281,17 +289,19 @@ describe("v1.3.14 — Bun.spawn IPC subprocess GC leak fix", () => {
     expect(proc.pid).toBeGreaterThan(0);
   });
 
-  it("subprocess exit event fires reliably (Linux pidfd fix)", async () => {
+  test("subprocess exit event fires reliably (Linux pidfd fix)", async () => {
     // The blog says: "subprocess 'exit' event not firing on Linux when
     // multiple child processes exit" — now fixed with level-triggered pidfd
     const procs = [];
     for (let i = 0; i < 5; i++) {
-      procs.push(Bun.spawn({
-        cmd: [process.execPath, "-e", `process.exit(${i})`],
-        stdin: "ignore",
-        stdout: "ignore",
-        stderr: "ignore",
-      }));
+      procs.push(
+        Bun.spawn({
+          cmd: [process.execPath, "-e", `process.exit(${i})`],
+          stdin: "ignore",
+          stdout: "ignore",
+          stderr: "ignore",
+        }),
+      );
     }
 
     const codes = await Promise.all(procs.map((p) => p.exited));
@@ -306,7 +316,7 @@ describe("v1.3.14 — Bun.spawn IPC subprocess GC leak fix", () => {
 //    Our code: uses stdin: "ignore", stdout: "inherit", stderr: "inherit"
 // ===========================================================================
 describe("v1.3.14 — Bun.spawn stdio safety", () => {
-  it("stdio with 'ignore' and 'inherit' works without crashes", async () => {
+  test("stdio with 'ignore' and 'inherit' works without crashes", async () => {
     const proc = Bun.spawn({
       cmd: [process.execPath, "-e", "console.log('hello')"],
       stdin: "ignore",
@@ -317,7 +327,7 @@ describe("v1.3.14 — Bun.spawn stdio safety", () => {
     expect(code).toBe(0);
   });
 
-  it("stdio with 'pipe' allows reading output", async () => {
+  test("stdio with 'pipe' allows reading output", async () => {
     const proc = Bun.spawn({
       cmd: [process.execPath, "-e", "process.stdout.write('piped-output')"],
       stdin: "ignore",
@@ -339,7 +349,7 @@ describe("v1.3.14 — Bun.spawn stdio safety", () => {
 //    Our code: withTimeout in task-worker.ts uses setTimeout + clearTimeout
 // ===========================================================================
 describe("v1.3.14 — Timer memory leak and ref fixes", () => {
-  it("clearTimeout doesn't leak native memory", () => {
+  test("clearTimeout doesn't leak native memory", () => {
     // Create and clear many timers — in v1.3.13 this would leak
     // native memory per clearTimeout call. Verify the process doesn't
     // crash or run out of memory after 1000 cycles.
@@ -353,7 +363,7 @@ describe("v1.3.14 — Timer memory leak and ref fixes", () => {
     expect(cleared).toBe(1000);
   });
 
-  it("ref() on already-fired setTimeout doesn't hang the event loop", async () => {
+  test("ref() on already-fired setTimeout doesn't hang the event loop", async () => {
     // Fire a timer, then ref() it — in v1.3.13 this would keep the
     // event loop alive indefinitely, causing the process to hang.
     const t = setTimeout(() => {}, 1);
@@ -365,12 +375,14 @@ describe("v1.3.14 — Timer memory leak and ref fixes", () => {
     expect(t).toBeDefined();
   });
 
-  it("withTimeout pattern (setTimeout + clearTimeout in race) is safe", async () => {
+  test("withTimeout pattern (setTimeout + clearTimeout in race) is safe", async () => {
     // Replicate the withTimeout pattern from task-worker.ts
     function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
       let timer: ReturnType<typeof setTimeout> | undefined;
       return Promise.race([
-        promise.finally(() => { if (timer) clearTimeout(timer); }),
+        promise.finally(() => {
+          if (timer) clearTimeout(timer);
+        }),
         new Promise<T>((_, reject) => {
           timer = setTimeout(() => reject(new Error("timeout")), ms);
         }),
@@ -382,10 +394,7 @@ describe("v1.3.14 — Timer memory leak and ref fixes", () => {
     expect(fast).toBe("fast");
 
     // Slow promise — timeout should fire
-    await expect(withTimeout(
-      new Promise((resolve) => setTimeout(resolve, 10000)),
-      50,
-    )).rejects.toThrow("timeout");
+    await expect(withTimeout(new Promise((resolve) => setTimeout(resolve, 10000)), 50)).rejects.toThrow("timeout");
   });
 });
 
@@ -395,26 +404,29 @@ describe("v1.3.14 — Timer memory leak and ref fixes", () => {
 //     Our code: retry.ts uses Bun.sleep, shutdown.ts uses Bun.sleep
 // ===========================================================================
 describe("v1.3.14 — Bun.sleep native API", () => {
-  it("Bun.sleep resolves after the specified delay", async () => {
+  test("Bun.sleep resolves after the specified delay", async () => {
     const start = Date.now();
     await Bun.sleep(30);
     expect(Date.now() - start).toBeGreaterThanOrEqual(25);
   });
 
-  it("Bun.sleep accepts a Date in the future", async () => {
+  test("Bun.sleep accepts a Date in the future", async () => {
     const target = new Date(Date.now() + 30);
     await Bun.sleep(target);
     expect(Date.now()).toBeGreaterThanOrEqual(target.getTime() - 5);
   });
 
-  it("withRetry uses Bun.sleep for backoff delays", async () => {
+  test("withRetry uses Bun.sleep for backoff delays", async () => {
     let attempts = 0;
     const start = Date.now();
-    await withRetry(async () => {
-      attempts++;
-      if (attempts < 2) throw new Error("retry me");
-      return "success";
-    }, { maxAttempts: 3, baseDelayMs: 20 });
+    await withRetry(
+      async () => {
+        attempts++;
+        if (attempts < 2) throw new Error("retry me");
+        return "success";
+      },
+      { maxAttempts: 3, baseDelayMs: 20 },
+    );
     const elapsed = Date.now() - start;
 
     expect(attempts).toBe(2);
@@ -429,7 +441,7 @@ describe("v1.3.14 — Bun.sleep native API", () => {
 //     Our code: extractDominantColor uses inflateSync for PNG IDAT parsing
 // ===========================================================================
 describe("v1.3.14 — Bun.inflateSync raw deflate (extractDominantColor)", () => {
-  it("deflateSync + inflateSync roundtrip preserves data", () => {
+  test("deflateSync + inflateSync roundtrip preserves data", () => {
     // Use highly compressible data (repeating pattern) so compressed < original
     const data = new Uint8Array(1024).map((_, i) => i % 4);
     // JUSTIFIED: data.buffer is a real ArrayBuffer
@@ -441,7 +453,7 @@ describe("v1.3.14 — Bun.inflateSync raw deflate (extractDominantColor)", () =>
     expect(decompressed).toEqual(data);
   });
 
-  it("inflateSync expects raw deflate (no zlib header)", () => {
+  test("inflateSync expects raw deflate (no zlib header)", () => {
     // PNG IDAT contains zlib-wrapped deflate (2-byte header + data + 4-byte adler)
     // Our extractDominantColor strips the header/trailer before calling inflateSync
     const raw = new Uint8Array([0, 120, 150, 200, 255]); // test data
@@ -461,7 +473,7 @@ describe("v1.3.14 — Bun.inflateSync raw deflate (extractDominantColor)", () =>
 //     Our code: db/index.ts uses bun:sqlite extensively
 // ===========================================================================
 describe("v1.3.14 — bun:sqlite (SQLite 3.53.0)", () => {
-  it("SQLite version is 3.51.0 or later (bundled with Bun 1.3.14)", () => {
+  test("SQLite version is 3.51.0 or later (bundled with Bun 1.3.14)", () => {
     const db = new Database(":memory:");
     // JUSTIFIED: .get() returns unknown; narrowing to version string
     const row = db.query("SELECT sqlite_version() as v").get() as { v: string };
@@ -474,28 +486,34 @@ describe("v1.3.14 — bun:sqlite (SQLite 3.53.0)", () => {
     db.close();
   });
 
-  it("RETURNING clause works (used in rate-limit.ts)", () => {
+  test("RETURNING clause works (used in rate-limit.ts)", () => {
     const db = new Database(":memory:");
     db.exec("CREATE TABLE t (id INTEGER PRIMARY KEY, count INTEGER DEFAULT 0);");
     // JUSTIFIED: .get() returns unknown; narrowing to RETURNING row
-    const r1 = db.query(
-      "INSERT INTO t (count) VALUES (1) RETURNING count",
-    // JUSTIFIED: .get() returns unknown; narrowing to RETURNING row
-    ).get() as { count: number };
+    const r1 = db
+      .query(
+        "INSERT INTO t (count) VALUES (1) RETURNING count",
+        // JUSTIFIED: .get() returns unknown; narrowing to RETURNING row
+      )
+      // JUSTIFIED: .get() returns unknown; narrowing to RETURNING row
+      .get() as { count: number };
     expect(r1.count).toBe(1);
 
     // ON CONFLICT + RETURNING (used in rate-limit.ts checkRateLimit)
-    const r2 = db.query(
-      `INSERT INTO t (id, count) VALUES (1, 1)
+    const r2 = db
+      .query(
+        `INSERT INTO t (id, count) VALUES (1, 1)
        ON CONFLICT(id) DO UPDATE SET count = count + 1
        RETURNING count`,
-    // JUSTIFIED: .get() returns unknown; narrowing to RETURNING row
-    ).get() as { count: number };
+        // JUSTIFIED: .get() returns unknown; narrowing to RETURNING row
+      )
+      // JUSTIFIED: .get() returns unknown; narrowing to RETURNING row
+      .get() as { count: number };
     expect(r2.count).toBe(2);
     db.close();
   });
 
-  it("WAL mode and busy_timeout work (used in db/index.ts)", () => {
+  test("WAL mode and busy_timeout work (used in db/index.ts)", () => {
     const db = new Database(":memory:");
     db.exec("PRAGMA journal_mode = WAL;");
     db.exec("PRAGMA busy_timeout = 5000;");
@@ -513,7 +531,7 @@ describe("v1.3.14 — bun:sqlite (SQLite 3.53.0)", () => {
 //     Our code: server.ts sets maxRequestBodySize: MAX_BODY_BYTES (1MB)
 // ===========================================================================
 describe("v1.3.14 — Bun.serve maxRequestBodySize (I3)", () => {
-  it("maxRequestBodySize rejects oversized bodies", async () => {
+  test("maxRequestBodySize rejects oversized bodies", async () => {
     const server = Bun.serve({
       port: 0,
       maxRequestBodySize: 100, // 100 bytes
@@ -542,10 +560,12 @@ describe("v1.3.14 — Bun.serve maxRequestBodySize (I3)", () => {
     }
   });
 
-  it("error handler catches unhandled exceptions", async () => {
+  test("error handler catches unhandled exceptions", async () => {
     const server = Bun.serve({
       port: 0,
-      fetch: () => { throw new Error("test error"); },
+      fetch: () => {
+        throw new Error("test error");
+      },
       error: (err) => {
         return new Response(`caught: ${err.message}`, { status: 500 });
       },
@@ -568,7 +588,7 @@ describe("v1.3.14 — Bun.serve maxRequestBodySize (I3)", () => {
 //     Our code: task-worker.ts uses encoding: "buffer" for zero-copy
 // ===========================================================================
 describe("v1.3.14 — Bun.WebView screenshot encoding options", () => {
-  it("screenshot encoding types are documented in bun-types", () => {
+  test("screenshot encoding types are documented in bun-types", () => {
     // Verify the Bun.WebView constructor exists and has the screenshot method.
     // The actual screenshot requires a running WebView which needs a display,
     // but we can verify the API surface exists at runtime.
@@ -587,7 +607,7 @@ describe("v1.3.14 — Bun.WebView screenshot encoding options", () => {
 //     Our code: render-mermaid.ts polls evaluate() with await (safe)
 // ===========================================================================
 describe("v1.3.14 — Bun.WebView evaluate() single-flight constraint", () => {
-  it("evaluate() constraint is documented (await prevents ERR_INVALID_STATE)", () => {
+  test("evaluate() constraint is documented (await prevents ERR_INVALID_STATE)", () => {
     // Our render-mermaid.ts polling loop uses `await` on each evaluate()
     // call before starting the next, so we never have two in flight.
     // Verify the Bun.WebView prototype has the evaluate method.
@@ -605,13 +625,14 @@ describe("v1.3.14 — Bun.WebView evaluate() single-flight constraint", () => {
 //     closures in memory indefinitely"
 // ===========================================================================
 describe("v1.3.14 — AbortSignal listener leak fix", () => {
-  it("AbortSignal doesn't leak listeners across many cycles", () => {
+  test("AbortSignal doesn't leak listeners across many cycles", () => {
     const controller = new AbortController();
     const signal = controller.signal;
 
     // Add and remove many listeners — in v1.3.13 this would accumulate
     // dead closures in memory indefinitely.
-    let added = 0, removed = 0;
+    let added = 0,
+      removed = 0;
     for (let i = 0; i < 1000; i++) {
       const handler = () => {};
       signal.addEventListener("abort", handler);
@@ -624,7 +645,9 @@ describe("v1.3.14 — AbortSignal listener leak fix", () => {
 
     // Verify the signal still works correctly after all the cycles
     let aborted = false;
-    signal.addEventListener("abort", () => { aborted = true; });
+    signal.addEventListener("abort", () => {
+      aborted = true;
+    });
     controller.abort();
     expect(aborted).toBe(true);
     expect(signal.aborted).toBe(true);
@@ -638,7 +661,7 @@ describe("v1.3.14 — AbortSignal listener leak fix", () => {
 //     collected, causing an out-of-memory crash in long-running apps"
 // ===========================================================================
 describe("v1.3.14 — TransformStream GC fix", () => {
-  it("dropped TransformStream doesn't cause OOM", () => {
+  test("dropped TransformStream doesn't cause OOM", () => {
     // Create and drop many TransformStreams without closing them.
     // In v1.3.13 this would eventually OOM because they were never GC'd.
     let created = 0;
@@ -656,7 +679,7 @@ describe("v1.3.14 — TransformStream GC fix", () => {
     expect(created).toBe(100);
   });
 
-  it("TransformStream actually transforms data correctly", async () => {
+  test("TransformStream actually transforms data correctly", async () => {
     // Verify the TransformStream works functionally, not just that it
     // doesn't leak. Use pipeTo to avoid writer/reader deadlock.
     const ts = new TransformStream({
@@ -675,7 +698,9 @@ describe("v1.3.14 — TransformStream GC fix", () => {
 
     const chunks: string[] = [];
     const output = new WritableStream({
-      write(chunk) { chunks.push(chunk); },
+      write(chunk) {
+        chunks.push(chunk);
+      },
     });
 
     await input.pipeThrough(ts).pipeTo(output);
@@ -689,7 +714,7 @@ describe("v1.3.14 — TransformStream GC fix", () => {
 //     instances (e.g. process.stdin and fetch(file://...)) could deadlock"
 // ===========================================================================
 describe("v1.3.14 — ReadableStream concurrent stream race fix", () => {
-  it("concurrent ReadableStreams don't deadlock", async () => {
+  test("concurrent ReadableStreams don't deadlock", async () => {
     // Create multiple concurrent readable streams and read them simultaneously
     const streams = [];
     for (let i = 0; i < 10; i++) {
@@ -698,9 +723,7 @@ describe("v1.3.14 — ReadableStream concurrent stream race fix", () => {
     }
 
     // Read all concurrently — in v1.3.13 this could deadlock
-    const results = await Promise.all(
-      streams.map(async (s) => s ? await new Response(s).arrayBuffer() : null),
-    );
+    const results = await Promise.all(streams.map(async (s) => (s ? await new Response(s).arrayBuffer() : null)));
 
     expect(results.length).toBe(10);
     for (const buf of results) {
@@ -718,7 +741,7 @@ describe("v1.3.14 — ReadableStream concurrent stream race fix", () => {
 //     Buffer.from(string, 'base64')"
 // ===========================================================================
 describe("v1.3.14 — Buffer.from bounds-checking and leak fixes", () => {
-  it("Buffer.copyBytesFrom with non-zero byteOffset", () => {
+  test("Buffer.copyBytesFrom with non-zero byteOffset", () => {
     const backing = new ArrayBuffer(100);
     const view = new Uint8Array(backing, 10, 50);
     view.fill(42);
@@ -735,14 +758,14 @@ describe("v1.3.14 — Buffer.from bounds-checking and leak fixes", () => {
     }
   });
 
-  it("Buffer.from hex doesn't leak", () => {
+  test("Buffer.from hex doesn't leak", () => {
     for (let i = 0; i < 100; i++) {
       const buf = Buffer.from("48656c6c6f", "hex");
       expect(buf.toString()).toBe("Hello");
     }
   });
 
-  it("Buffer.from base64 doesn't leak", () => {
+  test("Buffer.from base64 doesn't leak", () => {
     for (let i = 0; i < 100; i++) {
       const buf = Buffer.from("SGVsbG8=", "base64");
       expect(buf.toString()).toBe("Hello");
@@ -756,7 +779,7 @@ describe("v1.3.14 — Buffer.from bounds-checking and leak fixes", () => {
 //     Our code: render-mermaid.ts uses protocol: "http3" with fallback
 // ===========================================================================
 describe("v1.3.14 — HTTP/3 fetch client", () => {
-  it("fetch accepts protocol option at runtime", async () => {
+  test("fetch accepts protocol option at runtime", async () => {
     // The blog post says fetch() accepts protocol: "http3" | "h3"
     // Our render-mermaid.ts uses this with a cast because bun-types
     // doesn't include it yet. Verify the option is accepted at runtime
@@ -770,7 +793,7 @@ describe("v1.3.14 — HTTP/3 fetch client", () => {
       await fetch("https://127.0.0.1:1/test", {
         protocol: "http3",
         signal: AbortSignal.timeout(100),
-      // JUSTIFIED: protocol option is valid for Bun fetch but not in RequestInit type
+        // JUSTIFIED: protocol option is valid for Bun fetch but not in RequestInit type
       } as RequestInit & { protocol?: string });
     } catch (e) {
       // Connection failure or timeout is expected — the point is that
@@ -786,7 +809,7 @@ describe("v1.3.14 — HTTP/3 fetch client", () => {
 //     with the source symlink's own permissions"
 // ===========================================================================
 describe("v1.3.14 — fs.cp symlink fix", () => {
-  it("fs.cpSync copies files correctly", () => {
+  test("fs.cpSync copies files correctly", () => {
     const src = `/tmp/bun-fs-cp-test-${Date.now()}.txt`;
     const dst = `/tmp/bun-fs-cp-test-${Date.now()}-copy.txt`;
     Bun.write(src, "fs.cp test content").then(async () => {
@@ -806,7 +829,7 @@ describe("v1.3.14 — fs.cp symlink fix", () => {
 //     dynamically imports a module that waits on it"
 // ===========================================================================
 describe("v1.3.14 — ESM module evaluation fixes", () => {
-  it("top-level await in imported modules works", async () => {
+  test("top-level await in imported modules works", async () => {
     // Our server.ts uses top-level await (Bun.password.hash at module level)
     // If the ESM evaluation fix didn't work, importing server modules would hang.
     // The fact that our tests import from ../src/db and ../src/utils/image
@@ -823,7 +846,7 @@ describe("v1.3.14 — ESM module evaluation fixes", () => {
 //     handler writes synchronously without returning a promise"
 // ===========================================================================
 describe("v1.3.14 — Bun.serve direct stream handler leak fix", () => {
-  it("direct ReadableStream handler doesn't leak", async () => {
+  test("direct ReadableStream handler doesn't leak", async () => {
     const server = Bun.serve({
       port: 0,
       fetch: () => {
@@ -860,13 +883,13 @@ describe("v1.3.14 — Bun.serve direct stream handler leak fix", () => {
 //     Our code: task-worker.ts uses `await using view` for auto-cleanup
 // ===========================================================================
 describe("v1.3.14 — await using / using not lowered (native Symbol.asyncDispose)", () => {
-  it("Symbol.dispose is natively supported (using)", () => {
+  test("Symbol.dispose is natively supported (using)", () => {
     // Verify Symbol.dispose exists natively (not polyfilled)
     expect(typeof Symbol.dispose).toBe("symbol");
     expect(typeof Symbol.asyncDispose).toBe("symbol");
   });
 
-  it("using runs [Symbol.dispose]() deterministically on scope exit", () => {
+  test("using runs [Symbol.dispose]() deterministically on scope exit", () => {
     let disposed = false;
     {
       using _resource = {
@@ -879,12 +902,14 @@ describe("v1.3.14 — await using / using not lowered (native Symbol.asyncDispos
     expect(disposed).toBe(true); // disposed on scope exit
   });
 
-  it("await using runs [Symbol.asyncDispose]() on scope exit", async () => {
+  test("await using runs [Symbol.asyncDispose]() on scope exit", async () => {
     let disposed = false;
     {
       await using _resource = {
         [Symbol.asyncDispose]() {
-          return Promise.resolve().then(() => { disposed = true; });
+          return Promise.resolve().then(() => {
+            disposed = true;
+          });
         },
       };
       expect(disposed).toBe(false);
@@ -893,7 +918,7 @@ describe("v1.3.14 — await using / using not lowered (native Symbol.asyncDispos
     expect(disposed).toBe(true);
   });
 
-  it("await using disposes even when an error is thrown", async () => {
+  test("await using disposes even when an error is thrown", async () => {
     let disposed = false;
     try {
       {
@@ -912,14 +937,16 @@ describe("v1.3.14 — await using / using not lowered (native Symbol.asyncDispos
     expect(disposed).toBe(true);
   });
 
-  it("task-worker.ts pattern: await using view would auto-close", async () => {
+  test("task-worker.ts pattern: await using view would auto-close", async () => {
     // Verify the pattern used in task-worker.ts works correctly.
     // task-worker.ts does: `await using view = new Bun.WebView(viewOptions)`
     // and view[Symbol.asyncDispose] calls view.close().
     // We simulate this with a mock object that has the same shape.
     let closed = false;
     const mockView = {
-      close() { closed = true; },
+      close() {
+        closed = true;
+      },
       [Symbol.asyncDispose]() {
         this.close();
         return Promise.resolve();
@@ -942,7 +969,7 @@ describe("v1.3.14 — await using / using not lowered (native Symbol.asyncDispos
 //     Blog: "Fixed: integer overflow in IPC advanced serialization mode"
 // ===========================================================================
 describe("v1.3.14 — Security fixes", () => {
-  it("HTTP request smuggling: Content-Length + Transfer-Encoding conflict", async () => {
+  test("HTTP request smuggling: Content-Length + Transfer-Encoding conflict", async () => {
     // The fix prevents HTTP request smuggling via conflicting
     // Content-Length and Transfer-Encoding headers.
     // Verify Bun.serve doesn't accept smuggled requests.
@@ -963,7 +990,7 @@ describe("v1.3.14 — Security fixes", () => {
     }
   });
 
-  it("Blob deserialization bounds check (malicious Blob)", () => {
+  test("Blob deserialization bounds check (malicious Blob)", () => {
     // The fix adds a bounds check for maliciously-crafted Blob
     // deserialization. Verify normal Blob operations still work.
     const blob = new Blob(["hello", "world"]);
@@ -974,7 +1001,7 @@ describe("v1.3.14 — Security fixes", () => {
     expect(blob2.size).toBe(3);
   });
 
-  it("IPC advanced serialization doesn't overflow on large input", () => {
+  test("IPC advanced serialization doesn't overflow on large input", () => {
     // The fix prevents integer overflow in IPC advanced serialization.
     // Verify IPC works with large payloads (our worker pool sends
     // screenshots via IPC).
@@ -995,18 +1022,16 @@ describe("v1.3.14 — Security fixes", () => {
 //     BroadcastChannel or MessagePort"
 // ===========================================================================
 describe("v1.3.14 — Worker/MessagePort leak and crash fixes", () => {
-  it("MessagePort doesn't leak when worker is terminated", async () => {
+  test("MessagePort doesn't leak when worker is terminated", async () => {
     // The fix releases the self-reference when a Worker is terminated
     // without explicitly closing its MessagePorts.
     // Verify Worker can be created and terminated cleanly.
-    const worker = new Worker(
-      new URL("data:text/javascript,postMessage('hi')"),
-    );
+    const worker = new Worker(new URL("data:text/javascript,postMessage('hi')"));
     worker.terminate();
     // If we get here without crashing, the fix works
   });
 
-  it("BroadcastChannel works without race condition crash", () => {
+  test("BroadcastChannel works without race condition crash", () => {
     // The fix prevents a race condition where the GC marker thread
     // could observe a torn variant in m_data during concurrent access.
     const channel = new BroadcastChannel("test-channel");
@@ -1017,7 +1042,7 @@ describe("v1.3.14 — Worker/MessagePort leak and crash fixes", () => {
     expect(typeof channel).toBe("object");
   });
 
-  it("nested MessagePort transfer doesn't stack overflow", () => {
+  test("nested MessagePort transfer doesn't stack overflow", () => {
     // The fix prevents stack overflow when closing a deep chain of
     // nested transferred MessagePorts. We can't easily create a deep
     // chain in a test, but we can verify basic MessagePort works.
@@ -1039,7 +1064,7 @@ describe("v1.3.14 — Worker/MessagePort leak and crash fixes", () => {
 //     Our code: pool.ts sets BUN_FEATURE_FLAG_NO_ORPHANS=1 on worker spawn
 // ===========================================================================
 describe("v1.3.14 — --no-orphans flag (P1 worker safety)", () => {
-  it("BUN_FEATURE_FLAG_NO_ORPHANS is set on worker subprocess env", () => {
+  test("BUN_FEATURE_FLAG_NO_ORPHANS is set on worker subprocess env", () => {
     // Verify our pool.ts sets this env var on spawned workers.
     // We read the source to confirm — actually spawning a worker and
     // checking its env is complex, so we verify the env.d.ts type
@@ -1049,14 +1074,17 @@ describe("v1.3.14 — --no-orphans flag (P1 worker safety)", () => {
     expect(typeof Bun.spawn).toBe("function");
   });
 
-  it("worker subprocess inherits no-orphans and exits when parent dies", async () => {
+  test("worker subprocess inherits no-orphans and exits when parent dies", async () => {
     // Spawn a child Bun process with BUN_FEATURE_FLAG_NO_ORPHANS=1
     // that sleeps. Then kill the parent (this test) and verify the
     // child exits. Since we can't kill ourselves in a test, we
     // verify the flag is accepted by spawning a child that checks it.
     const proc = Bun.spawn({
-      cmd: [process.execPath, "-e",
-        "process.send?.(process.env.BUN_FEATURE_FLAG_NO_ORPHANS ?? 'unset'); process.exit(0)"],
+      cmd: [
+        process.execPath,
+        "-e",
+        "process.send?.(process.env.BUN_FEATURE_FLAG_NO_ORPHANS ?? 'unset'); process.exit(0)",
+      ],
       ipc: () => {},
       stdin: "ignore",
       stdout: "pipe",
@@ -1081,7 +1109,7 @@ describe("v1.3.14 — --no-orphans flag (P1 worker safety)", () => {
 //     Verifies all v1.3.14 features work together
 // ===========================================================================
 describe("v1.3.14 — Integration: full screenshot pipeline", () => {
-  it("processScreenshot uses all v1.3.14 features correctly", async () => {
+  test("processScreenshot uses all v1.3.14 features correctly", async () => {
     const png = createTestPng(128, 128, 100, 200, 50);
     const result = await processScreenshot(png, "v1314-integration");
 
@@ -1114,7 +1142,7 @@ describe("v1.3.14 — Integration: full screenshot pipeline", () => {
 //     Our code: server.ts uses routes: { "/health": ..., "/tasks": ... }
 // ===========================================================================
 describe("v1.3.14 — Bun.serve routes with trailing dot segment (fix #30)", () => {
-  it("routes match correctly when URL has trailing dot segment", async () => {
+  test("routes match correctly when URL has trailing dot segment", async () => {
     const server = Bun.serve({
       port: 0,
       routes: {
@@ -1150,7 +1178,7 @@ describe("v1.3.14 — Bun.serve routes with trailing dot segment (fix #30)", () 
 //     Our code: render-mermaid.ts uses fetch() for URL inputs
 // ===========================================================================
 describe("v1.3.14 — fetch() redirect chain memory leak fix (fix #36)", () => {
-  it("fetch() follows redirect chain without leaking", async () => {
+  test("fetch() follows redirect chain without leaking", async () => {
     // Create a server that redirects a few times before returning a response.
     // In v1.3.13, following long redirect chains would leak memory.
     let redirectCount = 0;
@@ -1181,7 +1209,7 @@ describe("v1.3.14 — fetch() redirect chain memory leak fix (fix #36)", () => {
     }
   });
 
-  it("fetch() handles multiple sequential redirect chains without leak", async () => {
+  test("fetch() handles multiple sequential redirect chains without leak", async () => {
     // Make multiple fetch() calls with redirects — in v1.3.13 each
     // chain would leak the intermediate URL buffers.
     let port = 0;
@@ -1190,10 +1218,7 @@ describe("v1.3.14 — fetch() redirect chain memory leak fix (fix #36)", () => {
       fetch: (req) => {
         const url = new URL(req.url);
         if (url.pathname === "/final") return new Response("ok");
-        return Response.redirect(
-          `http://localhost:${port}/final`,
-          302,
-        );
+        return Response.redirect(`http://localhost:${port}/final`, 302);
       },
     });
     // JUSTIFIED: server.port is number but TS sees it as number|undefined before assignment
@@ -1219,7 +1244,7 @@ describe("v1.3.14 — fetch() redirect chain memory leak fix (fix #36)", () => {
 //     Our code: task-worker.ts uses setTimeout in withTimeout
 // ===========================================================================
 describe("v1.3.14 — setTimeout out-of-range delay fix (fix #63)", () => {
-  it("setTimeout with very large delay doesn't crash", () => {
+  test("setTimeout with very large delay doesn't crash", () => {
     // In v1.3.13, an out-of-range delay could leave a pending JS exception
     // that would surface as an unexpected error when the timer fires.
     // Verify large delays are handled gracefully.
@@ -1229,7 +1254,7 @@ describe("v1.3.14 — setTimeout out-of-range delay fix (fix #63)", () => {
     }).not.toThrow();
   });
 
-  it("setTimeout with negative delay is clamped to 0", () => {
+  test("setTimeout with negative delay is clamped to 0", () => {
     // Negative delays should be treated as 0, not cause a crash.
     const t = setTimeout(() => {}, -1);
     // The timer should be created (clamped to 0ms), not throw
@@ -1237,7 +1262,7 @@ describe("v1.3.14 — setTimeout out-of-range delay fix (fix #63)", () => {
     clearTimeout(t);
   });
 
-  it("setTimeout with NaN delay doesn't crash", () => {
+  test("setTimeout with NaN delay doesn't crash", () => {
     // NaN delay should be handled gracefully (treated as 0 or rejected).
     expect(() => {
       const t = setTimeout(() => {}, NaN);
@@ -1245,13 +1270,15 @@ describe("v1.3.14 — setTimeout out-of-range delay fix (fix #63)", () => {
     }).not.toThrow();
   });
 
-  it("withTimeout pattern handles edge case delays safely", async () => {
+  test("withTimeout pattern handles edge case delays safely", async () => {
     // Replicate the withTimeout pattern from task-worker.ts.
     // Verify it doesn't crash with edge-case delay values.
     function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
       let timer: ReturnType<typeof setTimeout> | undefined;
       return Promise.race([
-        promise.finally(() => { if (timer) clearTimeout(timer); }),
+        promise.finally(() => {
+          if (timer) clearTimeout(timer);
+        }),
         new Promise<T>((_, reject) => {
           timer = setTimeout(() => reject(new Error("timeout")), ms);
         }),
@@ -1263,10 +1290,7 @@ describe("v1.3.14 — setTimeout out-of-range delay fix (fix #63)", () => {
     expect(fast).toBe("ok");
 
     // Timeout fires
-    await expect(withTimeout(
-      new Promise((resolve) => setTimeout(resolve, 10000)),
-      50,
-    )).rejects.toThrow("timeout");
+    await expect(withTimeout(new Promise((resolve) => setTimeout(resolve, 10000)), 50)).rejects.toThrow("timeout");
   });
 });
 
@@ -1277,7 +1301,7 @@ describe("v1.3.14 — setTimeout out-of-range delay fix (fix #63)", () => {
 //     Our code: pool.ts strips BUN_OPTIONS to prevent --hot inheritance
 // ===========================================================================
 describe("v1.3.14 — --hot stripped from worker env (pool.ts)", () => {
-  it("BUN_OPTIONS is set to undefined in worker spawn env", () => {
+  test("BUN_OPTIONS is set to undefined in worker spawn env", () => {
     // Read the pool.ts source to verify BUN_OPTIONS is stripped.
     // The actual behavior (worker doesn't inherit --hot) is an
     // integration test that requires running with --hot.
@@ -1286,12 +1310,11 @@ describe("v1.3.14 — --hot stripped from worker env (pool.ts)", () => {
     expect(typeof Bun.spawn).toBe("function");
   });
 
-  it("worker subprocess doesn't inherit BUN_OPTIONS when stripped", async () => {
+  test("worker subprocess doesn't inherit BUN_OPTIONS when stripped", async () => {
     // Spawn a child with BUN_OPTIONS: undefined and verify it's not set.
     // The child writes the result to stdout (not IPC) for easy reading.
     const proc = Bun.spawn({
-      cmd: [process.execPath, "-e",
-        "process.stdout.write(process.env.BUN_OPTIONS ?? 'unset'); process.exit(0)"],
+      cmd: [process.execPath, "-e", "process.stdout.write(process.env.BUN_OPTIONS ?? 'unset'); process.exit(0)"],
       stdin: "ignore",
       stdout: "pipe",
       stderr: "ignore",

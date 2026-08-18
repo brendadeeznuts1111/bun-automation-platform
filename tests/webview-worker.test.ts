@@ -1,6 +1,6 @@
-import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { type Subprocess } from "bun";
-import { migrate, write, read } from "../src/db";
+import { migrate, read, write } from "../src/db";
 
 /**
  * Test the Bun.WebView integration in task-worker.ts.
@@ -36,9 +36,7 @@ describe("WebView Worker Integration", () => {
     });
 
     taskId = await write((db) => {
-      const r = db.query(
-        `INSERT INTO tasks (agent_id, url, status) VALUES (?, ?, 'pending')`,
-      ).run(agentId, TEST_URL);
+      const r = db.query(`INSERT INTO tasks (agent_id, url, status) VALUES (?, ?, 'pending')`).run(agentId, TEST_URL);
       return Number(r.lastInsertRowid);
     });
 
@@ -71,7 +69,7 @@ describe("WebView Worker Integration", () => {
     }
   });
 
-  it("worker processes the task using Bun.WebView", async () => {
+  test("worker processes the task using Bun.WebView", async () => {
     // Wait for worker to be ready
     await new Promise((r) => setTimeout(r, 500));
 
@@ -87,9 +85,11 @@ describe("WebView Worker Integration", () => {
     while (Date.now() - start < maxWait) {
       const task = read((db) => {
         // JUSTIFIED: bun:sqlite .get() returns unknown; narrowing to the task row type
-        return db.query("SELECT status, result, error FROM tasks WHERE id = ?").get(taskId) as
-          | { status: string; result: string | null; error: string | null }
-          | null;
+        return db.query("SELECT status, result, error FROM tasks WHERE id = ?").get(taskId) as {
+          status: string;
+          result: string | null;
+          error: string | null;
+        } | null;
       });
       if (task) {
         taskStatus = task.status;
@@ -123,15 +123,20 @@ describe("WebView Worker Integration", () => {
     expect(["completed", "failed"]).toContain(taskStatus);
   }, 60_000);
 
-  it("session row is populated with cookies/localStorage (D2)", async () => {
+  test("session row is populated with cookies/localStorage (D2)", async () => {
     // Check if a session row was created for this task
     const session = read((db) => {
       // JUSTIFIED: bun:sqlite .get() returns unknown; narrowing to the session row type
-      return db.query(
-        "SELECT id, task_id, cookies, local_storage, screenshot_path FROM sessions WHERE task_id = ?",
-      ).get(taskId) as
-        | { id: number; task_id: number; cookies: string; local_storage: string; screenshot_path: string }
-        | null;
+      return db
+        .query("SELECT id, task_id, cookies, local_storage, screenshot_path FROM sessions WHERE task_id = ?")
+        // JUSTIFIED: bun:sqlite .get() returns unknown; narrowing to session row type
+        .get(taskId) as {
+        id: number;
+        task_id: number;
+        cookies: string;
+        local_storage: string;
+        screenshot_path: string;
+      } | null;
     });
 
     // Session may not exist if the task failed due to env issues

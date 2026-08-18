@@ -15,48 +15,48 @@
  * Ref: https://bun.com/docs/runtime/markdown
  */
 
-import { describe, expect, it, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 const opts = { autolinks: true, headings: { ids: true } } as const;
 
 describe("Bun.markdown.html() parser edge cases", () => {
   describe("setext headings", () => {
-    it("h1 with = underline", () => {
+    test("h1 with = underline", () => {
       const html = Bun.markdown.html("Heading\n=======", opts);
       expect(html).toContain("<h1");
       expect(html).toContain("Heading");
     });
 
-    it("h2 with - underline", () => {
+    test("h2 with - underline", () => {
       const html = Bun.markdown.html("Heading\n-------", opts);
       expect(html).toContain("<h2");
       expect(html).toContain("Heading");
     });
 
-    it("multi-line setext heading", () => {
+    test("multi-line setext heading", () => {
       const html = Bun.markdown.html("This is a\nsetext heading\n=======", opts);
       expect(html).toContain("<h1");
     });
   });
 
   describe("reference-style links", () => {
-    it("full reference link", () => {
+    test("full reference link", () => {
       const html = Bun.markdown.html("[text][1]\n\n[1]: https://example.com", opts);
       expect(html).toContain('href="https://example.com"');
       expect(html).toContain("text");
     });
 
-    it("shortcut reference link", () => {
+    test("shortcut reference link", () => {
       const html = Bun.markdown.html("[text]\n\n[text]: https://example.com", opts);
       expect(html).toContain('href="https://example.com"');
     });
 
-    it("reference link with title", () => {
+    test("reference link with title", () => {
       const html = Bun.markdown.html('[text][1]\n\n[1]: https://example.com "Title"', opts);
       expect(html).toContain('title="Title"');
     });
 
-    it("reference image", () => {
+    test("reference image", () => {
       const html = Bun.markdown.html("![alt][1]\n\n[1]: image.png", opts);
       expect(html).toContain('src="image.png"');
       expect(html).toContain('alt="alt"');
@@ -64,25 +64,25 @@ describe("Bun.markdown.html() parser edge cases", () => {
   });
 
   describe("unsupported GFM extensions", () => {
-    it("footnotes not supported (literal text)", () => {
+    test("footnotes not supported (literal text)", () => {
       const html = Bun.markdown.html("Text with a footnote[^1].\n\n[^1]: Footnote content", opts);
       expect(html).toContain("[^1]");
     });
 
-    it("definition lists not supported (literal text)", () => {
+    test("definition lists not supported (literal text)", () => {
       const html = Bun.markdown.html("Term\n: Definition", opts);
       expect(html).toContain(": Definition");
     });
   });
 
   describe("tight vs loose lists", () => {
-    it("tight list (no <p> wrapper)", () => {
+    test("tight list (no <p> wrapper)", () => {
       const html = Bun.markdown.html("- a\n- b\n- c", opts);
       expect(html).toContain("<li>a</li>");
       expect(html).not.toContain("<li><p>a</p></li>");
     });
 
-    it("loose list (with <p> wrapper)", () => {
+    test("loose list (with <p> wrapper)", () => {
       const html = Bun.markdown.html("- a\n\n- b\n\n- c", opts);
       // Bun formats with newlines: <li>\n<p>a</p>\n</li>
       expect(html).toContain("<p>a</p>");
@@ -92,29 +92,29 @@ describe("Bun.markdown.html() parser edge cases", () => {
   });
 
   describe("code blocks", () => {
-    it("indented code block (4 spaces)", () => {
+    test("indented code block (4 spaces)", () => {
       const html = Bun.markdown.html("    code here\n    more code", opts);
       expect(html).toContain("<pre><code>");
       expect(html).toContain("code here");
     });
 
-    it("tilde-fenced code block", () => {
+    test("tilde-fenced code block", () => {
       const html = Bun.markdown.html("~~~ts\ncode\n~~~", opts);
       expect(html).toContain('class="language-ts"');
     });
 
-    it("fenced code with no language", () => {
+    test("fenced code with no language", () => {
       const html = Bun.markdown.html("```\ncode\n```", opts);
       expect(html).toContain("<pre><code>");
       expect(html).not.toContain("language-");
     });
 
-    it("4-backtick fence contains 3-backtick", () => {
+    test("4-backtick fence contains 3-backtick", () => {
       const html = Bun.markdown.html("````\ncode with ``` inside\n````", opts);
       expect(html).toContain("``` inside");
     });
 
-    it("info string after language is ignored", () => {
+    test("info string after language is ignored", () => {
       const html = Bun.markdown.html("```ts line-numbers\ncode\n```", opts);
       expect(html).toContain('class="language-ts"');
       expect(html).not.toContain("line-numbers");
@@ -122,23 +122,23 @@ describe("Bun.markdown.html() parser edge cases", () => {
   });
 
   describe("tables", () => {
-    it("empty cells", () => {
+    test("empty cells", () => {
       const html = Bun.markdown.html("| A | B |\n|---|---|\n|   |   |", opts);
       expect(html).toContain("<table>");
       expect(html).toContain("<td></td>");
     });
 
-    it("escaped pipe in cell", () => {
+    test("escaped pipe in cell", () => {
       const html = Bun.markdown.html("| A | B |\n|---|---|\n| \\| | 2 |", opts);
       expect(html).toContain("<table>");
     });
 
-    it("no separator row = not a table", () => {
+    test("no separator row = not a table", () => {
       const html = Bun.markdown.html("| A | B |\n| 1 | 2 |", opts);
       expect(html).not.toContain("<table>");
     });
 
-    it("alignment left", () => {
+    test("alignment left", () => {
       const html = Bun.markdown.html("| L | C | R |\n|:--|:-:|--:|\n| 1 | 2 | 3 |", opts);
       expect(html).toContain('align="left"');
       expect(html).toContain('align="center"');
@@ -147,113 +147,113 @@ describe("Bun.markdown.html() parser edge cases", () => {
   });
 
   describe("horizontal rules", () => {
-    it.each(["***", "---", "___", "* * *", "----------"])("HR with %s", (hr) => {
+    test.each(["***", "---", "___", "* * *", "----------"])("HR with %s", (hr) => {
       const html = Bun.markdown.html(hr, opts);
       expect(html).toContain("<hr");
     });
   });
 
   describe("ATX headings", () => {
-    it("trailing # stripped", () => {
+    test("trailing # stripped", () => {
       const html = Bun.markdown.html("## Heading ##", opts);
       expect(html).toContain("<h2");
       expect(html).toContain("Heading");
     });
 
-    it("7 hashes = not a heading", () => {
+    test("7 hashes = not a heading", () => {
       const html = Bun.markdown.html("####### Not a heading", opts);
       expect(html).not.toContain("<h7");
     });
 
-    it("no space after # = not a heading", () => {
+    test("no space after # = not a heading", () => {
       const html = Bun.markdown.html("##Not a heading", opts);
       expect(html).not.toContain("<h2");
     });
   });
 
   describe("emphasis", () => {
-    it("intraword asterisk works", () => {
+    test("intraword asterisk works", () => {
       const html = Bun.markdown.html("foo*bar*baz", opts);
       expect(html).toContain("<em>bar</em>");
     });
 
-    it("intraword underscore does NOT work", () => {
+    test("intraword underscore does NOT work", () => {
       const html = Bun.markdown.html("foo_bar_baz", opts);
       expect(html).not.toContain("<em>");
     });
 
-    it("triple tilde = code block, not strikethrough", () => {
+    test("triple tilde = code block, not strikethrough", () => {
       const html = Bun.markdown.html("~~~not strike~~~", opts);
       expect(html).toContain("<pre><code");
     });
   });
 
   describe("HTML entities", () => {
-    it("named entities decoded", () => {
+    test("named entities decoded", () => {
       const html = Bun.markdown.html("&copy; &reg; &trade;", opts);
       expect(html).toContain("©");
       expect(html).toContain("®");
       expect(html).toContain("™");
     });
 
-    it("numeric entities decoded", () => {
+    test("numeric entities decoded", () => {
       const html = Bun.markdown.html("&#x41; &#65;", opts);
       expect(html).toContain("A");
     });
 
-    it("entities double-escaped in code", () => {
+    test("entities double-escaped in code", () => {
       const html = Bun.markdown.html("`&amp;`", opts);
       expect(html).toContain("&amp;amp;");
     });
   });
 
   describe("autolinks", () => {
-    it("email autolink", () => {
+    test("email autolink", () => {
       const html = Bun.markdown.html("<test@example.com>", opts);
       expect(html).toContain('href="mailto:test@example.com"');
     });
 
-    it("URL autolink", () => {
+    test("URL autolink", () => {
       const html = Bun.markdown.html("<https://example.com>", opts);
       expect(html).toContain('href="https://example.com"');
     });
 
-    it("bare URL autolinked (with autolinks: true)", () => {
+    test("bare URL autolinked (with autolinks: true)", () => {
       const html = Bun.markdown.html("https://example.com", opts);
       expect(html).toContain('href="https://example.com"');
     });
   });
 
   describe("line breaks", () => {
-    it("backslash hard break", () => {
+    test("backslash hard break", () => {
       const html = Bun.markdown.html("line 1\\\nline 2", opts);
       expect(html).toContain("<br");
     });
 
-    it("double-space hard break", () => {
+    test("double-space hard break", () => {
       const html = Bun.markdown.html("line 1  \nline 2", opts);
       expect(html).toContain("<br");
     });
 
-    it("soft break (no <br>)", () => {
+    test("soft break (no <br>)", () => {
       const html = Bun.markdown.html("line 1\nline 2", opts);
       expect(html).not.toContain("<br");
     });
   });
 
   describe("escaping", () => {
-    it("escaped asterisk = literal", () => {
+    test("escaped asterisk = literal", () => {
       const html = Bun.markdown.html("\\*not bold\\*", opts);
       expect(html).toContain("*not bold*");
       expect(html).not.toContain("<em>");
     });
 
-    it("escaped hash = literal", () => {
+    test("escaped hash = literal", () => {
       const html = Bun.markdown.html("\\# not a heading", opts);
       expect(html).not.toContain("<h1");
     });
 
-    it("escaped bracket = literal", () => {
+    test("escaped bracket = literal", () => {
       const html = Bun.markdown.html("\\[not a link\\](url)", opts);
       expect(html).not.toContain('href="url"');
     });
@@ -275,7 +275,7 @@ describe("Bun.markdown.html() parser edge cases", () => {
     });
 
     // Escaped pipe in text IS unescaped (bug was fixed)
-    it("escaped pipe in text is unescaped", () => {
+    test("escaped pipe in text is unescaped", () => {
       const html = Bun.markdown.html("text \\| more", opts);
       expect(html).toContain("text | more");
       expect(html).not.toContain("\\|");

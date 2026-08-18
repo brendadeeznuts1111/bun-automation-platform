@@ -1,8 +1,8 @@
-import { describe, expect, it } from "bun:test";
 import { Database } from "bun:sqlite";
+import { describe, expect, test } from "bun:test";
 
 describe("Bun Native APIs & Utilities", () => {
-  it("Bun.password hashes and verifies with Argon2id", async () => {
+  test("Bun.password hashes and verifies with Argon2id", async () => {
     const secret = "platform-secure-pass-123";
     const hash = await Bun.password.hash(secret);
     expect(hash.startsWith("$argon2id$")).toBe(true);
@@ -10,7 +10,7 @@ describe("Bun Native APIs & Utilities", () => {
     expect(await Bun.password.verify("wrong-password", hash)).toBe(false);
   });
 
-  it("Bun.CSRF generates and verifies HMAC tokens", () => {
+  test("Bun.CSRF generates and verifies HMAC tokens", () => {
     const secret = "test-csrf-secret-key-32-bytes-ok";
     const token = Bun.CSRF.generate(secret, { expiresIn: 3600, algorithm: "sha256" });
     expect(typeof token).toBe("string");
@@ -23,14 +23,14 @@ describe("Bun Native APIs & Utilities", () => {
     expect(isInvalidSecret).toBe(false);
   });
 
-  it("Bun.color converts and validates color formats", () => {
+  test("Bun.color converts and validates color formats", () => {
     expect(Bun.color("#3b82f6", "hex")).toBe("#3b82f6");
     expect(Bun.color("#ff0080", "rgb")).toBe("rgb(255, 0, 128)");
     expect(Bun.color("#ff0080", "number")).toBe(16711808);
     expect(Bun.color("invalid-color-string")).toBeNull();
   });
 
-  it("Bun.deflateSync and Bun.inflateSync roundtrip correctly", () => {
+  test("Bun.deflateSync and Bun.inflateSync roundtrip correctly", () => {
     const original = new Uint8Array(1024).map((_, i) => (i * 17) % 256);
     // JUSTIFIED: Uint8Array.buffer is ArrayBuffer-backed; Bun.deflateSync expects ArrayBuffer
     const compressed = Bun.deflateSync(original.buffer as ArrayBuffer);
@@ -41,7 +41,7 @@ describe("Bun Native APIs & Utilities", () => {
     expect(decompressed).toEqual(original);
   });
 
-  it("Bun.hash calculates checksums correctly", () => {
+  test("Bun.hash calculates checksums correctly", () => {
     const buf = Buffer.from("bun-automation-platform");
     const crc = Bun.hash.crc32(buf);
     const adler = Bun.hash.adler32(buf);
@@ -54,7 +54,7 @@ describe("Bun Native APIs & Utilities", () => {
     expect(adler).toBeGreaterThan(0);
   });
 
-  it("Bun.markdown renders HTML, ANSI, and custom callbacks", () => {
+  test("Bun.markdown renders HTML, ANSI, and custom callbacks", () => {
     const markdown = "# Title\n\n**bold** and ~~strike~~ and [link](https://bun.com)";
 
     const html = Bun.markdown.html(markdown);
@@ -71,8 +71,9 @@ describe("Bun Native APIs & Utilities", () => {
     expect(custom).toContain("__bold__");
   });
 
-  it("Bun.markdown supports all 15 parser options and GFM extensions", () => {
-    const md = "# Header\n\n| A | B |\n|---|---|\n| 1 | 2 |\n\n- [x] Done\n- [ ] Todo\n\nVisit www.example.com\n\n<script>alert(1)</script>\n\n$x = y^2$\n\n[[PageTarget|Custom Label]]";
+  test("Bun.markdown supports all 15 parser options and GFM extensions", () => {
+    const md =
+      "# Header\n\n| A | B |\n|---|---|\n| 1 | 2 |\n\n- [x] Done\n- [ ] Todo\n\nVisit www.example.com\n\n<script>alert(1)</script>\n\n$x = y^2$\n\n[[PageTarget|Custom Label]]";
 
     const html = Bun.markdown.html(md, {
       tables: true,
@@ -100,8 +101,9 @@ describe("Bun Native APIs & Utilities", () => {
     expect(typeof html).toBe("string");
   });
 
-  it("Bun.markdown passes correct metadata to render callbacks", () => {
-    const md = "# Test Heading\n\n```js\nconsole.log('hi');\n```\n\n1. First\n2. Second\n\n| Col1 |\n|---|\n| Val1 |\n\n[Bun](https://bun.com 'Bun Homepage')\n\n![Logo](https://bun.com/logo.png 'Logo Title')";
+  test("Bun.markdown passes correct metadata to render callbacks", () => {
+    const md =
+      "# Test Heading\n\n```js\nconsole.log('hi');\n```\n\n1. First\n2. Second\n\n| Col1 |\n|---|\n| Val1 |\n\n[Bun](https://bun.com 'Bun Homepage')\n\n![Logo](https://bun.com/logo.png 'Logo Title')";
 
     let capturedLevel = 0;
     let capturedLang = "";
@@ -157,7 +159,7 @@ describe("Bun Native APIs & Utilities", () => {
     expect(capturedTextDirect.length).toBeGreaterThan(0);
   });
 
-  it("Bun.markdown.react supports React 18 and 19 element types (REF-REACT-18)", () => {
+  test("Bun.markdown.react supports React 18 and 19 element types (REF-REACT-18)", () => {
     const text = "## React Heading\n\n[Link](https://bun.com)";
 
     // Reference ID: REF-REACT-18 — React 18 pinned as canonical reference
@@ -177,7 +179,7 @@ describe("Bun Native APIs & Utilities", () => {
     console.log("[REF-REACT-18] React 18 symbol:", String(el18.$$typeof));
   });
 
-  it("Bun.markdown.ansi respects AnsiTheme options", () => {
+  test("Bun.markdown.ansi respects AnsiTheme options", () => {
     const md = "# Title\n\n[Docs](https://bun.com)\n\nParagraph text word wrapping test.";
 
     const plain = Bun.markdown.ansi(md, { colors: false, columns: 40 });
@@ -187,7 +189,7 @@ describe("Bun Native APIs & Utilities", () => {
     expect(linked).toContain("https://bun.com");
   });
 
-  it("Bun.markdown.render extracts full ListItemMeta and ListMeta", () => {
+  test("Bun.markdown.render extracts full ListItemMeta and ListMeta", () => {
     const listMd = `3. Item A\n4. Item B\n   - [x] Subtask Done\n   - [ ] Subtask Todo\n5. Item C`;
 
     interface CapturedItem {
@@ -230,7 +232,7 @@ describe("Bun Native APIs & Utilities", () => {
     expect(subtasks[1]!.checked).toBe(false);
   });
 
-  it("bun:sqlite executes prepared statements and transactions", () => {
+  test("bun:sqlite executes prepared statements and transactions", () => {
     // Note: `using db = new Database(...)` would auto-close via Symbol.dispose,
     // but close(true) throws "database is locked" when prepared statements are
     // still outstanding. Manual close() after statements are done is safer.
@@ -251,7 +253,7 @@ describe("Bun Native APIs & Utilities", () => {
     db.close();
   });
 
-  it("Bun.file and Bun.write perform zero-copy file operations", async () => {
+  test("Bun.file and Bun.write perform zero-copy file operations", async () => {
     const path = `/tmp/bun-test-${Date.now()}.txt`;
     await Bun.write(path, "Bun File Content");
 
@@ -261,7 +263,7 @@ describe("Bun Native APIs & Utilities", () => {
     expect(await file.text()).toBe("Bun File Content");
   });
 
-  it("Native using / Symbol.dispose runs cleanup deterministically", () => {
+  test("Native using / Symbol.dispose runs cleanup deterministically", () => {
     let cleaned = false;
     {
       using _guard = {
@@ -274,7 +276,7 @@ describe("Bun Native APIs & Utilities", () => {
     expect(cleaned).toBe(true);
   });
 
-  it("Bun.gzipSync and Bun.gunzipSync roundtrip correctly", () => {
+  test("Bun.gzipSync and Bun.gunzipSync roundtrip correctly", () => {
     const raw = Buffer.from("gzip-compression-test-payload");
     const gz = Bun.gzipSync(raw);
     expect(gz.length).toBeGreaterThan(10);
@@ -282,30 +284,30 @@ describe("Bun Native APIs & Utilities", () => {
     expect(Buffer.from(gunzipped).toString()).toBe("gzip-compression-test-payload");
   });
 
-  it("Bun.escapeHTML escapes dangerous HTML entities", () => {
+  test("Bun.escapeHTML escapes dangerous HTML entities", () => {
     const dangerous = `<script>alert("xss") & test</script>`;
     const safe = Bun.escapeHTML(dangerous);
     expect(safe).toBe(`&lt;script&gt;alert(&quot;xss&quot;) &amp; test&lt;/script&gt;`);
   });
 
-  it("Bun.deepEquals performs deep structural comparisons", () => {
+  test("Bun.deepEquals performs deep structural comparisons", () => {
     expect(Bun.deepEquals({ a: 1, b: [2, 3] }, { a: 1, b: [2, 3] })).toBe(true);
     expect(Bun.deepEquals({ a: 1, b: [2, 3] }, { a: 1, b: [2, 4] })).toBe(false);
   });
 
-  it("Bun.sleep resolves after delay", async () => {
+  test("Bun.sleep resolves after delay", async () => {
     const start = Date.now();
     await Bun.sleep(20);
     expect(Date.now() - start).toBeGreaterThanOrEqual(15);
   });
 
-  it("Bun.which finds executable in PATH", () => {
+  test("Bun.which finds executable in PATH", () => {
     const bunBin = Bun.which("bun");
     expect(typeof bunBin).toBe("string");
     expect(bunBin).toContain("bun");
   });
 
-  it("bun:jsc provides heap stats and debugging snapshots", () => {
+  test("bun:jsc provides heap stats and debugging snapshots", () => {
     const { heapStats, heapSize, memoryUsage, generateHeapSnapshotForDebugging } = require("bun:jsc");
     const stats = heapStats();
     expect(stats.heapSize).toBeGreaterThan(0);
@@ -317,7 +319,7 @@ describe("Bun Native APIs & Utilities", () => {
     expect(typeof snapshot).toBe("object");
   });
 
-  it("Bun.cron.parse parses cron schedule expressions", () => {
+  test("Bun.cron.parse parses cron schedule expressions", () => {
     if (Bun.cron && typeof Bun.cron.parse === "function") {
       const parsed = Bun.cron.parse("0 2 * * *");
       expect(parsed).toBeDefined();

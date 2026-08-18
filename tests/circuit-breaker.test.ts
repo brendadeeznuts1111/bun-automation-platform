@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
 import { migrate } from "../src/db";
 import {
   getCircuitStatus,
@@ -13,7 +13,7 @@ describe("circuit-breaker", () => {
     migrate();
   });
 
-  it("starts in closed state with zero failures", async () => {
+  test("starts in closed state with zero failures", async () => {
     const site = `test-init-${Date.now()}.example.com`;
     await recordSuccess(site);
     const status = getCircuitStatus(site);
@@ -23,7 +23,7 @@ describe("circuit-breaker", () => {
   });
 
   // Parametrized: trips at exactly the threshold, and stays open beyond it.
-  it.each([
+  test.each([
     { failures: 5, desc: "trips at threshold (5)" },
     { failures: 10, desc: "stays open beyond threshold (10)" },
   ])("$desc", async ({ failures }) => {
@@ -38,7 +38,7 @@ describe("circuit-breaker", () => {
     expect(retryAfterSeconds(site)).toBeGreaterThan(0);
   });
 
-  it("resets on recordSuccess after being tripped", async () => {
+  test("resets on recordSuccess after being tripped", async () => {
     const site = `test-reset-${Date.now()}.example.com`;
     for (let i = 0; i < 5; i++) {
       await recordFailure(site);

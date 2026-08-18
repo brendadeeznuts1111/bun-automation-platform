@@ -26,7 +26,4 @@ import "./matchers";
 // Bun startup (before preload runs), and ??= would leave that in place.
 // Include PID + a random suffix so parallel `bun test --parallel` workers
 // don't collide on the same file.
-process.env.DB_PATH = join(
-  tmpdir(),
-  `bun-test-${process.pid}-${Math.random().toString(36).slice(2, 8)}.db`,
-);
+process.env.DB_PATH = join(tmpdir(), `bun-test-${process.pid}-${Math.random().toString(36).slice(2, 8)}.db`);

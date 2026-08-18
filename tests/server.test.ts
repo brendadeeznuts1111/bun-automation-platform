@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { type Subprocess } from "bun";
 import { migrate, write } from "../src/db";
 import { consumeJsonlStream } from "../src/utils/jsonl-stream";
@@ -17,7 +17,9 @@ describe("Server API Integration", () => {
     migrate();
     await write((db) => {
       // Clean up any previous test agent
-      db.query("DELETE FROM auth_sessions WHERE agent_id IN (SELECT id FROM agents WHERE username = ?)").run(TEST_AGENT.username);
+      db.query("DELETE FROM auth_sessions WHERE agent_id IN (SELECT id FROM agents WHERE username = ?)").run(
+        TEST_AGENT.username,
+      );
       db.query("DELETE FROM agents WHERE username = ?").run(TEST_AGENT.username);
       // Insert fresh test agent with hashed password
       const hashed = Bun.password.hashSync(TEST_AGENT.password);
@@ -70,7 +72,7 @@ describe("Server API Integration", () => {
     });
     if (loginRes.ok) {
       // JUSTIFIED: req.json() returns unknown; narrowing to the login response shape
-      const data = await loginRes.json() as { token: string; csrf_token: string };
+      const data = (await loginRes.json()) as { token: string; csrf_token: string };
       authToken = data.token;
       csrfToken = data.csrf_token;
     }
@@ -85,7 +87,7 @@ describe("Server API Integration", () => {
 
   // --- Public routes ---
 
-  it("GET /health returns status ok and worker pool info", async () => {
+  test("GET /health returns status ok and worker pool info", async () => {
     interface HealthResponse {
       status: string;
       uptime: number;
@@ -102,30 +104,30 @@ describe("Server API Integration", () => {
     expect(data.workers.total).toBe(1);
   });
 
-  it("GET /metrics returns Prometheus format metrics", async () => {
+  test("GET /metrics returns Prometheus format metrics", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/metrics`);
     expect(res.status).toBe(200);
     const text = await res.text();
     expect(text).toContain("process_uptime_seconds");
-    expect(text).toContain("workers{state=\"total\"} 1");
+    expect(text).toContain('workers{state="total"} 1');
   });
 
-  it("GET /metrics includes PWA and route metrics", async () => {
+  test("GET /metrics includes PWA and route metrics", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/metrics`);
     const text = await res.text();
-    expect(text).toContain("routes{type=\"total\"}");
-    expect(text).toContain("routes{type=\"pwa\"}");
+    expect(text).toContain('routes{type="total"}');
+    expect(text).toContain('routes{type="pwa"}');
     expect(text).toContain('pwa{enabled="true"}');
-    expect(text).toContain("features{type=\"active\"}");
-    expect(text).toContain("features{type=\"total\"}");
+    expect(text).toContain('features{type="active"}');
+    expect(text).toContain('features{type="total"}');
   });
 
-  it("GET /sitemap.xml returns valid sitemap XML", async () => {
+  test("GET /sitemap.xml returns valid sitemap XML", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/sitemap.xml`);
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toContain("application/xml");
     const text = await res.text();
-    expect(text).toContain("<?xml version=\"1.0\"");
+    expect(text).toContain('<?xml version="1.0"');
     expect(text).toContain("<urlset");
     expect(text).toContain("/health");
     expect(text).toContain("/features");
@@ -145,7 +147,7 @@ describe("Server API Integration", () => {
     expect(lastmod).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
   });
 
-  it("GET /sitemap.xml includes PWA routes when ENABLE_PWA=1", async () => {
+  test("GET /sitemap.xml includes PWA routes when ENABLE_PWA=1", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/sitemap.xml`);
     const text = await res.text();
     expect(text).toContain("/manifest.json");
@@ -159,7 +161,7 @@ describe("Server API Integration", () => {
     expect(text).not.toContain("/bun-com/icons/:filename");
   });
 
-  it("GET /features lists sitemap as active when ENABLE_SITEMAP=1", async () => {
+  test("GET /features lists sitemap as active when ENABLE_SITEMAP=1", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/features`);
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to the features response shape
@@ -169,7 +171,7 @@ describe("Server API Integration", () => {
     expect(sitemap!.active).toBe(true);
   });
 
-  it("GET /api/color converts colors via Bun.color — chains Bun.serve + Bun.color", async () => {
+  test("GET /api/color converts colors via Bun.color — chains Bun.serve + Bun.color", async () => {
     // Ref: https://bun.com/docs/runtime/color
     const res = await fetch(`http://localhost:${TEST_PORT}/api/color?color=red&format=css`);
     expect(res.status).toBe(200);
@@ -180,7 +182,7 @@ describe("Server API Integration", () => {
     expect(data.output).toBe("red");
   });
 
-  it("GET /api/color converts hex to rgb format", async () => {
+  test("GET /api/color converts hex to rgb format", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/color?color=%2350fa7b&format=rgb`);
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to the color response shape
@@ -189,7 +191,7 @@ describe("Server API Integration", () => {
     expect(data.output).toBe("rgb(80, 250, 123)");
   });
 
-  it("GET /api/color converts hex to number format", async () => {
+  test("GET /api/color converts hex to number format", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/color?color=%2350fa7b&format=number`);
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to the color response shape
@@ -199,7 +201,7 @@ describe("Server API Integration", () => {
     expect(data.output).toBe(0x50fa7b);
   });
 
-  it("GET /api/color converts to {rgb} object format", async () => {
+  test("GET /api/color converts to {rgb} object format", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/color?color=red&format={rgb}`);
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to the color response shape
@@ -207,23 +209,23 @@ describe("Server API Integration", () => {
     expect(data.output).toEqual({ r: 255, g: 0, b: 0 });
   });
 
-  it("GET /api/color returns 400 for invalid color input", async () => {
+  test("GET /api/color returns 400 for invalid color input", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/color?color=notacolor&format=css`);
     expect(res.status).toBe(400);
   });
 
-  it("GET /api/color returns 400 for missing color parameter", async () => {
+  test("GET /api/color returns 400 for missing color parameter", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/color?format=css`);
     expect(res.status).toBe(400);
   });
 
-  it("GET /api/color returns 400 for invalid format", async () => {
+  test("GET /api/color returns 400 for invalid format", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/color?color=red&format=invalid`);
     expect(res.status).toBe(400);
   });
 
   // Ref: https://bun.com/docs/runtime/env
-  it("GET /api/env returns safe subset of environment variables", async () => {
+  test("GET /api/env returns safe subset of environment variables", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/env`);
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to the env response shape
@@ -246,7 +248,7 @@ describe("Server API Integration", () => {
     expect(data.bunVersion).toBe(Bun.version);
   });
 
-  it("GET /api/env?key=NODE_ENV returns a single env var", async () => {
+  test("GET /api/env?key=NODE_ENV returns a single env var", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/env?key=NODE_ENV`);
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to the env response shape
@@ -256,12 +258,12 @@ describe("Server API Integration", () => {
     expect(data.source).toBe("Bun.env");
   });
 
-  it("GET /api/env?key=NONEXISTENT returns 404", async () => {
+  test("GET /api/env?key=NONEXISTENT returns 404", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/env?key=NONEXISTENT_VAR_12345`);
     expect(res.status).toBe(404);
   });
 
-  it("Bun.env, process.env, and import.meta.env are all aliases of the same object", () => {
+  test("Bun.env, process.env, and import.meta.env are all aliases of the same object", () => {
     // Ref: https://bun.com/docs/runtime/env#reading-environment-variables
     expect(process.env).toBe(Bun.env);
     expect(Bun.env).toBe(import.meta.env);
@@ -272,7 +274,7 @@ describe("Server API Integration", () => {
     delete process.env.BUN_ALIAS_TEST;
   });
 
-  it("process.env can be set programmatically", () => {
+  test("process.env can be set programmatically", () => {
     // Ref: https://bun.com/docs/runtime/env#setting-environment-variables
     process.env.BUN_SET_TEST = "testvalue";
     expect(Bun.env.BUN_SET_TEST).toBe("testvalue");
@@ -280,7 +282,7 @@ describe("Server API Integration", () => {
     delete process.env.BUN_SET_TEST;
   });
 
-  it("TypeScript interface merging types env vars as string", () => {
+  test("TypeScript interface merging types env vars as string", () => {
     // Ref: https://bun.com/docs/runtime/env#typescript
     // The Env interface in src/types/env.d.ts augments Bun's types.
     // PORT is declared as `string | undefined` in the augmented interface.
@@ -298,7 +300,7 @@ describe("Server API Integration", () => {
     delete process.env.ENABLE_SITEMAP;
   });
 
-  it("Bun --env-file supports variable expansion and escaping", async () => {
+  test("Bun --env-file supports variable expansion and escaping", async () => {
     // Ref: https://bun.com/docs/runtime/env#expansion
     // Write a temp .env file with expansion and escaped $
     const envContent = `BUN_EXPAND_BASE=hello
@@ -308,8 +310,13 @@ BUN_EXPAND_ESCAPED=hello\\$BUN_EXPAND_BASE`;
     await Bun.write(tmpEnv, envContent);
 
     const proc = Bun.spawn({
-      cmd: ["bun", "--env-file", tmpEnv, "-e",
-        "console.log(JSON.stringify({derived: process.env.BUN_EXPAND_DERIVED, escaped: process.env.BUN_EXPAND_ESCAPED}))"],
+      cmd: [
+        "bun",
+        "--env-file",
+        tmpEnv,
+        "-e",
+        "console.log(JSON.stringify({derived: process.env.BUN_EXPAND_DERIVED, escaped: process.env.BUN_EXPAND_ESCAPED}))",
+      ],
       stdout: "pipe",
       stderr: "pipe",
     });
@@ -323,7 +330,7 @@ BUN_EXPAND_ESCAPED=hello\\$BUN_EXPAND_BASE`;
     expect(parsed.escaped).toBe("hello$BUN_EXPAND_BASE");
   });
 
-  it("Bun --env-file supports quoted values (single, double, backtick)", async () => {
+  test("Bun --env-file supports quoted values (single, double, backtick)", async () => {
     // Ref: https://bun.com/docs/runtime/env#quotation-marks
     const envContent = `BUN_QUOTE_SINGLE='single_value'
 BUN_QUOTE_DOUBLE="double_value"
@@ -332,8 +339,13 @@ BUN_QUOTE_BACKTICK=\`backtick_value\``;
     await Bun.write(tmpEnv, envContent);
 
     const proc = Bun.spawn({
-      cmd: ["bun", "--env-file", tmpEnv, "-e",
-        "console.log(JSON.stringify({s: process.env.BUN_QUOTE_SINGLE, d: process.env.BUN_QUOTE_DOUBLE, b: process.env.BUN_QUOTE_BACKTICK}))"],
+      cmd: [
+        "bun",
+        "--env-file",
+        tmpEnv,
+        "-e",
+        "console.log(JSON.stringify({s: process.env.BUN_QUOTE_SINGLE, d: process.env.BUN_QUOTE_DOUBLE, b: process.env.BUN_QUOTE_BACKTICK}))",
+      ],
       stdout: "pipe",
       stderr: "pipe",
     });
@@ -346,7 +358,7 @@ BUN_QUOTE_BACKTICK=\`backtick_value\``;
     expect(parsed.b).toBe("backtick_value");
   });
 
-  it("Bun --env-file supports recursive variable expansion (A→B→C)", async () => {
+  test("Bun --env-file supports recursive variable expansion (A→B→C)", async () => {
     // Ref: https://bun.com/docs/runtime/env#expansion
     // Bun's expansion is recursive: C=$B, B=$A, A=1 → C resolves to "1"
     const envContent = `A=1
@@ -356,8 +368,13 @@ C=$B`;
     await Bun.write(tmpEnv, envContent);
 
     const proc = Bun.spawn({
-      cmd: ["bun", "--env-file", tmpEnv, "-e",
-        "console.log(JSON.stringify({a: process.env.A, b: process.env.B, c: process.env.C}))"],
+      cmd: [
+        "bun",
+        "--env-file",
+        tmpEnv,
+        "-e",
+        "console.log(JSON.stringify({a: process.env.A, b: process.env.B, c: process.env.C}))",
+      ],
       stdout: "pipe",
       stderr: "pipe",
     });
@@ -370,7 +387,7 @@ C=$B`;
     expect(parsed.c).toBe("1");
   });
 
-  it("Bun --env-file supports ${VAR} brace syntax for concatenation", async () => {
+  test("Bun --env-file supports ${VAR} brace syntax for concatenation", async () => {
     // Ref: https://bun.com/docs/runtime/env#expansion
     // ${VAR} allows concatenation without ambiguity: ${PREFIX}_v1
     const envContent = `PREFIX=app
@@ -379,8 +396,7 @@ NAME=\${PREFIX}_v1`;
     await Bun.write(tmpEnv, envContent);
 
     const proc = Bun.spawn({
-      cmd: ["bun", "--env-file", tmpEnv, "-e",
-        "console.log(process.env.NAME)"],
+      cmd: ["bun", "--env-file", tmpEnv, "-e", "console.log(process.env.NAME)"],
       stdout: "pipe",
       stderr: "pipe",
     });
@@ -389,7 +405,7 @@ NAME=\${PREFIX}_v1`;
     expect(output.trim()).toBe("app_v1");
   });
 
-  it("Bun --env-file does NOT support $(VAR) paren syntax in v1.3.14", async () => {
+  test("Bun --env-file does NOT support $(VAR) paren syntax in v1.3.14", async () => {
     // Ref: https://bun.com/docs/runtime/env#expansion
     // The docs mention $(VAR) but v1.3.14 does not support it — only $VAR and ${VAR}
     const envContent = `PREFIX=app
@@ -398,8 +414,7 @@ NAME=$(PREFIX)_v2`;
     await Bun.write(tmpEnv, envContent);
 
     const proc = Bun.spawn({
-      cmd: ["bun", "--env-file", tmpEnv, "-e",
-        "console.log(process.env.NAME)"],
+      cmd: ["bun", "--env-file", tmpEnv, "-e", "console.log(process.env.NAME)"],
       stdout: "pipe",
       stderr: "pipe",
     });
@@ -409,7 +424,7 @@ NAME=$(PREFIX)_v2`;
     expect(output.trim()).toBe("(PREFIX)_v2");
   });
 
-  it("Bun --env-file supports nested expansion for connection strings", async () => {
+  test("Bun --env-file supports nested expansion for connection strings", async () => {
     // Ref: https://bun.com/docs/runtime/env#expansion
     // Real-world pattern: building a DB URL from multiple vars
     const envContent = `DB_USER=postgres
@@ -421,8 +436,7 @@ DB_URL=postgres://$DB_USER:$DB_PASS@$DB_HOST:$DB_PORT`;
     await Bun.write(tmpEnv, envContent);
 
     const proc = Bun.spawn({
-      cmd: ["bun", "--env-file", tmpEnv, "-e",
-        "console.log(process.env.DB_URL)"],
+      cmd: ["bun", "--env-file", tmpEnv, "-e", "console.log(process.env.DB_URL)"],
       stdout: "pipe",
       stderr: "pipe",
     });
@@ -431,7 +445,7 @@ DB_URL=postgres://$DB_USER:$DB_PASS@$DB_HOST:$DB_PORT`;
     expect(output.trim()).toBe("postgres://postgres:secret@localhost:5432");
   });
 
-  it("Bun --env-file expansion is resolved at load time, not lazily on access", async () => {
+  test("Bun --env-file expansion is resolved at load time, not lazily on access", async () => {
     // Ref: https://bun.com/docs/runtime/env#expansion
     // In v1.3.14, expansion happens when the .env file is loaded, not when
     // process.env is accessed. Changing A after loading does not affect B=$A.
@@ -442,8 +456,7 @@ B=$A`;
     await Bun.write(tmpEnv, envContent);
 
     const proc = Bun.spawn({
-      cmd: ["bun", "--env-file", tmpEnv, "-e",
-        "process.env.A = '2'; console.log(process.env.B)"],
+      cmd: ["bun", "--env-file", tmpEnv, "-e", "process.env.A = '2'; console.log(process.env.B)"],
       stdout: "pipe",
       stderr: "pipe",
     });
@@ -453,7 +466,7 @@ B=$A`;
     expect(output.trim()).toBe("1");
   });
 
-  it("Bun.expandEnv is not available in v1.3.14", () => {
+  test("Bun.expandEnv is not available in v1.3.14", () => {
     // Ref: https://bun.com/docs/runtime/env#expansion
     // The docs mention Bun.expandEnv() for manual string expansion, but this
     // API was added in a later version. In v1.3.14 it is undefined.
@@ -461,7 +474,7 @@ B=$A`;
     expect((Bun as unknown as Record<string, unknown>).expandEnv).toBeUndefined();
   });
 
-  it("Bun.env can be iterated with Object.entries", () => {
+  test("Bun.env can be iterated with Object.entries", () => {
     // Ref: https://bun.com/docs/runtime/env#reading-environment-variables
     process.env.BUN_ITER_TEST = "iter_value";
     const entries = Object.entries(Bun.env);
@@ -472,7 +485,7 @@ B=$A`;
     delete process.env.BUN_ITER_TEST;
   });
 
-  it("Bun.env supports delete operator to remove variables", () => {
+  test("Bun.env supports delete operator to remove variables", () => {
     // Ref: https://bun.com/docs/runtime/env#reading-environment-variables
     process.env.BUN_DELETE_TEST = "temp";
     expect(Bun.env.BUN_DELETE_TEST).toBe("temp");
@@ -481,7 +494,7 @@ B=$A`;
     expect(process.env.BUN_DELETE_TEST).toBeUndefined();
   });
 
-  it("Bun.env ?? operator for default values", () => {
+  test("Bun.env ?? operator for default values", () => {
     // Ref: https://bun.com/docs/runtime/env#reading-environment-variables
     const apiKey = Bun.env.BUN_NONEXISTENT_KEY ?? "default-key";
     expect(apiKey).toBe("default-key");
@@ -493,7 +506,7 @@ B=$A`;
   });
 
   // Ref: https://bun.com/docs/runtime/env#automatic-env-loading
-  it("Bun .env file hierarchy: .env.local overrides .env.{NODE_ENV} overrides .env", async () => {
+  test("Bun .env file hierarchy: .env.local overrides .env.{NODE_ENV} overrides .env", async () => {
     // Ref: https://bun.com/docs/runtime/env#automatic-env-loading
     // Test all four levels of the hierarchy by removing files one at a time
     const testDir = `/tmp/env-hierarchy-${Date.now()}`;
@@ -525,7 +538,7 @@ B=$A`;
     expect(await runWithDir(testDir)).toBe("dev_local");
   });
 
-  it("Bun --no-env-file disables automatic .env loading", async () => {
+  test("Bun --no-env-file disables automatic .env loading", async () => {
     // Ref: https://bun.com/docs/runtime/env#disabling-automatic-env-loading
     const testDir = `/tmp/env-no-file-${Date.now()}`;
     await Bun.write(`${testDir}/.env`, "BUN_NOFILE_TEST=loaded");
@@ -541,7 +554,7 @@ B=$A`;
     expect(out.trim()).toBe("undefined");
   });
 
-  it("Bun --env-file loads a specific .env file even with --no-env-file defaults", async () => {
+  test("Bun --env-file loads a specific .env file even with --no-env-file defaults", async () => {
     // Ref: https://bun.com/docs/runtime/env#manually-specifying-env-files
     // --env-file explicitly loads a file; this works even in CI where
     // automatic loading is disabled
@@ -557,7 +570,7 @@ B=$A`;
     expect(out.trim()).toBe("loaded");
   });
 
-  it("Bun --print process.env outputs all environment variables", async () => {
+  test("Bun --print process.env outputs all environment variables", async () => {
     // Ref: https://bun.com/docs/runtime/env#reading-environment-variables
     // `bun --print process.env` prints all env vars as a JS object
     const proc = Bun.spawn({
@@ -572,11 +585,15 @@ B=$A`;
     expect(out).toContain("print_test_value");
   });
 
-  it("Bun-specific env vars: NO_COLOR and FORCE_COLOR", async () => {
+  test("Bun-specific env vars: NO_COLOR and FORCE_COLOR", async () => {
     // Ref: https://bun.com/docs/runtime/env#configuring-bun
     // NO_COLOR=1 disables ANSI color; FORCE_COLOR=1 overrides NO_COLOR
     const proc = Bun.spawn({
-      cmd: ["bun", "-e", "console.log(JSON.stringify({noColor: process.env.NO_COLOR, forceColor: process.env.FORCE_COLOR}))"],
+      cmd: [
+        "bun",
+        "-e",
+        "console.log(JSON.stringify({noColor: process.env.NO_COLOR, forceColor: process.env.FORCE_COLOR}))",
+      ],
       stdout: "pipe",
       stderr: "pipe",
       env: { ...process.env, NO_COLOR: "1", FORCE_COLOR: "1" },
@@ -589,7 +606,7 @@ B=$A`;
     expect(parsed.forceColor).toBe("1");
   });
 
-  it("Bun-specific env vars: BUN_CONFIG_MAX_HTTP_REQUESTS is readable", () => {
+  test("Bun-specific env vars: BUN_CONFIG_MAX_HTTP_REQUESTS is readable", () => {
     // Ref: https://bun.com/docs/runtime/env#configuring-bun
     // This env var controls max concurrent HTTP requests (default 256)
     process.env.BUN_CONFIG_MAX_HTTP_REQUESTS = "10";
@@ -597,7 +614,7 @@ B=$A`;
     delete process.env.BUN_CONFIG_MAX_HTTP_REQUESTS;
   });
 
-  it("Bun-specific env vars: BUN_RUNTIME_TRANSPILER_CACHE_PATH controls cache", async () => {
+  test("Bun-specific env vars: BUN_RUNTIME_TRANSPILER_CACHE_PATH controls cache", async () => {
     // Ref: https://bun.com/docs/runtime/env#runtime-transpiler-caching
     // Setting to "0" disables the cache; setting to a path uses that path
     const proc = Bun.spawn({
@@ -611,14 +628,14 @@ B=$A`;
     expect(out.trim()).toBe("0");
   });
 
-  it("Bun-specific env vars: DO_NOT_TRACK disables telemetry", () => {
+  test("Bun-specific env vars: DO_NOT_TRACK disables telemetry", () => {
     // Ref: https://bun.com/docs/runtime/env#configuring-bun
     process.env.DO_NOT_TRACK = "1";
     expect(Bun.env.DO_NOT_TRACK).toBe("1");
     delete process.env.DO_NOT_TRACK;
   });
 
-  it("Bun-specific env vars: BUN_CONFIG_VERBOSE_FETCH controls fetch logging", () => {
+  test("Bun-specific env vars: BUN_CONFIG_VERBOSE_FETCH controls fetch logging", () => {
     // Ref: https://bun.com/docs/runtime/env#configuring-bun
     // BUN_CONFIG_VERBOSE_FETCH=curl logs fetch requests like curl
     process.env.BUN_CONFIG_VERBOSE_FETCH = "curl";
@@ -626,7 +643,7 @@ B=$A`;
     delete process.env.BUN_CONFIG_VERBOSE_FETCH;
   });
 
-  it("getEnv helper returns fallback when env var is not set", () => {
+  test("getEnv helper returns fallback when env var is not set", () => {
     // Ref: src/server.ts getEnv() helper
     // The helper is used at module load time, but we can test the pattern
     function getEnv(key: string, fallback?: string): string {
@@ -639,7 +656,7 @@ B=$A`;
     expect(getEnv("BUN_NONEXISTENT_GETENV_TEST", "fallback_val")).toBe("fallback_val");
   });
 
-  it("getEnv helper throws when required env var is missing", () => {
+  test("getEnv helper throws when required env var is missing", () => {
     // Ref: src/server.ts getEnv() helper
     function getEnv(key: string, fallback?: string): string {
       const value = Bun.env[key];
@@ -651,7 +668,7 @@ B=$A`;
     expect(() => getEnv("BUN_REQUIRED_BUT_MISSING_VAR")).toThrow("Missing required environment variable");
   });
 
-  it("getEnv helper returns value when env var is set", () => {
+  test("getEnv helper returns value when env var is set", () => {
     // Ref: src/server.ts getEnv() helper
     function getEnv(key: string, fallback?: string): string {
       const value = Bun.env[key];
@@ -666,15 +683,18 @@ B=$A`;
   });
 
   // Ref: https://bun.com/docs/runtime/env#test-runner-specific
-  it("bun test sets NODE_ENV=test automatically", async () => {
+  test("bun test sets NODE_ENV=test automatically", async () => {
     // Ref: https://bun.com/docs/runtime/env#test-runner-specific
     // bun test sets NODE_ENV to "test" unless explicitly overridden.
     // We must unset NODE_ENV from the env (not set to "") for auto-set to trigger.
     const tmpTest = `/tmp/test-node-env-${Date.now()}.ts`;
-    await Bun.write(tmpTest, `import { test } from "bun:test";
+    await Bun.write(
+      tmpTest,
+      `import { test } from "bun:test";
 test("check NODE_ENV", () => {
   console.log("NODE_ENV=" + process.env.NODE_ENV);
-});`);
+});`,
+    );
     // Remove NODE_ENV from the env map so bun test auto-sets it
     const testEnv = { ...process.env };
     delete testEnv.NODE_ENV;
@@ -692,7 +712,7 @@ test("check NODE_ENV", () => {
     expect(combined).toContain("NODE_ENV=test");
   });
 
-  it("TZ environment variable controls timezone", async () => {
+  test("TZ environment variable controls timezone", async () => {
     // Ref: https://bun.com/docs/runtime/env#test-runner-specific
     // TZ sets the timezone; bun test defaults to Etc/UTC
     const proc = Bun.spawn({
@@ -706,7 +726,7 @@ test("check NODE_ENV", () => {
     expect(out.trim()).toBe("America/New_York");
   });
 
-  it("TZ defaults to undefined (system timezone) outside bun test", async () => {
+  test("TZ defaults to undefined (system timezone) outside bun test", async () => {
     // Ref: https://bun.com/docs/runtime/env#test-runner-specific
     // Outside bun test, TZ is not auto-set (uses system timezone)
     const proc = Bun.spawn({
@@ -721,7 +741,7 @@ test("check NODE_ENV", () => {
   });
 
   // Ref: https://bun.com/docs/runtime/env#package-manager-install
-  it("BUN_INSTALL_GLOBAL_STORE enables global virtual store", async () => {
+  test("BUN_INSTALL_GLOBAL_STORE enables global virtual store", async () => {
     // Ref: https://bun.com/docs/runtime/env#package-manager-install
     // This env var controls bun install's global virtual store feature
     const proc = Bun.spawn({
@@ -735,7 +755,7 @@ test("check NODE_ENV", () => {
     expect(out.trim()).toBe("1");
   });
 
-  it("BUN_INSTALL_CACHE_DIR overrides global package cache directory", async () => {
+  test("BUN_INSTALL_CACHE_DIR overrides global package cache directory", async () => {
     // Ref: https://bun.com/docs/runtime/env#package-manager-install
     const proc = Bun.spawn({
       cmd: ["bun", "-e", "console.log(process.env.BUN_INSTALL_CACHE_DIR)"],
@@ -749,7 +769,7 @@ test("check NODE_ENV", () => {
   });
 
   // Ref: https://bun.com/docs/runtime/env#configuring-bun
-  it("BUN_OPTIONS prepends CLI arguments to bun commands", () => {
+  test("BUN_OPTIONS prepends CLI arguments to bun commands", () => {
     // Ref: https://bun.com/docs/runtime/env#configuring-bun
     // BUN_OPTIONS is already set in the dev environment as "--hot"
     // We verify it's readable (the actual prepending is a Bun runtime behavior)
@@ -763,7 +783,7 @@ test("check NODE_ENV", () => {
     }
   });
 
-  it("BUN_CONFIG_NO_CLEAR_TERMINAL_ON_RELOAD prevents watch terminal clear", async () => {
+  test("BUN_CONFIG_NO_CLEAR_TERMINAL_ON_RELOAD prevents watch terminal clear", async () => {
     // Ref: https://bun.com/docs/runtime/env#configuring-bun
     // This env var controls bun --watch terminal clearing behavior
     const proc = Bun.spawn({
@@ -777,7 +797,7 @@ test("check NODE_ENV", () => {
     expect(out.trim()).toBe("true");
   });
 
-  it("NODE_TLS_REJECT_UNAUTHORIZED disables SSL validation when set to 0", async () => {
+  test("NODE_TLS_REJECT_UNAUTHORIZED disables SSL validation when set to 0", async () => {
     // Ref: https://bun.com/docs/runtime/env#configuring-bun
     // NODE_TLS_REJECT_UNAUTHORIZED=0 disables SSL cert validation
     // (dangerous — dev/testing only)
@@ -792,7 +812,7 @@ test("check NODE_ENV", () => {
     expect(out.trim()).toBe("0");
   });
 
-  it("TMPDIR controls temporary directory for Bun operations", async () => {
+  test("TMPDIR controls temporary directory for Bun operations", async () => {
     // Ref: https://bun.com/docs/runtime/env#configuring-bun
     // TMPDIR is where Bun stores intermediate assets during bundling
     const proc = Bun.spawn({
@@ -806,7 +826,7 @@ test("check NODE_ENV", () => {
     expect(out.trim()).toBe("/tmp/bun-tmpdir-test");
   });
 
-  it("bunfig.toml env=false disables .env loading (config equivalent of --no-env-file)", async () => {
+  test("bunfig.toml env=false disables .env loading (config equivalent of --no-env-file)", async () => {
     // Ref: https://bun.com/docs/runtime/env#disabling-automatic-env-loading
     // The bunfig.toml [env] key can disable automatic .env loading.
     // We test this by creating a temp project with env=false in bunfig.toml
@@ -825,7 +845,7 @@ test("check NODE_ENV", () => {
     expect(out.trim()).toBe("undefined");
   });
 
-  it("bun exec provides cross-platform env var setting", async () => {
+  test("bun exec provides cross-platform env var setting", async () => {
     // Ref: https://bun.com/docs/runtime/env#setting-environment-variables
     // bun exec uses Bun Shell, which supports FOO=value command syntax
     // cross-platform (including Windows)
@@ -834,17 +854,20 @@ test("check NODE_ENV", () => {
     expect(result.trim()).toBe("cross_platform");
   });
 
-  it("package.json scripts use Bun Shell for cross-platform env vars", async () => {
+  test("package.json scripts use Bun Shell for cross-platform env vars", async () => {
     // Ref: https://bun.com/docs/runtime/env#setting-environment-variables
     // Scripts called with `bun run` automatically use Bun Shell, so
     // NODE_ENV=development bun --watch app.ts works cross-platform
     const testPkg = `/tmp/test-pkg-env-${Date.now()}`;
-    await Bun.write(`${testPkg}/package.json`, JSON.stringify({
-      name: "env-test",
-      scripts: {
-        "test-env": "BUN_PKG_SCRIPT_TEST=from_script bun -e 'console.log(process.env.BUN_PKG_SCRIPT_TEST)'",
-      },
-    }));
+    await Bun.write(
+      `${testPkg}/package.json`,
+      JSON.stringify({
+        name: "env-test",
+        scripts: {
+          "test-env": "BUN_PKG_SCRIPT_TEST=from_script bun -e 'console.log(process.env.BUN_PKG_SCRIPT_TEST)'",
+        },
+      }),
+    );
     const proc = Bun.spawn({
       cmd: ["bun", "run", "test-env"],
       cwd: testPkg,
@@ -856,7 +879,7 @@ test("check NODE_ENV", () => {
     expect(out).toContain("from_script");
   });
 
-  it("Internal env vars: BUN_FEATURE_FLAG_* are readable when set", () => {
+  test("Internal env vars: BUN_FEATURE_FLAG_* are readable when set", () => {
     // Ref: https://bun.com/docs/runtime/env#internal-experimental
     // BUN_FEATURE_FLAG_* vars enable experimental features
     // We already use BUN_FEATURE_FLAG_NO_ORPHANS in the worker pool
@@ -865,7 +888,7 @@ test("check NODE_ENV", () => {
     delete process.env.BUN_FEATURE_FLAG_TEST_INTERNAL;
   });
 
-  it("Internal env vars: BUN_GARBAGE_COLLECTOR_LEVEL is readable when set", () => {
+  test("Internal env vars: BUN_GARBAGE_COLLECTOR_LEVEL is readable when set", () => {
     // Ref: https://bun.com/docs/runtime/env#internal-experimental
     // Forces GC to run more frequently (debugging)
     process.env.BUN_GARBAGE_COLLECTOR_LEVEL = "1";
@@ -874,7 +897,7 @@ test("check NODE_ENV", () => {
   });
 
   // Ref: https://bun.com/docs/runtime/color#flexible-input
-  it("Bun.color accepts all flexible input types and normalizes to css", () => {
+  test("Bun.color accepts all flexible input types and normalizes to css", () => {
     // Ref: https://bun.com/docs/runtime/color#flexible-input
     // All of these represent the color red and should normalize to "red"
     // Note: number input (0xff0000) returns "#f000" in v1.3.14 — a known bug
@@ -894,19 +917,19 @@ test("check NODE_ENV", () => {
     expect(Bun.color(0xff0000, "css")).not.toBeNull();
   });
 
-  it("Bun.color accepts LAB color strings", () => {
+  test("Bun.color accepts LAB color strings", () => {
     // Ref: https://bun.com/docs/runtime/color#flexible-input
     // LAB is listed as a supported input format
     const result = Bun.color("lab(50% 50 50)", "css");
     expect(result).not.toBeNull();
   });
 
-  it("Bun.color returns null for invalid input", () => {
+  test("Bun.color returns null for invalid input", () => {
     // Ref: https://bun.com/docs/runtime/color#format-colors-as-css
     expect(Bun.color("notacolor", "css")).toBeNull();
   });
 
-  it("Bun.color formats as ANSI escape codes for terminals", () => {
+  test("Bun.color formats as ANSI escape codes for terminals", () => {
     // Ref: https://bun.com/docs/runtime/color#format-colors-as-ansi-for-terminals
     const ansi16m = Bun.color("red", "ansi-16m");
     expect(ansi16m).toContain("\x1b[38;2;255;0;0m");
@@ -922,7 +945,7 @@ test("check NODE_ENV", () => {
     expect(ansi16!.startsWith("\x1b[")).toBe(true);
   });
 
-  it("Bun.color formats as number for database storage", () => {
+  test("Bun.color formats as number for database storage", () => {
     // Ref: https://bun.com/docs/runtime/color#format-colors-as-numbers
     expect(Bun.color("red", "number")).toBe(16711680);
     expect(Bun.color(0xff0000, "number")).toBe(16711680);
@@ -930,19 +953,19 @@ test("check NODE_ENV", () => {
     expect(Bun.color([255, 0, 0], "number")).toBe(16711680);
   });
 
-  it("Bun.color {rgba} returns object with alpha as 0-1 decimal", () => {
+  test("Bun.color {rgba} returns object with alpha as 0-1 decimal", () => {
     // Ref: https://bun.com/docs/runtime/color#rgba-object
     expect(Bun.color("red", "{rgba}")).toEqual({ r: 255, g: 0, b: 0, a: 1 });
     expect(Bun.color("hsl(0, 0%, 50%)", "{rgba}")).toEqual({ r: 128, g: 128, b: 128, a: 1 });
   });
 
-  it("Bun.color [rgba] returns array with alpha as 0-255 integer", () => {
+  test("Bun.color [rgba] returns array with alpha as 0-255 integer", () => {
     // Ref: https://bun.com/docs/runtime/color#rgba-array
     expect(Bun.color("red", "[rgba]")).toEqual([255, 0, 0, 255]);
     expect(Bun.color("hsl(0, 0%, 50%)", "[rgba]")).toEqual([128, 128, 128, 255]);
   });
 
-  it("Bun.color hex and HEX formats produce lowercase and uppercase", () => {
+  test("Bun.color hex and HEX formats produce lowercase and uppercase", () => {
     // Ref: https://bun.com/docs/runtime/color#format-colors-as-hex-strings
     expect(Bun.color("red", "hex")).toBe("#ff0000");
     expect(Bun.color("red", "HEX")).toBe("#FF0000");
@@ -950,7 +973,7 @@ test("check NODE_ENV", () => {
     expect(Bun.color("hsl(0, 0%, 50%)", "HEX")).toBe("#808080");
   });
 
-  it("Bun.color bundle-time macro inlines color conversion at build time", async () => {
+  test("Bun.color bundle-time macro inlines color conversion at build time", async () => {
     // Ref: https://bun.com/docs/runtime/color#bundle-time-client-side-color-formatting
     // The macro import evaluates Bun.color at build time and inlines the result.
     const src = `import { color } from "bun" with { type: "macro" };
@@ -971,18 +994,18 @@ console.log(color("red", "number"));`;
     expect(output).toContain('console.log("#50fa7b")');
     expect(output).toContain("console.log(16711680)");
     // The output should NOT contain the macro import
-    expect(output).not.toContain('import { color }');
+    expect(output).not.toContain("import { color }");
     expect(output).not.toContain("Bun.color");
   });
 
-  it("GET /dashboard includes sitemap link when sitemap is active", async () => {
+  test("GET /dashboard includes sitemap link when sitemap is active", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain('href="/sitemap.xml"');
   });
 
-  it("POST /api/markdown chains Bun.markdown.html() through Bun.serve", async () => {
+  test("POST /api/markdown chains Bun.markdown.html() through Bun.serve", async () => {
     const md = "# Hello\n\n| A | B |\n|---|---|\n| 1 | 2 |";
     const res = await fetch(`http://localhost:${TEST_PORT}/api/markdown`, {
       method: "POST",
@@ -996,7 +1019,7 @@ console.log(color("red", "number"));`;
     expect(html).toContain("Hello");
   });
 
-  it("HTMLRewriter injects theme-color meta and feature flags into /dashboard", async () => {
+  test("HTMLRewriter injects theme-color meta and feature flags into /dashboard", async () => {
     // Ref: https://bun.com/docs/runtime/htmlrewriter
     const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
     expect(res.status).toBe(200);
@@ -1011,7 +1034,7 @@ console.log(color("red", "number"));`;
     expect(html).toContain('data-html-rewritten="true"');
   });
 
-  it("HTMLRewriter marks /api/markdown output with data-markdown-rendered", async () => {
+  test("HTMLRewriter marks /api/markdown output with data-markdown-rendered", async () => {
     // Ref: https://bun.com/docs/runtime/htmlrewriter
     const md = "# Test\n\nHello world";
     const res = await fetch(`http://localhost:${TEST_PORT}/api/markdown`, {
@@ -1024,7 +1047,7 @@ console.log(color("red", "number"));`;
     expect(html).toContain('data-markdown-rendered="true"');
   });
 
-  it("GET /features lists htmlRewriter as active when ENABLE_HTML_REWRITER=1", async () => {
+  test("GET /features lists htmlRewriter as active when ENABLE_HTML_REWRITER=1", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/features`);
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to the features response shape
@@ -1034,7 +1057,7 @@ console.log(color("red", "number"));`;
     expect(rewriter!.active).toBe(true);
   });
 
-  it("HTMLRewriter can scrape and transform external HTML", () => {
+  test("HTMLRewriter can scrape and transform external HTML", () => {
     // Ref: https://bun.com/docs/runtime/htmlrewriter
     // Unit test: verify HTMLRewriter element handlers work correctly
     const html = "<html><head><title>Test</title></head><body><h1>Hello</h1></body></html>";
@@ -1062,7 +1085,7 @@ console.log(color("red", "number"));`;
   // --- PWA (Progressive Web App) ---
   // Ref: https://web.dev/articles/add-manifest
 
-  it("GET /manifest.json serves the PWA manifest when ENABLE_PWA=1", async () => {
+  test("GET /manifest.json serves the PWA manifest when ENABLE_PWA=1", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/manifest.json`);
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toContain("application/manifest+json");
@@ -1086,7 +1109,7 @@ console.log(color("red", "number"));`;
     expect(sizes).toContain("512x512");
   });
 
-  it("GET /icons/icon-128.png serves a PNG icon", async () => {
+  test("GET /icons/icon-128.png serves a PNG icon", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/icons/icon-128.png`);
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toBe("image/png");
@@ -1099,17 +1122,17 @@ console.log(color("red", "number"));`;
     expect(bytes[3]).toBe(0x47);
   });
 
-  it("GET /icons/nonexistent.png returns 404", async () => {
+  test("GET /icons/nonexistent.png returns 404", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/icons/nonexistent.png`);
     expect(res.status).toBe(404);
   });
 
-  it("GET /icons/icon-128.txt returns 404 (non-png rejected)", async () => {
+  test("GET /icons/icon-128.txt returns 404 (non-png rejected)", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/icons/icon-128.txt`);
     expect(res.status).toBe(404);
   });
 
-  it("GET /dashboard includes manifest link when PWA is enabled", async () => {
+  test("GET /dashboard includes manifest link when PWA is enabled", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
     expect(res.status).toBe(200);
     const html = await res.text();
@@ -1122,7 +1145,7 @@ console.log(color("red", "number"));`;
     expect(html).toContain('media="(prefers-color-scheme: dark)"');
   });
 
-  it("GET /dashboard has enhanced dark theme with PWA install button", async () => {
+  test("GET /dashboard has enhanced dark theme with PWA install button", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
     const html = await res.text();
     // Dark theme CSS variables
@@ -1144,7 +1167,7 @@ console.log(color("red", "number"));`;
     expect(html).toContain("BUN-DEV");
   });
 
-  it("GET /dashboard has live health polling and status cards", async () => {
+  test("GET /dashboard has live health polling and status cards", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
     const html = await res.text();
     expect(html).toContain("pollHealth");
@@ -1154,7 +1177,7 @@ console.log(color("red", "number"));`;
     expect(html).toContain("routes-stat");
   });
 
-  it("GET /dashboard has network status indicator", async () => {
+  test("GET /dashboard has network status indicator", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
     const html = await res.text();
     expect(html).toContain("net-status");
@@ -1162,7 +1185,7 @@ console.log(color("red", "number"));`;
     expect(html).toContain("updateNetStatus");
   });
 
-  it("GET /dashboard has icon gallery with all BUN-DEV and bun.com icons", async () => {
+  test("GET /dashboard has icon gallery with all BUN-DEV and bun.com icons", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
     const html = await res.text();
     expect(html).toContain("icon-gallery");
@@ -1178,7 +1201,7 @@ console.log(color("red", "number"));`;
     expect(html).toContain("/bun-com/icons/apple-touch-icon.png");
   });
 
-  it("GET /dashboard has visual icon comparison section", async () => {
+  test("GET /dashboard has visual icon comparison section", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
     const html = await res.text();
     expect(html).toContain("icon-vs");
@@ -1186,7 +1209,7 @@ console.log(color("red", "number"));`;
     expect(html).toContain("bun.com (theirs)");
   });
 
-  it("GET /dashboard has SW cache status panel", async () => {
+  test("GET /dashboard has SW cache status panel", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
     const html = await res.text();
     expect(html).toContain("sw-cache-content");
@@ -1194,7 +1217,7 @@ console.log(color("red", "number"));`;
     expect(html).toContain("sw-cache-fill");
   });
 
-  it("GET /dashboard has copy-to-clipboard for manifest", async () => {
+  test("GET /dashboard has copy-to-clipboard for manifest", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
     const html = await res.text();
     expect(html).toContain("copyManifest");
@@ -1202,7 +1225,7 @@ console.log(color("red", "number"));`;
     expect(html).toContain("Copy Manifest JSON");
   });
 
-  it("GET /dashboard has keyboard shortcuts", async () => {
+  test("GET /dashboard has keyboard shortcuts", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
     const html = await res.text();
     expect(html).toContain("keydown");
@@ -1214,20 +1237,20 @@ console.log(color("red", "number"));`;
     expect(html).toContain("Shortcuts:");
   });
 
-  it("GET /dashboard has toast notification element", async () => {
+  test("GET /dashboard has toast notification element", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
     const html = await res.text();
     expect(html).toContain('id="toast"');
     expect(html).toContain("showToast");
   });
 
-  it("GET /dashboard has toggleSection helper for collapsible panels", async () => {
+  test("GET /dashboard has toggleSection helper for collapsible panels", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
     const html = await res.text();
     expect(html).toContain("toggleSection");
   });
 
-  it("GET /features lists pwa as active when ENABLE_PWA=1", async () => {
+  test("GET /features lists pwa as active when ENABLE_PWA=1", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/features`);
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to the features response shape
@@ -1237,7 +1260,7 @@ console.log(color("red", "number"));`;
     expect(pwa!.active).toBe(true);
   });
 
-  it("manifest.json has correct theme_color matching Bun.color output", async () => {
+  test("manifest.json has correct theme_color matching Bun.color output", async () => {
     // Ref: https://bun.com/docs/runtime/color
     // The manifest theme_color should match the dashboard's injected theme-color
     const res = await fetch(`http://localhost:${TEST_PORT}/manifest.json`);
@@ -1248,7 +1271,7 @@ console.log(color("red", "number"));`;
     expect(manifest.background_color).toBe("#1f2020");
   });
 
-  it("GET /sw.js serves the service worker", async () => {
+  test("GET /sw.js serves the service worker", async () => {
     // Ref: https://web.dev/articles/install-criteria
     // Chrome requires a service worker for PWA installability
     const res = await fetch(`http://localhost:${TEST_PORT}/sw.js`);
@@ -1261,7 +1284,7 @@ console.log(color("red", "number"));`;
     expect(js).toContain("caches");
   });
 
-  it("dashboard includes service worker registration script when PWA is enabled", async () => {
+  test("dashboard includes service worker registration script when PWA is enabled", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
     const html = await res.text();
     expect(html).toContain("navigator.serviceWorker.register('/sw.js'");
@@ -1269,7 +1292,7 @@ console.log(color("red", "number"));`;
 
   // --- bun.com PWA snapshot ---
 
-  it("GET /bun-com/manifest.json serves the original bun.com manifest", async () => {
+  test("GET /bun-com/manifest.json serves the original bun.com manifest", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/bun-com/manifest.json`);
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toContain("application/manifest+json");
@@ -1280,7 +1303,7 @@ console.log(color("red", "number"));`;
     expect(manifest.display).toBe("minimal-ui");
   });
 
-  it("GET /bun-com/icons/icon-512x512.png serves the original Bun icon", async () => {
+  test("GET /bun-com/icons/icon-512x512.png serves the original Bun icon", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/bun-com/icons/icon-512x512.png`);
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toBe("image/png");
@@ -1289,7 +1312,7 @@ console.log(color("red", "number"));`;
     expect(bytes[0]).toBe(0x89); // PNG magic
   });
 
-  it("GET /bun-com/icons/logo.svg serves the Bun SVG logo", async () => {
+  test("GET /bun-com/icons/logo.svg serves the Bun SVG logo", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/bun-com/icons/logo.svg`);
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toBe("image/svg+xml");
@@ -1297,13 +1320,13 @@ console.log(color("red", "number"));`;
     expect(svg).toContain("<svg");
   });
 
-  it("GET /bun-com/icons/favicon.ico serves the Bun favicon", async () => {
+  test("GET /bun-com/icons/favicon.ico serves the Bun favicon", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/bun-com/icons/favicon.ico`);
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toBe("image/x-icon");
   });
 
-  it("GET /bun-com/icons/nonexistent.png returns 404", async () => {
+  test("GET /bun-com/icons/nonexistent.png returns 404", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/bun-com/icons/nonexistent.png`);
     expect(res.status).toBe(404);
   });
@@ -1311,16 +1334,21 @@ console.log(color("red", "number"));`;
   // --- PWA manifest comparison + validation ---
   // Ref: https://web.dev/articles/install-criteria
 
-  it("GET /api/pwa/compare returns BUN-DEV vs bun.com comparison", async () => {
+  test("GET /api/pwa/compare returns BUN-DEV vs bun.com comparison", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/pwa/compare`);
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to the comparison shape
     const data = (await res.json()) as {
       summary: {
-        totalFields: number; matchingFields: number; differingFields: number;
-        ourIconCount: number; theirIconCount: number;
-        ourInstallable: boolean; theirInstallable: boolean;
-        ourScore: number; theirScore: number;
+        totalFields: number;
+        matchingFields: number;
+        differingFields: number;
+        ourIconCount: number;
+        theirIconCount: number;
+        ourInstallable: boolean;
+        theirInstallable: boolean;
+        ourScore: number;
+        theirScore: number;
       };
       fields: { field: string; ours: string; theirs: string; match: boolean }[];
       icons: { size: string; ours: boolean; theirs: boolean }[];
@@ -1355,7 +1383,7 @@ console.log(color("red", "number"));`;
     expect(data.validation.theirs.errors.length).toBe(0);
   });
 
-  it("GET /api/pwa/compare shows BUN-DEV has maskable icon but bun.com does not", async () => {
+  test("GET /api/pwa/compare shows BUN-DEV has maskable icon but bun.com does not", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/pwa/compare`);
     // JUSTIFIED: res.json() returns unknown; narrowing to the comparison shape
     const data = (await res.json()) as {
@@ -1372,13 +1400,16 @@ console.log(color("red", "number"));`;
     expect(theirMaskable!.pass).toBe(false);
   });
 
-  it("GET /api/pwa/validate returns BUN-DEV installability validation", async () => {
+  test("GET /api/pwa/validate returns BUN-DEV installability validation", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/pwa/validate`);
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to the validation shape
     const data = (await res.json()) as {
-      manifest: string; installable: boolean; score: number;
-      errors: string[]; warnings: string[];
+      manifest: string;
+      installable: boolean;
+      score: number;
+      errors: string[];
+      warnings: string[];
       checks: { category: string; check: string; pass: boolean; severity: string; detail: string }[];
     };
     expect(data.manifest).toBe("BUN-DEV");
@@ -1397,7 +1428,7 @@ console.log(color("red", "number"));`;
     expect(maskable!.pass).toBe(true);
   });
 
-  it("GET /api/pwa/validate has all required fields passing", async () => {
+  test("GET /api/pwa/validate has all required fields passing", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/pwa/validate`);
     // JUSTIFIED: res.json() returns unknown; narrowing to the validation shape
     const data = (await res.json()) as {
@@ -1409,7 +1440,7 @@ console.log(color("red", "number"));`;
     }
   });
 
-  it("GET /api/pwa/validate includes service worker check", async () => {
+  test("GET /api/pwa/validate includes service worker check", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/pwa/validate`);
     // JUSTIFIED: res.json() returns unknown; narrowing to the validation shape
     const data = (await res.json()) as {
@@ -1421,7 +1452,7 @@ console.log(color("red", "number"));`;
     expect(swCheck!.detail).toBe("/sw.js");
   });
 
-  it("dashboard includes links to compare and validate endpoints", async () => {
+  test("dashboard includes links to compare and validate endpoints", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
     const html = await res.text();
     expect(html).toContain("/api/pwa/compare");
@@ -1430,7 +1461,7 @@ console.log(color("red", "number"));`;
     expect(html).toContain("loadPWAValidate()");
   });
 
-  it("dashboard has collapsible comparison and validation panels", async () => {
+  test("dashboard has collapsible comparison and validation panels", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
     const html = await res.text();
     expect(html).toContain('id="pwa-compare-panel"');
@@ -1441,7 +1472,7 @@ console.log(color("red", "number"));`;
 
   // --- Auth ---
 
-  it("POST /login rejects invalid credentials and audits failure", async () => {
+  test("POST /login rejects invalid credentials and audits failure", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1450,24 +1481,24 @@ console.log(color("red", "number"));`;
     expect(res.status).toBe(401);
   });
 
-  it("POST /login returns token + csrf_token on success", async () => {
+  test("POST /login returns token + csrf_token on success", async () => {
     expect(authToken).toBeTruthy();
     expect(csrfToken).toBeTruthy();
   });
 
-  it("GET /tasks returns 401 without auth", async () => {
+  test("GET /tasks returns 401 without auth", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/tasks`);
     expect(res.status).toBe(401);
   });
 
-  it("GET /audit returns 401 without auth", async () => {
+  test("GET /audit returns 401 without auth", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/audit`);
     expect(res.status).toBe(401);
   });
 
   // --- Authenticated routes ---
 
-  it("GET /tasks returns paginated task list with auth", async () => {
+  test("GET /tasks returns paginated task list with auth", async () => {
     interface TasksResponse {
       tasks: unknown[];
       total: number;
@@ -1485,7 +1516,7 @@ console.log(color("red", "number"));`;
     expect(typeof data.total).toBe("number");
   });
 
-  it("GET /api/tasks.jsonl streams tasks as JSONL consumable with parseChunk", async () => {
+  test("GET /api/tasks.jsonl streams tasks as JSONL consumable with parseChunk", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/tasks.jsonl?limit=10`, {
       headers: { Authorization: `Bearer ${authToken}` },
     });
@@ -1518,7 +1549,7 @@ console.log(color("red", "number"));`;
     }
   });
 
-  it("GET /audit returns paginated audit log entries with auth", async () => {
+  test("GET /audit returns paginated audit log entries with auth", async () => {
     interface AuditResponse {
       logs: unknown[];
       limit: number;
@@ -1534,7 +1565,7 @@ console.log(color("red", "number"));`;
     expect(Array.isArray(data.logs)).toBe(true);
   });
 
-  it("GET /api/sessions.jsonl streams sessions as JSONL consumable with parseChunk", async () => {
+  test("GET /api/sessions.jsonl streams sessions as JSONL consumable with parseChunk", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/sessions.jsonl?limit=10`, {
       headers: { Authorization: `Bearer ${authToken}` },
     });
@@ -1568,7 +1599,7 @@ console.log(color("red", "number"));`;
     }
   });
 
-  it("GET /api/audit.jsonl returns parseable JSONL via Bun.JSONL.parse", async () => {
+  test("GET /api/audit.jsonl returns parseable JSONL via Bun.JSONL.parse", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/audit.jsonl?limit=5`, {
       headers: { Authorization: `Bearer ${authToken}` },
     });
@@ -1585,7 +1616,7 @@ console.log(color("red", "number"));`;
     }
   });
 
-  it("GET /api/audit.jsonl can be consumed incrementally with parseChunk", async () => {
+  test("GET /api/audit.jsonl can be consumed incrementally with parseChunk", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/audit.jsonl?limit=5`, {
       headers: { Authorization: `Bearer ${authToken}` },
     });
@@ -1619,7 +1650,7 @@ console.log(color("red", "number"));`;
     }
   });
 
-  it("Bun.JSONL.parseChunk handles partial and complete audit JSONL chunks", () => {
+  test("Bun.JSONL.parseChunk handles partial and complete audit JSONL chunks", () => {
     // Ref: node_modules/bun-types/docs/runtime/jsonl.mdx#parseChunk
     const full = '{"action":"login"}\n{"action":"task"}';
     const bytes = new TextEncoder().encode(full);
@@ -1637,7 +1668,7 @@ console.log(color("red", "number"));`;
     expect(pResult.error).toBeNull();
   });
 
-  it("Bun.JSONL.parseChunk supports byte offsets for zero-copy streaming", () => {
+  test("Bun.JSONL.parseChunk supports byte offsets for zero-copy streaming", () => {
     // Ref: https://bun.com/docs/runtime/jsonl#byte-offsets-with-uint8array
     const buf = new TextEncoder().encode('{"a":1}\n{"b":2}\n{"c":3}\n');
     // Parse starting from byte offset 8 (skips the first line)
@@ -1654,7 +1685,7 @@ console.log(color("red", "number"));`;
     expect(partial.values[0]).toEqual({ a: 1 });
   });
 
-  it("Bun.JSONL.parseChunk uses subarray for zero-copy streaming", () => {
+  test("Bun.JSONL.parseChunk uses subarray for zero-copy streaming", () => {
     // Ref: https://bun.com/docs/runtime/jsonl#byte-offsets-with-uint8array
     // Simulate binary stream chunks arriving and use subarray() to carry
     // forward unconsumed bytes — the zero-copy pattern from the docs.
@@ -1694,7 +1725,7 @@ console.log(color("red", "number"));`;
     expect(buf.length).toBeLessThanOrEqual(1);
   });
 
-  it("Bun.JSONL.parseChunk recovers from errors without throwing", () => {
+  test("Bun.JSONL.parseChunk recovers from errors without throwing", () => {
     // Ref: https://bun.com/docs/runtime/jsonl#error-recovery
     const input = '{"a":1}\n{invalid}\n{"b":2}\n';
     const result = Bun.JSONL.parseChunk(input);
@@ -1707,7 +1738,7 @@ console.log(color("red", "number"));`;
     expect(result.read).toBe(7);
   });
 
-  it("Bun.JSONL.parseChunk returns a pre-built object shape for fast property access", () => {
+  test("Bun.JSONL.parseChunk returns a pre-built object shape for fast property access", () => {
     // Ref: https://bun.com/docs/runtime/jsonl#performance-notes
     // The result object uses a cached structure — verify all four properties
     // are always present (values, read, done, error) regardless of input.
@@ -1730,14 +1761,14 @@ console.log(color("red", "number"));`;
     expect(empty).toHaveProperty("error");
   });
 
-  it("Bun.JSONL.parse handles all supported JSON value types", () => {
+  test("Bun.JSONL.parse handles all supported JSON value types", () => {
     // Ref: https://bun.com/docs/runtime/jsonl#supported-value-types
     const input = '42\n"hello"\ntrue\nnull\n[1,2,3]\n{"key":"value"}\n';
     const values = Bun.JSONL.parse(input);
     expect(values).toEqual([42, "hello", true, null, [1, 2, 3], { key: "value" }]);
   });
 
-  it("Bun.JSONL.parse skips UTF-8 BOM in Uint8Array input", () => {
+  test("Bun.JSONL.parse skips UTF-8 BOM in Uint8Array input", () => {
     // Ref: https://bun.com/docs/runtime/jsonl#performance-notes
     const bom = new Uint8Array([0xef, 0xbb, 0xbf]);
     const payload = new TextEncoder().encode('{"ok":true}\n');
@@ -1748,7 +1779,7 @@ console.log(color("red", "number"));`;
     expect(values).toEqual([{ ok: true }]);
   });
 
-  it("Bun.JSONL.parseChunk error recovery: can continue after skipping bad line", () => {
+  test("Bun.JSONL.parseChunk error recovery: can continue after skipping bad line", () => {
     // Ref: https://bun.com/docs/runtime/jsonl#error-recovery
     // parseChunk never throws but gets stuck at read=0 when the buffer
     // starts with invalid JSON. Manually skip past the bad line to continue.
@@ -1784,15 +1815,11 @@ console.log(color("red", "number"));`;
     expect(collected).toEqual([{ a: 1 }, { b: 2 }]);
   });
 
-  it("consumeJsonlStream helper: zero-copy streaming with error recovery", async () => {
+  test("consumeJsonlStream helper: zero-copy streaming with error recovery", async () => {
     // Ref: src/utils/jsonl-stream.ts
     // Build a stream with two valid lines and one bad line in the middle
     const encoder = new TextEncoder();
-    const chunks = [
-      encoder.encode('{"id":1}\n{"id":2}\n'),
-      encoder.encode('{bad}\n'),
-      encoder.encode('{"id":3}\n'),
-    ];
+    const chunks = [encoder.encode('{"id":1}\n{"id":2}\n'), encoder.encode("{bad}\n"), encoder.encode('{"id":3}\n')];
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
         for (const chunk of chunks) controller.enqueue(chunk);
@@ -1815,7 +1842,7 @@ console.log(color("red", "number"));`;
     expect(result.errors).toBe(1);
   });
 
-  it("consumeJsonlStream helper: handles partial values across chunk boundaries", async () => {
+  test("consumeJsonlStream helper: handles partial values across chunk boundaries", async () => {
     // Ref: src/utils/jsonl-stream.ts
     // Split a JSON object across two chunks to test the remainder buffer
     const encoder = new TextEncoder();
@@ -1833,16 +1860,12 @@ console.log(color("red", "number"));`;
       onValue: (v) => values.push(v as { id: number; name?: string }),
     });
 
-    expect(values).toEqual([
-      { id: 1 },
-      { id: 2, name: "Alice" },
-      { id: 3 },
-    ]);
+    expect(values).toEqual([{ id: 1 }, { id: 2, name: "Alice" }, { id: 3 }]);
     expect(result.count).toBe(3);
     expect(result.errors).toBe(0);
   });
 
-  it("consumeJsonlStream helper: consumes /api/audit.jsonl end-to-end", async () => {
+  test("consumeJsonlStream helper: consumes /api/audit.jsonl end-to-end", async () => {
     // Ref: src/utils/jsonl-stream.ts
     // Use the helper to consume the real server endpoint
     const res = await fetch(`http://localhost:${TEST_PORT}/api/audit.jsonl?limit=5`, {
@@ -1867,7 +1890,7 @@ console.log(color("red", "number"));`;
 
   // --- CSRF ---
 
-  it("POST /task returns 403 without CSRF token (even with auth)", async () => {
+  test("POST /task returns 403 without CSRF token (even with auth)", async () => {
     // E3: agent_id in the body is now ignored — the server forces it to
     // ctx.agentId. We send a wrong agent_id to verify it's not used.
     const res = await fetch(`http://localhost:${TEST_PORT}/task`, {
@@ -1885,7 +1908,7 @@ console.log(color("red", "number"));`;
   // Phase 1-5: Deep Enhancement Tests
   // ==========================================================================
 
-  it("Phase 1: GET /dashboard has CSP nonce on script tags", async () => {
+  test("Phase 1: GET /dashboard has CSP nonce on script tags", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
     const html = await res.text();
     // nonce= appears in script tag attributes
@@ -1896,7 +1919,7 @@ console.log(color("red", "number"));`;
     expect(csp).toContain("nonce-");
   });
 
-  it("Phase 1: POST /login sets session cookie with HttpOnly and SameSite", async () => {
+  test("Phase 1: POST /login sets session cookie with HttpOnly and SameSite", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1910,20 +1933,20 @@ console.log(color("red", "number"));`;
     }
   });
 
-  it("Phase 2: GET /api/health-log returns health check history", async () => {
+  test("Phase 2: GET /api/health-log returns health check history", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/health-log`);
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to expected response shape
-    const data = await res.json() as { entries: unknown[] };
+    const data = (await res.json()) as { entries: unknown[] };
     expect(Array.isArray(data.entries)).toBe(true);
   });
 
-  it("Phase 2: GET /api/semver returns version negotiation info", async () => {
+  test("Phase 2: GET /api/semver returns version negotiation info", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/semver?version=1.3.14&range=>=1.3.0`);
     // JUSTIFIED: res.json() returns unknown; narrowing to expected response shape
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to response shape
-    const data = await res.json() as { version: string; satisfies: boolean; features: Record<string, boolean> };
+    const data = (await res.json()) as { version: string; satisfies: boolean; features: Record<string, boolean> };
     expect(data.version).toBe("1.3.14");
     expect(data.satisfies).toBe(true);
     expect(data.features.http3).toBe(true);
@@ -1931,21 +1954,21 @@ console.log(color("red", "number"));`;
     expect(data.features.cron).toBe(true);
   });
 
-    // JUSTIFIED: res.json() returns unknown; narrowing to expected response shape
-  it("Phase 2: GET /api/semver detects old version features", async () => {
+  // JUSTIFIED: res.json() returns unknown; narrowing to expected response shape
+  test("Phase 2: GET /api/semver detects old version features", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/semver?version=1.3.10`);
     // JUSTIFIED: res.json() returns unknown; narrowing to response shape
-    const data = await res.json() as { features: Record<string, boolean> };
+    const data = (await res.json()) as { features: Record<string, boolean> };
     expect(data.features.http3).toBe(false);
     expect(data.features.cron).toBe(false);
   });
 
-  it("Phase 2: GET /api/audit/stream requires auth (returns 401)", async () => {
+  test("Phase 2: GET /api/audit/stream requires auth (returns 401)", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/audit/stream`);
     expect(res.status).toBe(401);
   });
 
-  it("Phase 2: GET /api/audit/stream returns SSE content type with auth", async () => {
+  test("Phase 2: GET /api/audit/stream returns SSE content type with auth", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/audit/stream`, {
       headers: { Authorization: `Bearer ${authToken}` },
     });
@@ -1953,12 +1976,12 @@ console.log(color("red", "number"));`;
     expect(res.headers.get("Content-Type")).toContain("text/event-stream");
   });
 
-  it("Phase 3: GET /api/export/bundle.tar requires auth", async () => {
+  test("Phase 3: GET /api/export/bundle.tar requires auth", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/export/bundle.tar`);
     expect(res.status).toBe(401);
   });
 
-  it("Phase 3: GET /api/export/bundle.tar returns tar archive with auth", async () => {
+  test("Phase 3: GET /api/export/bundle.tar returns tar archive with auth", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/export/bundle.tar`, {
       headers: { Authorization: `Bearer ${authToken}` },
     });
@@ -1967,45 +1990,45 @@ console.log(color("red", "number"));`;
     expect(res.headers.get("Content-Disposition")).toContain("bun-dev-export-");
   });
 
-    // JUSTIFIED: res.json() returns unknown; narrowing to expected response shape
-  it("Phase 4: GET /api/openapi.json returns OpenAPI 3.1 spec", async () => {
+  // JUSTIFIED: res.json() returns unknown; narrowing to expected response shape
+  test("Phase 4: GET /api/openapi.json returns OpenAPI 3.1 spec", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/openapi.json`);
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to response shape
-    const data = await res.json() as { openapi: string; info: { title: string }; paths: Record<string, unknown> };
+    const data = (await res.json()) as { openapi: string; info: { title: string }; paths: Record<string, unknown> };
     expect(data.openapi).toBe("3.1.0");
     expect(data.info.title).toBe("BUN-DEV API");
     expect(Object.keys(data.paths).length).toBeGreaterThan(10);
   });
-    // JUSTIFIED: res.json() returns unknown; narrowing to expected response shape
+  // JUSTIFIED: res.json() returns unknown; narrowing to expected response shape
 
-  it("Phase 4: GET /api/diagrams auto-discovers .mmd files via Bun.glob", async () => {
+  test("Phase 4: GET /api/diagrams auto-discovers .mmd files via Bun.glob", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/diagrams`);
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to response shape
-    const data = await res.json() as { diagrams: string[]; count: number };
+    const data = (await res.json()) as { diagrams: string[]; count: number };
     expect(Array.isArray(data.diagrams)).toBe(true);
     expect(data.count).toBe(data.diagrams.length);
     // JUSTIFIED: res.json() returns unknown; narrowing to expected response shape
   });
 
-  it("Phase 4: GET /api/config parses multi-format config files", async () => {
+  test("Phase 4: GET /api/config parses multi-format config files", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/config`);
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to expected response shape
-    const data = await res.json() as { config: Record<string, unknown> };
+    const data = (await res.json()) as { config: Record<string, unknown> };
     expect(data.config.json).toBeDefined();
   });
 
-  it("Phase 4: GET /api/config?format=toml only returns toml config", async () => {
+  test("Phase 4: GET /api/config?format=toml only returns toml config", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/config?format=toml`);
     // JUSTIFIED: res.json() returns unknown; narrowing to response shape
-    const data = await res.json() as { format: string; config: Record<string, unknown> };
+    const data = (await res.json()) as { format: string; config: Record<string, unknown> };
     expect(data.format).toBe("toml");
     expect(data.config.json).toBeUndefined();
   });
 
-  it("Phase 4: POST /api/admin/shell requires auth + CSRF", async () => {
+  test("Phase 4: POST /api/admin/shell requires auth + CSRF", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/admin/shell`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2014,7 +2037,7 @@ console.log(color("red", "number"));`;
     expect(res.status).toBe(401);
   });
 
-  it("Phase 4: POST /api/admin/shell rejects unknown commands", async () => {
+  test("Phase 4: POST /api/admin/shell rejects unknown commands", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/admin/shell`, {
       method: "POST",
       headers: {
@@ -2027,11 +2050,11 @@ console.log(color("red", "number"));`;
     expect(res.status).toBe(400);
   });
 
-  it("Phase 4: POST /api/admin/shell accepts 'workers' command", async () => {
+  test("Phase 4: POST /api/admin/shell accepts 'workers' command", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/admin/shell`, {
       method: "POST",
       headers: {
-    // JUSTIFIED: res.json() returns unknown; narrowing to expected response shape
+        // JUSTIFIED: res.json() returns unknown; narrowing to expected response shape
         "Content-Type": "application/json",
         Authorization: `Bearer ${authToken}`,
         "X-CSRF-Token": csrfToken,
@@ -2040,11 +2063,11 @@ console.log(color("red", "number"));`;
     });
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to response shape
-    const data = await res.json() as { command: string; output: string };
+    const data = (await res.json()) as { command: string; output: string };
     expect(data.command).toBe("workers");
   });
 
-  it("Phase 5: POST /api/features/toggle requires auth + CSRF", async () => {
+  test("Phase 5: POST /api/features/toggle requires auth + CSRF", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/features/toggle`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2053,7 +2076,7 @@ console.log(color("red", "number"));`;
     expect(res.status).toBe(401);
   });
 
-  it("Phase 5: POST /api/features/toggle rejects unknown features", async () => {
+  test("Phase 5: POST /api/features/toggle rejects unknown features", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/features/toggle`, {
       method: "POST",
       headers: {
@@ -2066,10 +2089,10 @@ console.log(color("red", "number"));`;
     expect(res.status).toBe(400);
   });
 
-  it("Phase 5: POST /api/features/toggle enables a feature at runtime", async () => {
+  test("Phase 5: POST /api/features/toggle enables a feature at runtime", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/features/toggle`, {
       method: "POST",
-    // JUSTIFIED: res.json() returns unknown; narrowing to expected response shape
+      // JUSTIFIED: res.json() returns unknown; narrowing to expected response shape
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${authToken}`,
@@ -2079,19 +2102,19 @@ console.log(color("red", "number"));`;
     });
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to response shape
-    const data = await res.json() as { ok: boolean; key: string; enabled: boolean; active: boolean };
+    const data = (await res.json()) as { ok: boolean; key: string; enabled: boolean; active: boolean };
     expect(data.ok).toBe(true);
     expect(data.key).toBe("devDashboard");
     expect(data.active).toBe(true);
   });
 
-  it("Phase 5: GET /dashboard has dark/light mode media query", async () => {
+  test("Phase 5: GET /dashboard has dark/light mode media query", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
     const html = await res.text();
     expect(html).toContain("prefers-color-scheme: light");
   });
 
-  it("Phase 5: GET /dashboard lists new endpoints", async () => {
+  test("Phase 5: GET /dashboard lists new endpoints", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
     const html = await res.text();
     expect(html).toContain("/api/openapi.json");
@@ -2107,62 +2130,62 @@ console.log(color("red", "number"));`;
 
   // --- Deep Enhancement: Mermaid, Redis, S3, Logs, Stream, WebSocket ---
 
-  it("GET /api/redis returns status (not configured without REDIS_URL)", async () => {
+  test("GET /api/redis returns status (not configured without REDIS_URL)", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/redis?test=1`);
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to response shape
-    const data = await res.json() as { redis: string };
+    const data = (await res.json()) as { redis: string };
     expect(data.redis).toBeDefined();
   });
 
-  it("GET /api/s3/backup requires auth", async () => {
+  test("GET /api/s3/backup requires auth", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/s3/backup`);
     expect(res.status).toBe(401);
   });
 
-  it("GET /api/s3/backup returns status with auth", async () => {
+  test("GET /api/s3/backup returns status with auth", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/s3/backup`, {
       headers: { Authorization: `Bearer ${authToken}` },
     });
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to response shape
-    const data = await res.json() as { s3: string };
+    const data = (await res.json()) as { s3: string };
     expect(data.s3).toBeDefined();
   });
 
-  it("GET /api/logs requires auth", async () => {
+  test("GET /api/logs requires auth", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/logs`);
     expect(res.status).toBe(401);
   });
 
-  it("GET /api/logs returns structured log entries with auth", async () => {
+  test("GET /api/logs returns structured log entries with auth", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/logs`, {
       headers: { Authorization: `Bearer ${authToken}` },
     });
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to response shape
-    const data = await res.json() as { logs: unknown[]; count: number };
+    const data = (await res.json()) as { logs: unknown[]; count: number };
     expect(Array.isArray(data.logs)).toBe(true);
     expect(data.count).toBeGreaterThan(0);
   });
 
-  it("GET /api/stream/:path rejects path traversal", async () => {
+  test("GET /api/stream/:path rejects path traversal", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/stream/..%2F..%2Fetc%2Fpasswd`);
     expect(res.status).toBe(400);
   });
 
-  it("GET /api/stream/:path returns 404 for nonexistent file", async () => {
+  test("GET /api/stream/:path returns 404 for nonexistent file", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/stream/nonexistent.txt`);
     expect(res.status).toBe(404);
   });
 
-  it("GET /api/stream/:path streams existing file", async () => {
+  test("GET /api/stream/:path streams existing file", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/stream/manifest.json`);
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toContain("application/json");
   });
 
-  it("POST /api/mermaid requires auth", async () => {
+  test("POST /api/mermaid requires auth", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/mermaid`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2171,7 +2194,7 @@ console.log(color("red", "number"));`;
     expect(res.status).toBe(401);
   });
 
-  it("POST /api/mermaid rejects empty code", async () => {
+  test("POST /api/mermaid rejects empty code", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/mermaid`, {
       method: "POST",
       headers: {
@@ -2183,7 +2206,7 @@ console.log(color("red", "number"));`;
     expect(res.status).toBe(400);
   });
 
-  it("GET /dashboard has SSE audit terminal panel", async () => {
+  test("GET /dashboard has SSE audit terminal panel", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
     const html = await res.text();
     expect(html).toContain("audit-terminal");
@@ -2191,7 +2214,7 @@ console.log(color("red", "number"));`;
     expect(html).toContain("EventSource");
   });
 
-  it("GET /dashboard has Mermaid live renderer", async () => {
+  test("GET /dashboard has Mermaid live renderer", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
     const html = await res.text();
     expect(html).toContain("mermaid-input");
@@ -2199,7 +2222,7 @@ console.log(color("red", "number"));`;
     expect(html).toContain("Mermaid Live Renderer");
   });
 
-  it("GET /dashboard has Swagger/OpenAPI panel", async () => {
+  test("GET /dashboard has Swagger/OpenAPI panel", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
     const html = await res.text();
     expect(html).toContain("swagger-content");
@@ -2207,14 +2230,14 @@ console.log(color("red", "number"));`;
     expect(html).toContain("API Docs (OpenAPI)");
   });
 
-  it("GET /dashboard has feature toggle buttons", async () => {
+  test("GET /dashboard has feature toggle buttons", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
     const html = await res.text();
     expect(html).toContain("toggleFeature");
     expect(html).toContain("setupFeatureToggles");
   });
 
-  it("GET /dashboard lists all new deep enhancement endpoints", async () => {
+  test("GET /dashboard lists all new deep enhancement endpoints", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
     const html = await res.text();
     expect(html).toContain("/api/mermaid");
@@ -2227,11 +2250,11 @@ console.log(color("red", "number"));`;
 
   // --- Deeper Enhancement: SQL, FFI, Image, Hash, Screenshot, Config Write ---
 
-  it("GET /api/ffi loads native library via Bun.ffi", async () => {
+  test("GET /api/ffi loads native library via Bun.ffi", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/ffi`);
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to response shape
-    const data = await res.json() as { ffi: string; sqlite3_version?: string };
+    const data = (await res.json()) as { ffi: string; sqlite3_version?: string };
     expect(data.ffi).toBeDefined();
     // If libsqlite3 is available, version should be present
     if (data.sqlite3_version) {
@@ -2239,30 +2262,30 @@ console.log(color("red", "number"));`;
     }
   });
 
-  it("GET /api/hash computes hash of input", async () => {
+  test("GET /api/hash computes hash of input", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/hash?input=hello&algorithm=sha256`);
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to response shape
-    const data = await res.json() as { input: string; algorithm: string; hash: string; length: number };
+    const data = (await res.json()) as { input: string; algorithm: string; hash: string; length: number };
     expect(data.input).toBe("hello");
     expect(data.algorithm).toBe("sha256");
     expect(data.hash).toMatch(/^[0-9a-f]{64}$/);
     expect(data.length).toBe(64);
   });
 
-  it("GET /api/hash rejects empty input", async () => {
+  test("GET /api/hash rejects empty input", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/hash`);
     expect(res.status).toBe(400);
   });
 
-  it("GET /api/hash supports sha512", async () => {
+  test("GET /api/hash supports sha512", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/hash?input=test&algorithm=sha512`);
     // JUSTIFIED: res.json() returns unknown; narrowing to response shape
-    const data = await res.json() as { hash: string; length: number };
+    const data = (await res.json()) as { hash: string; length: number };
     expect(data.length).toBe(128); // sha512 hex = 64 bytes = 128 chars
   });
 
-  it("POST /api/sql requires auth", async () => {
+  test("POST /api/sql requires auth", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/sql`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2271,7 +2294,7 @@ console.log(color("red", "number"));`;
     expect(res.status).toBe(401);
   });
 
-  it("POST /api/sql rejects non-SELECT queries", async () => {
+  test("POST /api/sql rejects non-SELECT queries", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/sql`, {
       method: "POST",
       headers: {
@@ -2283,7 +2306,7 @@ console.log(color("red", "number"));`;
     expect(res.status).toBe(400);
   });
 
-  it("POST /api/sql executes SELECT query with auth", async () => {
+  test("POST /api/sql executes SELECT query with auth", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/sql`, {
       method: "POST",
       headers: {
@@ -2294,27 +2317,30 @@ console.log(color("red", "number"));`;
     });
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to response shape
-    const data = await res.json() as { rows: Record<string, unknown>[]; count: number };
+    const data = (await res.json()) as { rows: Record<string, unknown>[]; count: number };
     expect(data.count).toBeGreaterThan(0);
     expect(data.rows[0]?.cnt).toBeDefined();
   });
 
-  it("GET /api/image requires auth", async () => {
+  test("GET /api/image requires auth", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/image?src=/icons/icon-512.png`);
     expect(res.status).toBe(401);
   });
 
-  it("GET /api/image rejects path traversal", async () => {
+  test("GET /api/image rejects path traversal", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/image?src=../../etc/passwd`, {
       headers: { Authorization: `Bearer ${authToken}` },
     });
     expect(res.status).toBe(400);
   });
 
-  it("GET /api/image resizes image to webp", async () => {
-    const res = await fetch(`http://localhost:${TEST_PORT}/api/image?src=/icons/icon-512.png&width=64&height=64&format=webp`, {
-      headers: { Authorization: `Bearer ${authToken}` },
-    });
+  test("GET /api/image resizes image to webp", async () => {
+    const res = await fetch(
+      `http://localhost:${TEST_PORT}/api/image?src=/icons/icon-512.png&width=64&height=64&format=webp`,
+      {
+        headers: { Authorization: `Bearer ${authToken}` },
+      },
+    );
     // Image processing may fail if source doesn't exist — accept 200 or 404
     if (res.status === 200) {
       expect(res.headers.get("Content-Type")).toBe("image/webp");
@@ -2322,26 +2348,26 @@ console.log(color("red", "number"));`;
     }
   });
 
-  it("GET /api/screenshot requires auth", async () => {
+  test("GET /api/screenshot requires auth", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/screenshot?url=https://example.com`);
     expect(res.status).toBe(401);
   });
 
-  it("GET /api/screenshot rejects non-http URLs", async () => {
+  test("GET /api/screenshot rejects non-http URLs", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/screenshot?url=file:///etc/passwd`, {
       headers: { Authorization: `Bearer ${authToken}` },
     });
     expect(res.status).toBe(400);
   });
 
-  it("GET /api/screenshot rejects missing url param", async () => {
+  test("GET /api/screenshot rejects missing url param", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/screenshot`, {
       headers: { Authorization: `Bearer ${authToken}` },
     });
     expect(res.status).toBe(400);
   });
 
-  it("POST /api/config/write requires auth + CSRF", async () => {
+  test("POST /api/config/write requires auth + CSRF", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/config/write`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2350,7 +2376,7 @@ console.log(color("red", "number"));`;
     expect(res.status).toBe(401);
   });
 
-  it("POST /api/config/write rejects path traversal in filename", async () => {
+  test("POST /api/config/write rejects path traversal in filename", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/config/write`, {
       method: "POST",
       headers: {
@@ -2363,7 +2389,7 @@ console.log(color("red", "number"));`;
     expect(res.status).toBe(400);
   });
 
-  it("POST /api/config/write creates a JSON5 config file", async () => {
+  test("POST /api/config/write creates a JSON5 config file", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/config/write`, {
       method: "POST",
       headers: {
@@ -2375,12 +2401,12 @@ console.log(color("red", "number"));`;
     });
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to response shape
-    const data = await res.json() as { ok: boolean; path: string; size: number };
+    const data = (await res.json()) as { ok: boolean; path: string; size: number };
     expect(data.ok).toBe(true);
     expect(data.path).toContain("test-config.json5");
   });
 
-  it("GET /api/export/bundle.tar?gzip=1 returns compressed tar", async () => {
+  test("GET /api/export/bundle.tar?gzip=1 returns compressed tar", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/export/bundle.tar?gzip=1`, {
       headers: { Authorization: `Bearer ${authToken}` },
     });
@@ -2390,7 +2416,7 @@ console.log(color("red", "number"));`;
     expect(res.headers.get("X-Export-Ratio")).toBeDefined();
   });
 
-  it("POST /api/admin/shell accepts 'git' command", async () => {
+  test("POST /api/admin/shell accepts 'git' command", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/admin/shell`, {
       method: "POST",
       headers: {
@@ -2402,11 +2428,11 @@ console.log(color("red", "number"));`;
     });
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to response shape
-    const data = await res.json() as { command: string; output: string };
+    const data = (await res.json()) as { command: string; output: string };
     expect(data.command).toBe("git");
   });
 
-  it("POST /api/admin/shell accepts 'env' command", async () => {
+  test("POST /api/admin/shell accepts 'env' command", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/admin/shell`, {
       method: "POST",
       headers: {
@@ -2418,24 +2444,24 @@ console.log(color("red", "number"));`;
     });
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to response shape
-    const data = await res.json() as { command: string; output: string };
+    const data = (await res.json()) as { command: string; output: string };
     expect(data.output).toContain("NODE_ENV=");
   });
 
-  it("all responses have X-Trace-Id header", async () => {
+  test("all responses have X-Trace-Id header", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/health`);
     expect(res.headers.get("X-Trace-Id")).not.toBeNull();
     expect(res.headers.get("X-Trace-Id")!.length).toBe(16);
   });
 
-  it("all responses have X-Response-Time header", async () => {
+  test("all responses have X-Response-Time header", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/health`);
     const timing = res.headers.get("X-Response-Time");
     expect(timing).not.toBeNull();
     expect(timing!.endsWith("ms")).toBe(true);
   });
 
-  it("GET /dashboard has WebSocket live chart canvas", async () => {
+  test("GET /dashboard has WebSocket live chart canvas", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
     const html = await res.text();
     expect(html).toContain("worker-chart");
@@ -2444,7 +2470,7 @@ console.log(color("red", "number"));`;
     expect(html).toContain("/ws/metrics");
   });
 
-  it("GET /dashboard lists Bun.ffi, hash, sql, image, screenshot endpoints", async () => {
+  test("GET /dashboard lists Bun.ffi, hash, sql, image, screenshot endpoints", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
     const html = await res.text();
     expect(html).toContain("/api/ffi");
@@ -2457,37 +2483,41 @@ console.log(color("red", "number"));`;
 
   // --- Even Deeper: Transpiler, DNS, FS, Compress, Utils, Runtime ---
 
-  it("GET /api/transpile transpiles TypeScript to JavaScript", async () => {
-    const res = await fetch(`http://localhost:${TEST_PORT}/api/transpile?code=${encodeURIComponent("const x: number = 42;")}`);
+  test("GET /api/transpile transpiles TypeScript to JavaScript", async () => {
+    const res = await fetch(
+      `http://localhost:${TEST_PORT}/api/transpile?code=${encodeURIComponent("const x: number = 42;")}`,
+    );
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to response shape
-    const data = await res.json() as { input: string; output: string; inputSize: number; outputSize: number };
+    const data = (await res.json()) as { input: string; output: string; inputSize: number; outputSize: number };
     expect(data.input).toContain("const x: number = 42;");
     expect(data.output).toContain("const x");
     expect(data.output).not.toContain(": number");
   });
 
-  it("GET /api/transpile rejects empty code", async () => {
+  test("GET /api/transpile rejects empty code", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/transpile`);
     expect(res.status).toBe(400);
   });
 
-  it("GET /api/transpile transpiles JSX", async () => {
-    const res = await fetch(`http://localhost:${TEST_PORT}/api/transpile?code=${encodeURIComponent("const el = <div>hello</div>;")}`);
+  test("GET /api/transpile transpiles JSX", async () => {
+    const res = await fetch(
+      `http://localhost:${TEST_PORT}/api/transpile?code=${encodeURIComponent("const el = <div>hello</div>;")}`,
+    );
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to response shape
-    const data = await res.json() as { output: string };
+    const data = (await res.json()) as { output: string };
     // JSX should be transformed to function calls (jsx or createElement)
     expect(data.output.length).toBeGreaterThan(0);
     expect(data.output).toMatch(/jsx|createElement|h\(/);
   });
 
-  it("GET /api/dns returns info message for GET", async () => {
+  test("GET /api/dns returns info message for GET", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/dns?host=example.com`);
     expect(res.status).toBe(200);
   });
 
-  it("POST /api/dns resolves a hostname", async () => {
+  test("POST /api/dns resolves a hostname", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/dns`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2495,13 +2525,13 @@ console.log(color("red", "number"));`;
     });
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to response shape
-    const data = await res.json() as { host: string; results: { address: string; family: number }[]; count: number };
+    const data = (await res.json()) as { host: string; results: { address: string; family: number }[]; count: number };
     expect(data.host).toBe("localhost");
     expect(data.count).toBeGreaterThan(0);
     expect(data.results[0]?.address).toBeDefined();
   });
 
-  it("POST /api/dns rejects missing host", async () => {
+  test("POST /api/dns rejects missing host", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/dns`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2510,143 +2540,157 @@ console.log(color("red", "number"));`;
     expect(res.status).toBe(400);
   });
 
-  it("GET /api/processes requires auth", async () => {
+  test("GET /api/processes requires auth", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/processes`);
     expect(res.status).toBe(401);
   });
 
-  it("GET /api/processes lists running processes with auth", async () => {
+  test("GET /api/processes lists running processes with auth", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/processes`, {
       headers: { Authorization: `Bearer ${authToken}` },
     });
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to response shape
-    const data = await res.json() as { processes: { pid: string; command: string }[]; count: number; total: number };
+    const data = (await res.json()) as { processes: { pid: string; command: string }[]; count: number; total: number };
     expect(data.count).toBeGreaterThan(0);
     expect(data.processes[0]?.pid).toBeDefined();
   });
 
-  it("GET /api/fs requires auth", async () => {
+  test("GET /api/fs requires auth", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/fs`);
     expect(res.status).toBe(401);
   });
 
-  it("GET /api/fs lists files in current directory", async () => {
+  test("GET /api/fs lists files in current directory", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/fs?path=.`, {
       headers: { Authorization: `Bearer ${authToken}` },
     });
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to response shape
-    const data = await res.json() as { path: string; files: { name: string; type: string }[]; count: number };
+    const data = (await res.json()) as { path: string; files: { name: string; type: string }[]; count: number };
     expect(data.count).toBeGreaterThan(0);
     const names = data.files.map((f) => f.name);
     expect(names).toContain("package.json");
     expect(names).toContain("src");
   });
 
-  it("GET /api/compress compresses text", async () => {
-    const res = await fetch(`http://localhost:${TEST_PORT}/api/compress?input=${encodeURIComponent("hello world ".repeat(20))}&action=compress`);
+  test("GET /api/compress compresses text", async () => {
+    const res = await fetch(
+      `http://localhost:${TEST_PORT}/api/compress?input=${encodeURIComponent("hello world ".repeat(20))}&action=compress`,
+    );
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to response shape
-    const data = await res.json() as { action: string; inputSize: number; compressedSize: number; ratio: string };
+    const data = (await res.json()) as { action: string; inputSize: number; compressedSize: number; ratio: string };
     expect(data.action).toBe("compress");
     expect(data.compressedSize).toBeLessThan(data.inputSize);
     expect(data.ratio).toMatch(/%/);
   });
 
-  it("GET /api/compress rejects empty input", async () => {
+  test("GET /api/compress rejects empty input", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/compress`);
     expect(res.status).toBe(400);
   });
 
-  it("GET /api/utils escapes HTML", async () => {
-    const res = await fetch(`http://localhost:${TEST_PORT}/api/utils?tool=escape&input=${encodeURIComponent("<script>alert(1)</script>")}`);
+  test("GET /api/utils escapes HTML", async () => {
+    const res = await fetch(
+      `http://localhost:${TEST_PORT}/api/utils?tool=escape&input=${encodeURIComponent("<script>alert(1)</script>")}`,
+    );
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to response shape
-    const data = await res.json() as { tool: string; input: string; output: string };
+    const data = (await res.json()) as { tool: string; input: string; output: string };
     expect(data.output).toContain("&lt;script&gt;");
     expect(data.output).not.toContain("<script>");
   });
 
-  it("GET /api/utils base64 encodes", async () => {
+  test("GET /api/utils base64 encodes", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/utils?tool=base64-encode&input=hello`);
     // JUSTIFIED: res.json() returns unknown; narrowing to response shape
-    const data = await res.json() as { output: string };
+    const data = (await res.json()) as { output: string };
     expect(data.output).toBe(btoa("hello"));
   });
 
-  it("GET /api/utils base64 decodes", async () => {
-    const res = await fetch(`http://localhost:${TEST_PORT}/api/utils?tool=base64-decode&input=${encodeURIComponent(btoa("hello"))}`);
+  test("GET /api/utils base64 decodes", async () => {
+    const res = await fetch(
+      `http://localhost:${TEST_PORT}/api/utils?tool=base64-decode&input=${encodeURIComponent(btoa("hello"))}`,
+    );
     // JUSTIFIED: res.json() returns unknown; narrowing to response shape
-    const data = await res.json() as { output: string };
+    const data = (await res.json()) as { output: string };
     expect(data.output).toBe("hello");
   });
 
-  it("GET /api/utils URL encodes", async () => {
-    const res = await fetch(`http://localhost:${TEST_PORT}/api/utils?tool=urlencode&input=${encodeURIComponent("hello world?foo=bar")}`);
+  test("GET /api/utils URL encodes", async () => {
+    const res = await fetch(
+      `http://localhost:${TEST_PORT}/api/utils?tool=urlencode&input=${encodeURIComponent("hello world?foo=bar")}`,
+    );
     // JUSTIFIED: res.json() returns unknown; narrowing to response shape
-    const data = await res.json() as { output: string };
+    const data = (await res.json()) as { output: string };
     expect(data.output).toBe(encodeURIComponent("hello world?foo=bar"));
   });
 
-  it("GET /api/utils rejects unknown tool", async () => {
+  test("GET /api/utils rejects unknown tool", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/utils?tool=nonexistent&input=test`);
     expect(res.status).toBe(400);
   });
 
-  it("GET /api/runtime requires auth", async () => {
+  test("GET /api/runtime requires auth", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/runtime`);
     expect(res.status).toBe(401);
   });
 
-  it("GET /api/runtime returns runtime status with auth", async () => {
+  test("GET /api/runtime returns runtime status with auth", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/runtime`, {
       headers: { Authorization: `Bearer ${authToken}` },
     });
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to response shape
-    const data = await res.json() as { action: string; uptime: number; bunVersion: string; pid: number; memory: { rss: number } };
+    const data = (await res.json()) as {
+      action: string;
+      uptime: number;
+      bunVersion: string;
+      pid: number;
+      memory: { rss: number };
+    };
     expect(data.action).toBe("status");
     expect(data.uptime).toBeGreaterThan(0);
     expect(data.bunVersion).toBeDefined();
     expect(data.memory.rss).toBeGreaterThan(0);
   });
 
-  it("GET /api/runtime?action=gc forces garbage collection", async () => {
+  test("GET /api/runtime?action=gc forces garbage collection", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/runtime?action=gc`, {
       headers: { Authorization: `Bearer ${authToken}` },
     });
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to response shape
-    const data = await res.json() as { action: string; before: { heapUsed: number }; after: { heapUsed: number } };
+    const data = (await res.json()) as { action: string; before: { heapUsed: number }; after: { heapUsed: number } };
     expect(data.action).toBe("gc");
     expect(data.before.heapUsed).toBeDefined();
     expect(data.after.heapUsed).toBeDefined();
   });
 
-  it("GET /api/runtime?action=shrink releases memory", async () => {
+  test("GET /api/runtime?action=shrink releases memory", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/runtime?action=shrink`, {
       headers: { Authorization: `Bearer ${authToken}` },
     });
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to response shape
-    const data = await res.json() as { action: string; before: { rss: number }; after: { rss: number } };
+    const data = (await res.json()) as { action: string; before: { rss: number }; after: { rss: number } };
     expect(data.action).toBe("shrink");
   });
 
-  it("GET /api/runtime?action=nanoseconds returns high-res timing", async () => {
+  test("GET /api/runtime?action=nanoseconds returns high-res timing", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/runtime?action=nanoseconds`, {
       headers: { Authorization: `Bearer ${authToken}` },
     });
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to response shape
-    const data = await res.json() as { action: string; startNs: number; endNs: number; elapsedNs: number };
+    const data = (await res.json()) as { action: string; startNs: number; endNs: number; elapsedNs: number };
     expect(data.action).toBe("nanoseconds");
     expect(data.elapsedNs).toBeGreaterThan(0);
     expect(data.endNs).toBeGreaterThan(data.startNs);
   });
 
-  it("GET /dashboard has transpiler playground", async () => {
+  test("GET /dashboard has transpiler playground", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
     const html = await res.text();
     expect(html).toContain("transpile-input");
@@ -2654,7 +2698,7 @@ console.log(color("red", "number"));`;
     expect(html).toContain("Code Transpiler Playground");
   });
 
-  it("GET /dashboard has filesystem browser", async () => {
+  test("GET /dashboard has filesystem browser", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
     const html = await res.text();
     expect(html).toContain("fs-browser-content");
@@ -2662,7 +2706,7 @@ console.log(color("red", "number"));`;
     expect(html).toContain("Filesystem Browser");
   });
 
-  it("GET /dashboard has developer utilities panel", async () => {
+  test("GET /dashboard has developer utilities panel", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
     const html = await res.text();
     expect(html).toContain("utils-content");
@@ -2670,7 +2714,7 @@ console.log(color("red", "number"));`;
     expect(html).toContain("Developer Utilities");
   });
 
-  it("GET /dashboard has runtime info panel", async () => {
+  test("GET /dashboard has runtime info panel", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
     const html = await res.text();
     expect(html).toContain("runtime-content");
@@ -2679,7 +2723,7 @@ console.log(color("red", "number"));`;
     expect(html).toContain("runNano()");
   });
 
-  it("GET /dashboard lists all newest endpoints", async () => {
+  test("GET /dashboard lists all newest endpoints", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
     const html = await res.text();
     expect(html).toContain("/api/transpile");
@@ -2693,12 +2737,12 @@ console.log(color("red", "number"));`;
 
   // --- Enhanced Manifest & Sitemap ---
 
-  it("GET /manifest.json returns dynamic manifest with runtime fields", async () => {
+  test("GET /manifest.json returns dynamic manifest with runtime fields", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/manifest.json`);
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toContain("application/manifest+json");
     // JUSTIFIED: res.json() returns unknown; narrowing to manifest shape
-    const m = await res.json() as Record<string, unknown>;
+    const m = (await res.json()) as Record<string, unknown>;
     expect(m.name).toBeDefined();
     expect(m.short_name).toBe("BUN-DEV");
     expect(m.display).toBe("standalone");
@@ -2719,10 +2763,10 @@ console.log(color("red", "number"));`;
     expect(m.display_override).toBeDefined();
   });
 
-  it("GET /manifest.json has shortcuts with 5 entries", async () => {
+  test("GET /manifest.json has shortcuts with 5 entries", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/manifest.json`);
     // JUSTIFIED: res.json() returns unknown; narrowing to manifest shape
-    const m = await res.json() as { shortcuts: { name: string; url: string }[] };
+    const m = (await res.json()) as { shortcuts: { name: string; url: string }[] };
     expect(m.shortcuts.length).toBe(5);
     expect(m.shortcuts[0]?.name).toBe("Dashboard");
     expect(m.shortcuts[1]?.name).toBe("API Reference");
@@ -2731,40 +2775,40 @@ console.log(color("red", "number"));`;
     expect(m.shortcuts[4]?.name).toBe("OpenAPI Spec");
   });
 
-  it("GET /manifest.json has maskable icons", async () => {
+  test("GET /manifest.json has maskable icons", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/manifest.json`);
     // JUSTIFIED: res.json() returns unknown; narrowing to manifest shape
-    const m = await res.json() as { icons: { purpose?: string; sizes: string }[] };
+    const m = (await res.json()) as { icons: { purpose?: string; sizes: string }[] };
     const maskable = m.icons.filter((i) => i.purpose === "maskable");
     expect(maskable.length).toBeGreaterThanOrEqual(1);
     expect(maskable.some((i) => i.sizes === "512x512")).toBe(true);
   });
 
-  it("GET /manifest.json has file_handlers for JSON/MD/YAML/TOML", async () => {
+  test("GET /manifest.json has file_handlers for JSON/MD/YAML/TOML", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/manifest.json`);
     // JUSTIFIED: res.json() returns unknown; narrowing to manifest shape
-    const m = await res.json() as { file_handlers: { accept: Record<string, string[]> }[] };
+    const m = (await res.json()) as { file_handlers: { accept: Record<string, string[]> }[] };
     expect(m.file_handlers).toBeDefined();
     expect(m.file_handlers[0]?.accept["application/json"]).toBeDefined();
     expect(m.file_handlers[0]?.accept["text/markdown"]).toBeDefined();
   });
 
-  it("GET /manifest.json has share_target for receiving shared content", async () => {
+  test("GET /manifest.json has share_target for receiving shared content", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/manifest.json`);
     // JUSTIFIED: res.json() returns unknown; narrowing to manifest shape
-    const m = await res.json() as { share_target: { action: string; method: string } };
+    const m = (await res.json()) as { share_target: { action: string; method: string } };
     expect(m.share_target.action).toBe("/api/share-target");
     expect(m.share_target.method).toBe("POST");
   });
 
-  it("GET /manifest.json has launch_handler for single-instance", async () => {
+  test("GET /manifest.json has launch_handler for single-instance", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/manifest.json`);
     // JUSTIFIED: res.json() returns unknown; narrowing to manifest shape
-    const m = await res.json() as { launch_handler: { client_mode: string } };
+    const m = (await res.json()) as { launch_handler: { client_mode: string } };
     expect(m.launch_handler.client_mode).toBe("navigate-existing");
   });
 
-  it("POST /api/manifest requires auth + CSRF", async () => {
+  test("POST /api/manifest requires auth + CSRF", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/manifest`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2773,7 +2817,7 @@ console.log(color("red", "number"));`;
     expect(res.status).toBe(401);
   });
 
-  it("POST /api/manifest rejects disallowed fields", async () => {
+  test("POST /api/manifest rejects disallowed fields", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/manifest`, {
       method: "POST",
       headers: {
@@ -2786,7 +2830,7 @@ console.log(color("red", "number"));`;
     expect(res.status).toBe(400);
   });
 
-  it("POST /api/manifest updates theme_color at runtime", async () => {
+  test("POST /api/manifest updates theme_color at runtime", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/api/manifest`, {
       method: "POST",
       headers: {
@@ -2798,14 +2842,14 @@ console.log(color("red", "number"));`;
     });
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to response shape
-    const data = await res.json() as { ok: boolean; field: string; value: string };
+    const data = (await res.json()) as { ok: boolean; field: string; value: string };
     expect(data.ok).toBe(true);
     expect(data.field).toBe("theme_color");
     // Restore the original value
     expect(data.value).toBe("#50fa7b");
   });
 
-  it("POST /api/share-target receives shared content", async () => {
+  test("POST /api/share-target receives shared content", async () => {
     const form = new FormData();
     form.append("title", "Test Share");
     form.append("text", "Shared text content");
@@ -2816,13 +2860,13 @@ console.log(color("red", "number"));`;
     });
     expect(res.status).toBe(200);
     // JUSTIFIED: res.json() returns unknown; narrowing to response shape
-    const data = await res.json() as { ok: boolean; received: { title: string; url: string } };
+    const data = (await res.json()) as { ok: boolean; received: { title: string; url: string } };
     expect(data.ok).toBe(true);
     expect(data.received.title).toBe("Test Share");
     expect(data.received.url).toBe("https://example.com");
   });
 
-  it("GET /sitemap.xml has route count header", async () => {
+  test("GET /sitemap.xml has route count header", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/sitemap.xml`);
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toContain("application/xml");
@@ -2831,7 +2875,7 @@ console.log(color("red", "number"));`;
     expect(count).toBeGreaterThan(10);
   });
 
-  it("GET /sitemap.xml has priority and changefreq per URL", async () => {
+  test("GET /sitemap.xml has priority and changefreq per URL", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/sitemap.xml`);
     const xml = await res.text();
     expect(xml).toContain("<priority>");
@@ -2842,7 +2886,7 @@ console.log(color("red", "number"));`;
     expect(xml).toContain("<changefreq>always</changefreq>");
   });
 
-  it("GET /sitemap.xml excludes dynamic routes with :params", async () => {
+  test("GET /sitemap.xml excludes dynamic routes with :params", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/sitemap.xml`);
     const xml = await res.text();
     expect(xml).not.toContain("/:id");
@@ -2850,7 +2894,7 @@ console.log(color("red", "number"));`;
     expect(xml).not.toContain("/:filename");
   });
 
-  it("GET /dashboard lists manifest editor and share-target endpoints", async () => {
+  test("GET /dashboard lists manifest editor and share-target endpoints", async () => {
     const res = await fetch(`http://localhost:${TEST_PORT}/dashboard`);
     const html = await res.text();
     expect(html).toContain("/api/manifest");

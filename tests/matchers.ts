@@ -40,8 +40,7 @@ expect.extend({
     if (actual === null || typeof actual !== "object") {
       return {
         pass: false,
-        message: () =>
-          `expected ${printReceived(actual)} to be a valid audit entry (object)`,
+        message: () => `expected ${printReceived(actual)} to be a valid audit entry (object)`,
       };
     }
 

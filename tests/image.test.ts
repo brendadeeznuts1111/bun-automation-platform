@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { processScreenshot, serveScreenshot } from "../src/utils/image";
 
 describe("Bun.Image processing", () => {
@@ -52,7 +52,7 @@ describe("Bun.Image processing", () => {
     ]);
   }
 
-  it("processes screenshot buffer into webp, thumb, and metadata", async () => {
+  test("processes screenshot buffer into webp, thumb, and metadata", async () => {
     const png = createTestPng();
     const result = await processScreenshot(png, "test-img");
 
@@ -66,7 +66,7 @@ describe("Bun.Image processing", () => {
     expect(typeof result.placeholder).toBe("string");
   });
 
-  it("serves screenshot response with correct format", async () => {
+  test("serves screenshot response with correct format", async () => {
     const png = createTestPng();
     const result = await processScreenshot(png, "test-serve");
 

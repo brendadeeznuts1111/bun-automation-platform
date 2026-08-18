@@ -21,7 +21,7 @@
  * - Some non-standard MIME types: .bmp → image/x-ms-bmp, .wav → audio/x-wav
  */
 
-import { describe, expect, it } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 // Helper: check if a MIME type matches (ignoring charset suffix)
 // JUSTIFIED: helper is used for ad-hoc verification, not in test cases below
@@ -41,17 +41,17 @@ void expectMimeType;
 // ============================================================================
 
 describe("Bun.file() MIME type — docs examples", () => {
-  it("package.json → application/json;charset=utf-8", () => {
+  test("package.json → application/json;charset=utf-8", () => {
     const file = Bun.file("./package.json");
     expect(file.type).toBe("application/json;charset=utf-8");
   });
 
-  it("index.html → text/html;charset=utf-8", () => {
+  test("index.html → text/html;charset=utf-8", () => {
     const file = Bun.file("./index.html");
     expect(file.type).toBe("text/html;charset=utf-8");
   });
 
-  it("image.png → image/png", () => {
+  test("image.png → image/png", () => {
     const file = Bun.file("./image.png");
     expect(file.type).toBe("image/png");
   });
@@ -77,7 +77,7 @@ describe("Bun.file() MIME type — text types with charset", () => {
     ["file.log", "text/plain"],
   ];
 
-  it.each(textWithCharset)("%s → %s;charset=utf-8", (path, expectedBase) => {
+  test.each(textWithCharset)("%s → %s;charset=utf-8", (path, expectedBase) => {
     const file = Bun.file(path);
     expect(file.type).toBe(`${expectedBase};charset=utf-8`);
   });
@@ -98,7 +98,7 @@ describe("Bun.file() MIME type — text types without charset", () => {
     ["file.mdx", "text/mdx"],
   ];
 
-  it.each(textNoCharset)("%s → %s (no charset)", (path, expected) => {
+  test.each(textNoCharset)("%s → %s (no charset)", (path, expected) => {
     const file = Bun.file(path);
     expect(file.type).toBe(expected);
   });
@@ -138,7 +138,7 @@ describe("Bun.file() MIME type — binary types no charset", () => {
     ["file.xz", "application/x-xz"],
   ];
 
-  it.each(binaryTypes)("%s → %s (no charset)", (path, expected) => {
+  test.each(binaryTypes)("%s → %s (no charset)", (path, expected) => {
     const file = Bun.file(path);
     expect(file.type).toBe(expected);
   });
@@ -149,67 +149,61 @@ describe("Bun.file() MIME type — binary types no charset", () => {
 // ============================================================================
 
 describe("Bun.file() MIME type — non-standard vendor types", () => {
-  it(".bmp → image/x-ms-bmp (not image/bmp)", () => {
+  test(".bmp → image/x-ms-bmp (not image/bmp)", () => {
     const file = Bun.file("./file.bmp");
     expect(file.type).toBe("image/x-ms-bmp");
     // IANA standard is image/bmp, but Bun uses the older x-ms-bmp variant
   });
 
-  it(".wav → audio/x-wav (not audio/wav)", () => {
+  test(".wav → audio/x-wav (not audio/wav)", () => {
     const file = Bun.file("./file.wav");
     expect(file.type).toBe("audio/x-wav");
     // IANA standard is audio/wav, but Bun uses the older x-wav variant
   });
 
-  it(".flac → audio/x-flac (not audio/flac)", () => {
+  test(".flac → audio/x-flac (not audio/flac)", () => {
     const file = Bun.file("./file.flac");
     expect(file.type).toBe("audio/x-flac");
   });
 
-  it(".eot → application/vnd.ms-fontobject", () => {
+  test(".eot → application/vnd.ms-fontobject", () => {
     const file = Bun.file("./file.eot");
     expect(file.type).toBe("application/vnd.ms-fontobject");
   });
 
-  it(".opus → audio/ogg (not audio/opus)", () => {
+  test(".opus → audio/ogg (not audio/opus)", () => {
     const file = Bun.file("./file.opus");
     expect(file.type).toBe("audio/ogg");
   });
 
-  it(".doc → application/msword", () => {
+  test(".doc → application/msword", () => {
     const file = Bun.file("./file.doc");
     expect(file.type).toBe("application/msword");
   });
 
-  it(".docx → application/vnd.openxmlformats...", () => {
+  test(".docx → application/vnd.openxmlformats...", () => {
     const file = Bun.file("./file.docx");
-    expect(file.type).toBe(
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    );
+    expect(file.type).toBe("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
   });
 
-  it(".xls → application/vnd.ms-excel", () => {
+  test(".xls → application/vnd.ms-excel", () => {
     const file = Bun.file("./file.xls");
     expect(file.type).toBe("application/vnd.ms-excel");
   });
 
-  it(".xlsx → application/vnd.openxmlformats...", () => {
+  test(".xlsx → application/vnd.openxmlformats...", () => {
     const file = Bun.file("./file.xlsx");
-    expect(file.type).toBe(
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    );
+    expect(file.type).toBe("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
   });
 
-  it(".ppt → application/vnd.ms-powerpoint", () => {
+  test(".ppt → application/vnd.ms-powerpoint", () => {
     const file = Bun.file("./file.ppt");
     expect(file.type).toBe("application/vnd.ms-powerpoint");
   });
 
-  it(".pptx → application/vnd.openxmlformats...", () => {
+  test(".pptx → application/vnd.openxmlformats...", () => {
     const file = Bun.file("./file.pptx");
-    expect(file.type).toBe(
-      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    );
+    expect(file.type).toBe("application/vnd.openxmlformats-officedocument.presentationml.presentation");
   });
 });
 
@@ -218,34 +212,34 @@ describe("Bun.file() MIME type — non-standard vendor types", () => {
 // ============================================================================
 
 describe("Bug 41: file extensions are case-sensitive", () => {
-  it(".JSON (uppercase) → application/octet-stream (not application/json)", () => {
+  test(".JSON (uppercase) → application/octet-stream (not application/json)", () => {
     const file = Bun.file("./file.JSON");
     expect(file.type).toBe("application/octet-stream");
     // Most OSes and web servers treat extensions case-insensitively
     // Bun returns octet-stream for uppercase extensions
   });
 
-  it(".Html (mixed case) → application/octet-stream", () => {
+  test(".Html (mixed case) → application/octet-stream", () => {
     const file = Bun.file("./file.Html");
     expect(file.type).toBe("application/octet-stream");
   });
 
-  it(".PNG (uppercase) → application/octet-stream", () => {
+  test(".PNG (uppercase) → application/octet-stream", () => {
     const file = Bun.file("./file.PNG");
     expect(file.type).toBe("application/octet-stream");
   });
 
-  it(".JS (uppercase) → application/octet-stream", () => {
+  test(".JS (uppercase) → application/octet-stream", () => {
     const file = Bun.file("./file.JS");
     expect(file.type).toBe("application/octet-stream");
   });
 
-  it(".CSS (uppercase) → application/octet-stream", () => {
+  test(".CSS (uppercase) → application/octet-stream", () => {
     const file = Bun.file("./file.CSS");
     expect(file.type).toBe("application/octet-stream");
   });
 
-  it(".MD (uppercase) → application/octet-stream", () => {
+  test(".MD (uppercase) → application/octet-stream", () => {
     const file = Bun.file("./file.MD");
     expect(file.type).toBe("application/octet-stream");
   });
@@ -256,37 +250,37 @@ describe("Bug 41: file extensions are case-sensitive", () => {
 // ============================================================================
 
 describe("Bun.file() MIME type — unknown/no extension", () => {
-  it("unknown extension → application/octet-stream", () => {
+  test("unknown extension → application/octet-stream", () => {
     const file = Bun.file("./file.unknownext");
     expect(file.type).toBe("application/octet-stream");
   });
 
-  it("no extension → application/octet-stream", () => {
+  test("no extension → application/octet-stream", () => {
     const file = Bun.file("./file");
     expect(file.type).toBe("application/octet-stream");
   });
 
-  it(".zstd → application/octet-stream (not recognized)", () => {
+  test(".zstd → application/octet-stream (not recognized)", () => {
     const file = Bun.file("./file.zstd");
     expect(file.type).toBe("application/octet-stream");
   });
 
-  it(".zst → application/octet-stream (not recognized)", () => {
+  test(".zst → application/octet-stream (not recognized)", () => {
     const file = Bun.file("./file.zst");
     expect(file.type).toBe("application/octet-stream");
   });
 
-  it(".jsonc → application/octet-stream (not recognized)", () => {
+  test(".jsonc → application/octet-stream (not recognized)", () => {
     const file = Bun.file("./file.jsonc");
     expect(file.type).toBe("application/octet-stream");
   });
 
-  it(".env → application/octet-stream (not recognized)", () => {
+  test(".env → application/octet-stream (not recognized)", () => {
     const file = Bun.file("./file.env");
     expect(file.type).toBe("application/octet-stream");
   });
 
-  it(".lock → application/octet-stream (not recognized)", () => {
+  test(".lock → application/octet-stream (not recognized)", () => {
     const file = Bun.file("./file.lock");
     expect(file.type).toBe("application/octet-stream");
   });
@@ -297,27 +291,27 @@ describe("Bun.file() MIME type — unknown/no extension", () => {
 // ============================================================================
 
 describe("Bun.file() MIME type — double extensions", () => {
-  it(".tar.gz → application/gzip (last ext wins)", () => {
+  test(".tar.gz → application/gzip (last ext wins)", () => {
     const file = Bun.file("./file.tar.gz");
     expect(file.type).toBe("application/gzip");
   });
 
-  it(".min.js → text/javascript;charset=utf-8 (last ext wins)", () => {
+  test(".min.js → text/javascript;charset=utf-8 (last ext wins)", () => {
     const file = Bun.file("./file.min.js");
     expect(file.type).toBe("text/javascript;charset=utf-8");
   });
 
-  it(".d.ts → text/javascript;charset=utf-8 (last ext wins)", () => {
+  test(".d.ts → text/javascript;charset=utf-8 (last ext wins)", () => {
     const file = Bun.file("./file.d.ts");
     expect(file.type).toBe("text/javascript;charset=utf-8");
   });
 
-  it(".test.ts → text/javascript;charset=utf-8 (last ext wins)", () => {
+  test(".test.ts → text/javascript;charset=utf-8 (last ext wins)", () => {
     const file = Bun.file("./file.test.ts");
     expect(file.type).toBe("text/javascript;charset=utf-8");
   });
 
-  it(".spec.ts → text/javascript;charset=utf-8 (last ext wins)", () => {
+  test(".spec.ts → text/javascript;charset=utf-8 (last ext wins)", () => {
     const file = Bun.file("./file.spec.ts");
     expect(file.type).toBe("text/javascript;charset=utf-8");
   });
@@ -328,22 +322,22 @@ describe("Bun.file() MIME type — double extensions", () => {
 // ============================================================================
 
 describe("Bun.file() MIME type — type option override", () => {
-  it("can override with type option", () => {
+  test("can override with type option", () => {
     const file = Bun.file("./package.json", { type: "text/plain" });
     expect(file.type).toBe("text/plain;charset=utf-8");
   });
 
-  it("can override with custom MIME type", () => {
+  test("can override with custom MIME type", () => {
     const file = Bun.file("./file.json", { type: "application/custom" });
     expect(file.type).toBe("application/custom");
   });
 
-  it("can override binary file with text type", () => {
+  test("can override binary file with text type", () => {
     const file = Bun.file("./file.png", { type: "text/plain" });
     expect(file.type).toBe("text/plain;charset=utf-8");
   });
 
-  it("empty type option falls back to extension detection", () => {
+  test("empty type option falls back to extension detection", () => {
     const file = Bun.file("./file.json", { type: "" });
     // Empty type doesn't override — falls back to extension-based MIME
     expect(file.type).toBe("application/json;charset=utf-8");
@@ -355,14 +349,14 @@ describe("Bun.file() MIME type — type option override", () => {
 // ============================================================================
 
 describe("Bun.file() MIME type — existence independence", () => {
-  it("non-existent .json file still has json MIME type", () => {
+  test("non-existent .json file still has json MIME type", () => {
     const existing = Bun.file("./package.json");
     const nonExistent = Bun.file("./does-not-exist-12345.json");
     expect(existing.type).toBe(nonExistent.type);
     expect(nonExistent.type).toBe("application/json;charset=utf-8");
   });
 
-  it("non-existent .png file still has png MIME type", () => {
+  test("non-existent .png file still has png MIME type", () => {
     const nonExistent = Bun.file("./does-not-exist-12345.png");
     expect(nonExistent.type).toBe("image/png");
   });
@@ -373,18 +367,18 @@ describe("Bun.file() MIME type — existence independence", () => {
 // ============================================================================
 
 describe("Bun.file() MIME type — Blob inheritance", () => {
-  it(".type is on the prototype (Blob), not own property", () => {
+  test(".type is on the prototype (Blob), not own property", () => {
     const file = Bun.file("./package.json");
     expect("type" in file).toBe(true);
-    expect(file.hasOwnProperty("type")).toBe(false);
+    expect(Object.hasOwn(file, "type")).toBe(false);
   });
 
-  it("BunFile extends Blob", () => {
+  test("BunFile extends Blob", () => {
     const file = Bun.file("./package.json");
     expect(file).toBeInstanceOf(Blob);
   });
 
-  it("Blob.type works the same way", () => {
+  test("Blob.type works the same way", () => {
     const blob = new Blob(["test"], { type: "text/plain" });
     expect(blob.type).toBe("text/plain;charset=utf-8");
   });
@@ -395,13 +389,13 @@ describe("Bun.file() MIME type — Blob inheritance", () => {
 // ============================================================================
 
 describe("Bun.file() MIME type — URL paths", () => {
-  it("accepts URL object", () => {
+  test("accepts URL object", () => {
     const url = new URL("file:///path/to/file.json");
     const file = Bun.file(url);
     expect(file.type).toBe("application/json;charset=utf-8");
   });
 
-  it("accepts file:// URL string", () => {
+  test("accepts file:// URL string", () => {
     const file = Bun.file("file:///path/to/file.html");
     expect(file.type).toBe("text/html;charset=utf-8");
   });
@@ -412,22 +406,22 @@ describe("Bun.file() MIME type — URL paths", () => {
 // ============================================================================
 
 describe("Bun.file() MIME type — special types", () => {
-  it(".map → application/json;charset=utf-8", () => {
+  test(".map → application/json;charset=utf-8", () => {
     const file = Bun.file("./file.map");
     expect(file.type).toBe("application/json;charset=utf-8");
   });
 
-  it(".json5 → application/json5", () => {
+  test(".json5 → application/json5", () => {
     const file = Bun.file("./file.json5");
     expect(file.type).toBe("application/json5");
   });
 
-  it(".webmanifest → application/manifest+json", () => {
+  test(".webmanifest → application/manifest+json", () => {
     const file = Bun.file("./file.webmanifest");
     expect(file.type).toBe("application/manifest+json");
   });
 
-  it(".markdown → text/markdown", () => {
+  test(".markdown → text/markdown", () => {
     const file = Bun.file("./file.markdown");
     expect(file.type).toBe("text/markdown");
   });
@@ -438,7 +432,7 @@ describe("Bun.file() MIME type — special types", () => {
 // ============================================================================
 
 describe("Bun.file() MIME type — PWA manifest + icons", () => {
-  it("manifest.json is served as application/manifest+json by our server", async () => {
+  test("manifest.json is served as application/manifest+json by our server", async () => {
     // Our server explicitly sets Content-Type for manifest.json
     // (Bun.file alone would return application/json, but the route overrides)
     const file = Bun.file("./public/manifest.json");
@@ -447,22 +441,22 @@ describe("Bun.file() MIME type — PWA manifest + icons", () => {
     expect(file.type).toBe("application/json;charset=utf-8");
   });
 
-  it("sw.js is served as application/javascript by our server", () => {
+  test("sw.js is served as application/javascript by our server", () => {
     const file = Bun.file("./public/sw.js");
     expect(file.type).toBe("text/javascript;charset=utf-8");
   });
 
-  it("PWA icons (.png) have correct MIME type", () => {
+  test("PWA icons (.png) have correct MIME type", () => {
     const file = Bun.file("./public/icons/icon-128.png");
     expect(file.type).toBe("image/png");
   });
 
-  it("bun.com SVG icon has correct MIME type", () => {
+  test("bun.com SVG icon has correct MIME type", () => {
     const file = Bun.file("./public/bun-com/icons/logo.svg");
     expect(file.type).toBe("image/svg+xml");
   });
 
-  it("bun.com favicon.ico has correct MIME type", () => {
+  test("bun.com favicon.ico has correct MIME type", () => {
     const file = Bun.file("./public/bun-com/icons/favicon.ico");
     expect(file.type).toBe("image/x-icon");
   });
@@ -475,7 +469,7 @@ describe("Bun.file() MIME type — PWA manifest + icons", () => {
 describe("Bun.file() MIME type — determinism", () => {
   const paths = ["./file.json", "./file.png", "./file.ts", "./file.html", "./file.unknown"];
 
-  it.each(paths)("MIME type is deterministic for %s", (path: string) => {
+  test.each(paths)("MIME type is deterministic for %s", (path: string) => {
     const f1 = Bun.file(path);
     const f2 = Bun.file(path);
     expect(f1.type).toBe(f2.type);

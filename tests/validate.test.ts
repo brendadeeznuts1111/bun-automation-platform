@@ -5,12 +5,13 @@
  * and validateAll against both fixtures and real release directories.
  */
 
-import { afterEach, describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   collectIssues,
+  type ExtractedRelease,
   escapeXml,
   extractHrefs,
   formatConsoleReport,
@@ -20,16 +21,15 @@ import {
   isExtractedRelease,
   isNormalizedData,
   loadConfig,
+  type NormalizedBlock,
   normalizeVersion,
   parseCliArgs,
   runCli,
+  type ValidationReport,
   validateAll,
   validateConsistency,
   validateSemantics,
   validateVersionsParallel,
-  type ExtractedRelease,
-  type NormalizedBlock,
-  type ValidationReport,
 } from "../docs/releases/validate-release.ts";
 
 const savedEnv = {
@@ -86,9 +86,7 @@ function normalized(overrides: Partial<NormalizedBlock> = {}): NormalizedBlock {
   };
 }
 
-async function writeFixture(
-  data: { extracted: unknown; normalized: unknown },
-): Promise<string> {
+async function writeFixture(data: { extracted: unknown; normalized: unknown }): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "validate-"));
   await Bun.write(`${dir}/extracted.json`, JSON.stringify(data.extracted, null, 2));
   await Bun.write(`${dir}/normalized.json`, JSON.stringify(data.normalized, null, 2));
@@ -96,18 +94,18 @@ async function writeFixture(
 }
 
 describe("type guards", () => {
-  it("accepts a valid code block", () => {
+  test("accepts a valid code block", () => {
     expect(isCodeBlock({ lang: "ts", code: "const x = 1" })).toBe(true);
     expect(isCodeBlock({ lang: 1, code: "x" })).toBe(false);
   });
 
-  it("accepts pipeline extracted + normalized shapes", () => {
+  test("accepts pipeline extracted + normalized shapes", () => {
     expect(isExtractedRelease(extracted())).toBe(true);
     expect(isNormalizedData([normalized()])).toBe(true);
     expect(isExtractedRelease({ sections: [] })).toBe(false);
   });
 
-  it("accepts spec-style section extracted data", () => {
+  test("accepts spec-style section extracted data", () => {
     const data = {
       sections: [{ heading: "HTTP", text: "hi", codeBlocks: [{ lang: "ts", code: "x" }] }],
     };
@@ -115,7 +113,7 @@ describe("type guards", () => {
     expect(isExtractedData({ sections: [{ heading: 1 }] })).toBe(false);
   });
 
-  it("rejects malformed normalized arrays", () => {
+  test("rejects malformed normalized arrays", () => {
     expect(isNormalizedData([{ heading: "x" }])).toBe(false);
     expect(isNormalizedData("nope")).toBe(false);
     expect(isNormalizedData([])).toBe(true);
@@ -123,20 +121,16 @@ describe("type guards", () => {
 });
 
 describe("semantic rules", () => {
-  it("flags empty feature names as errors and empty code as warnings", () => {
+  test("flags empty feature names as errors and empty code as warnings", () => {
     const src = extracted({
       code_blocks: [block({ feature: "  ", code: "   " })],
     });
     const issues = collectIssues(src, [normalized({ feature: "  " })], "1.3.14");
-    expect(issues.some((i) => i.message.includes("empty feature") && i.severity === "error")).toBe(
-      true,
-    );
-    expect(issues.some((i) => i.message.includes("empty code") && i.severity === "warning")).toBe(
-      true,
-    );
+    expect(issues.some((i) => i.message.includes("empty feature") && i.severity === "error")).toBe(true);
+    expect(issues.some((i) => i.message.includes("empty code") && i.severity === "warning")).toBe(true);
   });
 
-  it("flags unknown languages as warnings only", () => {
+  test("flags unknown languages as warnings only", () => {
     const src = extracted({
       code_blocks: [block({ lang: "cobol" })],
     });
@@ -144,26 +138,20 @@ describe("semantic rules", () => {
     const langs = issues.filter((i) => i.rule === "unknown-language");
     expect(langs).toHaveLength(1);
     expect(langs[0]?.severity).toBe("warning");
-    expect(validateSemantics(src, [normalized()], "1.3.14")).not.toContainEqual(
-      expect.stringContaining("cobol"),
-    );
+    expect(validateSemantics(src, [normalized()], "1.3.14")).not.toContainEqual(expect.stringContaining("cobol"));
   });
 
-  it("flags normalized features missing from extracted", () => {
+  test("flags normalized features missing from extracted", () => {
     const errors = validateSemantics(extracted(), [normalized({ feature: "Ghost" })], "1.3.14");
     expect(errors.some((e) => e.includes("not found in extracted"))).toBe(true);
   });
 
-  it("flags Stable + productionReady false", () => {
-    const errors = validateSemantics(
-      extracted(),
-      [normalized({ productionReady: false })],
-      "1.3.14",
-    );
+  test("flags Stable + productionReady false", () => {
+    const errors = validateSemantics(extracted(), [normalized({ productionReady: false })], "1.3.14");
     expect(errors.some((e) => e.includes("Stable but productionReady false"))).toBe(true);
   });
 
-  it("flags Highly Experimental + productionReady true", () => {
+  test("flags Highly Experimental + productionReady true", () => {
     const src = extracted({
       code_blocks: [block({ status: "Highly Experimental" })],
     });
@@ -172,12 +160,10 @@ describe("semantic rules", () => {
       [normalized({ status: "Highly Experimental", productionReady: true })],
       "1.3.14",
     );
-    expect(errors.some((e) => e.includes("Highly Experimental but productionReady true"))).toBe(
-      true,
-    );
+    expect(errors.some((e) => e.includes("Highly Experimental but productionReady true"))).toBe(true);
   });
 
-  it("flags duplicate features", () => {
+  test("flags duplicate features", () => {
     const src = extracted({
       code_blocks: [block({ id: 1 }), block({ id: 2 })],
     });
@@ -185,16 +171,12 @@ describe("semantic rules", () => {
     expect(errors.some((e) => e.includes("Duplicate feature"))).toBe(true);
   });
 
-  it("flags extracted/normalized status mismatch", () => {
-    const errors = validateSemantics(
-      extracted(),
-      [normalized({ status: "experimental" })],
-      "1.3.14",
-    );
+  test("flags extracted/normalized status mismatch", () => {
+    const errors = validateSemantics(extracted(), [normalized({ status: "experimental" })], "1.3.14");
     expect(errors.some((e) => e.includes("status 'experimental'"))).toBe(true);
   });
 
-  it("validates spec-style section documents", () => {
+  test("validates spec-style section documents", () => {
     const src = {
       sections: [
         { heading: "", text: "x", codeBlocks: [{ lang: "cobol", code: "" }] },
@@ -222,7 +204,7 @@ describe("semantic rules", () => {
     expect(validateConsistency(src).some((e) => e.includes("Total code blocks"))).toBe(true);
   });
 
-  it("flags added_in / release mismatches and duplicate ids", () => {
+  test("flags added_in / release mismatches and duplicate ids", () => {
     const issues = collectIssues(
       extracted({ release: "bun-v9.9.9" }),
       [normalized({ added_in: "0.0.1" }), normalized({ id: "bun-1.3.14-bun-image-1", feature: "Other" })],
@@ -235,20 +217,20 @@ describe("semantic rules", () => {
 });
 
 describe("consistency", () => {
-  it("checks totalCodeBlocks and assigned+missed", () => {
+  test("checks totalCodeBlocks and assigned+missed", () => {
     const src = extracted({ totalCodeBlocks: 9, assignedCount: 1, missedCount: 1 });
     const errors = validateConsistency(src);
     expect(errors.some((e) => e.includes("Total code blocks mismatch"))).toBe(true);
     expect(errors.some((e) => e.includes("assignedCount"))).toBe(true);
   });
 
-  it("passes when counts match", () => {
+  test("passes when counts match", () => {
     expect(validateConsistency(extracted({ totalCodeBlocks: 1 }))).toEqual([]);
   });
 });
 
 describe("validateAll", () => {
-  it("passes real bun-v1.3.14 and bun-v1.3.13 releases", async () => {
+  test("passes real bun-v1.3.14 and bun-v1.3.13 releases", async () => {
     const a = await validateAll("1.3.14");
     const b = await validateAll("bun-v1.3.13");
     expect(a.valid).toBe(true);
@@ -257,7 +239,7 @@ describe("validateAll", () => {
     expect(a.files.normalized.valid).toBe(true);
   });
 
-  it("reports missing files", async () => {
+  test("reports missing files", async () => {
     const dir = await mkdtemp(join(tmpdir(), "validate-missing-"));
     try {
       const report = await validateAll("1.2.3", false, dir);
@@ -269,7 +251,7 @@ describe("validateAll", () => {
     }
   });
 
-  it("reports invalid JSON and invalid shape", async () => {
+  test("reports invalid JSON and invalid shape", async () => {
     const dir = await mkdtemp(join(tmpdir(), "validate-bad-"));
     try {
       await Bun.write(`${dir}/extracted.json`, "{not json");
@@ -285,7 +267,7 @@ describe("validateAll", () => {
     }
   });
 
-  it("surfaces semantic + consistency errors from fixtures", async () => {
+  test("surfaces semantic + consistency errors from fixtures", async () => {
     const dir = await writeFixture({
       extracted: extracted({
         totalCodeBlocks: 99,
@@ -303,7 +285,7 @@ describe("validateAll", () => {
     }
   });
 
-  it("strict mode fails on warnings", async () => {
+  test("strict mode fails on warnings", async () => {
     const dir = await writeFixture({
       extracted: extracted({ code_blocks: [block({ lang: "cobol" })] }),
       normalized: [normalized()],
@@ -319,7 +301,7 @@ describe("validateAll", () => {
     }
   });
 
-  it("fails when warnings exceed MAX_WARNINGS", async () => {
+  test("fails when warnings exceed MAX_WARNINGS", async () => {
     process.env.MAX_WARNINGS = "0";
     const dir = await writeFixture({
       extracted: extracted({ code_blocks: [block({ lang: "cobol" })] }),
@@ -356,14 +338,14 @@ describe("reporters", () => {
     regressionWarnings: [],
   };
 
-  it("formats a console report", () => {
+  test("formats a console report", () => {
     const text = formatConsoleReport("1.3.14", failed);
     expect(text).toContain("FAIL");
     expect(text).toContain("empty heading");
     expect(text).toContain("cobol");
   });
 
-  it("emits JUnit XML with escaped messages", () => {
+  test("emits JUnit XML with escaped messages", () => {
     const xml = generateJUnit({
       ...failed,
       errors: ['bad <tag> & "quote"'],
@@ -373,7 +355,7 @@ describe("reporters", () => {
         semantic: ['bad <tag> & "quote"'],
       },
     });
-    expect(xml).toContain("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
+    expect(xml).toContain('<?xml version="1.0" encoding="UTF-8"?>');
     expect(xml).toContain("<failure");
     expect(xml).toContain('name="semantic"');
     expect(xml).toContain("&lt;tag&gt;");
@@ -381,38 +363,38 @@ describe("reporters", () => {
     expect(xml).not.toContain("<tag>");
   });
 
-  it("escapeXml covers the five XML entities", () => {
+  test("escapeXml covers the five XML entities", () => {
     expect(escapeXml(`&<>"'`)).toBe("&amp;&lt;&gt;&quot;&apos;");
   });
 });
 
 describe("CLI", () => {
-  it("parses positional version, --strict, and --report=", () => {
+  test("parses positional version, --strict, and --report=", () => {
     const opts = parseCliArgs(["1.3.14", "--strict", "--report=json"]);
     expect(opts.version).toBe("1.3.14");
     expect(opts.strict).toBe(true);
     expect(opts.reportFormat).toBe("json");
   });
 
-  it("parses --version and --report as separate flags", () => {
+  test("parses --version and --report as separate flags", () => {
     const opts = parseCliArgs(["--version", "1.3.13", "--report", "junit"]);
     expect(opts.version).toBe("1.3.13");
     expect(opts.reportFormat).toBe("junit");
   });
 
-  it("treats -V and bare --version as CLI version", () => {
+  test("treats -V and bare --version as CLI version", () => {
     expect(parseCliArgs(["-V"]).showCliVersion).toBe(true);
     expect(parseCliArgs(["--cli-version"]).showCliVersion).toBe(true);
     expect(parseCliArgs(["--version"]).showCliVersion).toBe(true);
     expect(parseCliArgs(["--release", "1.3.14"]).version).toBe("1.3.14");
   });
 
-  it("normalizeVersion strips bun-v", () => {
+  test("normalizeVersion strips bun-v", () => {
     expect(normalizeVersion("bun-v1.3.14")).toBe("1.3.14");
     expect(normalizeVersion("1.3.14")).toBe("1.3.14");
   });
 
-  it("loadConfig reads env overrides", () => {
+  test("loadConfig reads env overrides", () => {
     process.env.STRICT_VALIDATION = "true";
     process.env.MAX_WARNINGS = "3";
     process.env.VALID_STATUSES = "stable,preview";
@@ -422,7 +404,7 @@ describe("CLI", () => {
     expect(cfg.validStatuses.has("preview")).toBe(true);
   });
 
-  it("runCli exits 1 without a version", async () => {
+  test("runCli exits 1 without a version", async () => {
     const logs: string[] = [];
     const code = await runCli([], {
       log: (s) => logs.push(s),
@@ -432,7 +414,7 @@ describe("CLI", () => {
     expect(logs.join("\n")).toContain("Usage:");
   });
 
-  it("runCli prints JSON for a real release", async () => {
+  test("runCli prints JSON for a real release", async () => {
     const logs: string[] = [];
     const code = await runCli(["1.3.14", "--report", "json"], {
       log: (s) => logs.push(s),
@@ -443,7 +425,7 @@ describe("CLI", () => {
     expect(parsed.valid).toBe(true);
   });
 
-  it("runCli prints CLI version", async () => {
+  test("runCli prints CLI version", async () => {
     const logs: string[] = [];
     const { CLI_VERSION } = await import("../packages/bun-validation/src/version.ts");
     const code = await runCli(["-V"], {
@@ -454,7 +436,7 @@ describe("CLI", () => {
     expect(logs.join("")).toBe(CLI_VERSION);
   });
 
-  it("runCli prints JUnit for a real release", async () => {
+  test("runCli prints JUnit for a real release", async () => {
     const logs: string[] = [];
     const code = await runCli(["1.3.14", "--report=junit"], {
       log: (s) => logs.push(s),
@@ -466,7 +448,7 @@ describe("CLI", () => {
 });
 
 describe("enhancements", () => {
-  it("extracts and rejects invalid markdown / bare URLs", () => {
+  test("extracts and rejects invalid markdown / bare URLs", () => {
     expect(extractHrefs("See [docs](https://bun.com/docs) and https://bun.com")).toEqual([
       "https://bun.com/docs",
       "https://bun.com",
@@ -475,12 +457,10 @@ describe("enhancements", () => {
       code_blocks: [block({ notes: "See [x](http://%) and also #local" })],
     });
     const issues = collectIssues(src, [normalized()]);
-    expect(issues.some((i) => i.rule === "markdown-links" && i.message.includes("http://%"))).toBe(
-      true,
-    );
+    expect(issues.some((i) => i.rule === "markdown-links" && i.message.includes("http://%"))).toBe(true);
   });
 
-  it("schema v2 treats empty code as an error", () => {
+  test("schema v2 treats empty code as an error", () => {
     const src = extracted({
       schemaVersion: "2",
       code_blocks: [block({ code: "" })],
@@ -489,7 +469,7 @@ describe("enhancements", () => {
     expect(errors.some((e) => e.includes("empty code"))).toBe(true);
   });
 
-  it("groups JUnit failures by category", () => {
+  test("groups JUnit failures by category", () => {
     const xml = generateJUnit({
       valid: false,
       schemaVersion: "1",
@@ -516,7 +496,7 @@ describe("enhancements", () => {
     expect(xml).not.toContain("semantic_0");
   });
 
-  it("validateVersionsParallel respects concurrency and baseDirFor", async () => {
+  test("validateVersionsParallel respects concurrency and baseDirFor", async () => {
     const dir = await writeFixture({
       extracted: extracted(),
       normalized: [normalized()],
@@ -534,7 +514,7 @@ describe("enhancements", () => {
     }
   });
 
-  it("aborts the rule walk at MAX_ERRORS", () => {
+  test("aborts the rule walk at MAX_ERRORS", () => {
     process.env.MAX_ERRORS = "1";
     const src = extracted({
       code_blocks: [block({ feature: "" }), block({ id: 2, feature: "" })],

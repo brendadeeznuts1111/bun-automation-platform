@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
 import { migrate } from "../src/db";
 import { checkRateLimit, cleanupRateLimits } from "../src/middleware/rate-limit";
 
@@ -7,7 +7,7 @@ describe("rate-limit", () => {
     migrate();
   });
 
-  it("allows requests under the limit and tracks remaining", async () => {
+  test("allows requests under the limit and tracks remaining", async () => {
     const ip = `192.168.1.${Math.floor(Math.random() * 200 + 10)}`;
     const path = "/task";
     const method = "POST";
@@ -21,7 +21,7 @@ describe("rate-limit", () => {
     expect(second.remaining).toBe(18);
   });
 
-  it("blocks requests when limit exceeded", async () => {
+  test("blocks requests when limit exceeded", async () => {
     const ip = `10.0.0.${Math.floor(Math.random() * 200 + 10)}`;
     const path = "/login"; // limit 5
     const method = "POST";
@@ -36,7 +36,7 @@ describe("rate-limit", () => {
     expect(blocked.remaining).toBe(0);
   });
 
-  it("E11: separates rate limits by HTTP method", async () => {
+  test("E11: separates rate limits by HTTP method", async () => {
     const ip = `172.16.0.${Math.floor(Math.random() * 200 + 10)}`;
     const path = "/task";
 
@@ -50,7 +50,7 @@ describe("rate-limit", () => {
     expect((await checkRateLimit(ip, path, "GET")).allowed).toBe(true);
   });
 
-  it("cleans up old windows without error", () => {
+  test("cleans up old windows without error", () => {
     expect(() => cleanupRateLimits()).not.toThrow();
   });
 });

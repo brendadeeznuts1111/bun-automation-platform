@@ -1,8 +1,8 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { corsHeaders, handlePreflight, withCors } from "../src/middleware/cors";
 
 describe("CORS Middleware", () => {
-  it("generates CORS headers for request with localhost Origin", () => {
+  test("generates CORS headers for request with localhost Origin", () => {
     // G1: Dev mode only allows localhost origins (not arbitrary sites)
     const req = new Request("http://localhost:3000/tasks", {
       headers: { origin: "http://localhost:5173" },
@@ -14,7 +14,7 @@ describe("CORS Middleware", () => {
     expect(headers["Access-Control-Allow-Credentials"]).toBe("true");
   });
 
-  it("rejects non-localhost origins in dev mode (G1)", () => {
+  test("rejects non-localhost origins in dev mode (G1)", () => {
     const req = new Request("http://localhost:3000/tasks", {
       headers: { origin: "http://evil.com" },
     });
@@ -24,7 +24,7 @@ describe("CORS Middleware", () => {
     expect(headers["Access-Control-Allow-Origin"]).toBeUndefined();
   });
 
-  it("handles OPTIONS preflight requests for localhost origin", () => {
+  test("handles OPTIONS preflight requests for localhost origin", () => {
     const preflightReq = new Request("http://localhost:3000/task", {
       method: "OPTIONS",
       headers: { origin: "http://127.0.0.1:5173" },
@@ -36,7 +36,7 @@ describe("CORS Middleware", () => {
     expect(res?.headers.get("Access-Control-Allow-Origin")).toBe("http://127.0.0.1:5173");
   });
 
-  it("rejects OPTIONS preflight from non-localhost origins in dev mode (G1)", () => {
+  test("rejects OPTIONS preflight from non-localhost origins in dev mode (G1)", () => {
     const preflightReq = new Request("http://localhost:3000/task", {
       method: "OPTIONS",
       headers: { origin: "http://evil.com" },
@@ -47,7 +47,7 @@ describe("CORS Middleware", () => {
     expect(res?.status).toBe(403);
   });
 
-  it("applies CORS headers to outbound Response for localhost origin", () => {
+  test("applies CORS headers to outbound Response for localhost origin", () => {
     const req = new Request("http://localhost:3000/metrics", {
       headers: { origin: "http://localhost:8080" },
     });

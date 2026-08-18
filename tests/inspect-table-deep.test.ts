@@ -14,7 +14,7 @@
  * Ref: https://bun.com/docs/runtime/utils#bun-inspect-table-tabulardata-properties-options
  */
 
-import { describe, expect, it } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 // JUSTIFIED: bun-types only declares { colors?: boolean } for Bun.inspect.table
 // options, but the `depth` option works at runtime (undocumented — Bug 17).
@@ -24,51 +24,51 @@ const withDepth = (depth: number): TableDepthOptions => ({ depth });
 
 describe("Bun.inspect.table() deep edge cases", () => {
   describe("type handling in cells", () => {
-    it("Date objects show ISO string", () => {
+    test("Date objects show ISO string", () => {
       const out = Bun.inspect.table([{ d: new Date("2024-01-01T00:00:00.000Z") }]);
       expect(out).toContain("2024-01-01");
     });
 
-    it("RegExp shows pattern and flags", () => {
+    test("RegExp shows pattern and flags", () => {
       const out = Bun.inspect.table([{ r: /pattern/g }]);
       expect(out).toContain("/pattern/g");
     });
 
-    it("Promise shows resolved state", () => {
+    test("Promise shows resolved state", () => {
       const out = Bun.inspect.table([{ p: Promise.resolve(1) }]);
       expect(out).toContain("Promise");
     });
 
-    it("TypedArray shows type and contents", () => {
+    test("TypedArray shows type and contents", () => {
       const out = Bun.inspect.table([{ u8: new Uint8Array([1, 2, 3]) }]);
       expect(out).toContain("Uint8Array");
       expect(out).toContain("1");
     });
 
-    it("BigInt shows with n suffix", () => {
+    test("BigInt shows with n suffix", () => {
       const out = Bun.inspect.table([{ big: 9007199254740993n }]);
       expect(out).toContain("9007199254740993n");
     });
 
-    it("NaN, Infinity, -Infinity display correctly", () => {
+    test("NaN, Infinity, -Infinity display correctly", () => {
       const out = Bun.inspect.table([{ nan: NaN, inf: Infinity, negInf: -Infinity }]);
       expect(out).toContain("NaN");
       expect(out).toContain("Infinity");
       expect(out).toContain("-Infinity");
     });
 
-    it("-0 displays as -0", () => {
+    test("-0 displays as -0", () => {
       const out = Bun.inspect.table([{ z: -0 }]);
       expect(out).toContain("-0");
     });
 
-    it("null and undefined display distinctly", () => {
+    test("null and undefined display distinctly", () => {
       const out = Bun.inspect.table([{ a: null, b: undefined, c: 0, d: "" }]);
       expect(out).toContain("null");
       expect(out).toContain("undefined");
     });
 
-    it("functions show as [Function: name]", () => {
+    test("functions show as [Function: name]", () => {
       const named = function foo() {};
       const out = Bun.inspect.table([{ fn: () => 1, named }]);
       expect(out).toContain("[Function:");
@@ -76,14 +76,14 @@ describe("Bun.inspect.table() deep edge cases", () => {
   });
 
   describe("structural edge cases", () => {
-    it("circular reference shows [Circular]", () => {
+    test("circular reference shows [Circular]", () => {
       const circ: Record<string, unknown> = { a: 1 };
       circ.self = circ;
       const out = Bun.inspect.table([circ]);
       expect(out).toContain("[Circular]");
     });
 
-    it("sparse array shows undefined for gaps", () => {
+    test("sparse array shows undefined for gaps", () => {
       const sparse = new Array(5);
       sparse[0] = "a";
       sparse[2] = "c";
@@ -94,7 +94,7 @@ describe("Bun.inspect.table() deep edge cases", () => {
       expect(out).toContain("c");
     });
 
-    it("getters are called and values displayed", () => {
+    test("getters are called and values displayed", () => {
       const arr: string[] = [];
       Object.defineProperty(arr, 0, { get: () => "getter value", enumerable: true });
       arr[1] = "normal";
@@ -102,23 +102,25 @@ describe("Bun.inspect.table() deep edge cases", () => {
       expect(out).toContain("getter value");
     });
 
-    it("Proxy objects are transparent", () => {
+    test("Proxy objects are transparent", () => {
       const target: Record<string, number> = { a: 1, b: 2 };
       const proxy = new Proxy(target, {
-        get(t: Record<string, number>, k: string) { return t[k]; },
+        get(t: Record<string, number>, k: string) {
+          return t[k];
+        },
       });
       const out = Bun.inspect.table([proxy]);
       expect(out).toContain("1");
       expect(out).toContain("2");
     });
 
-    it("frozen objects work", () => {
+    test("frozen objects work", () => {
       const frozen = Object.freeze({ a: 1, b: 2 });
       const out = Bun.inspect.table([frozen]);
       expect(out).toContain("1");
     });
 
-    it("null-prototype objects work", () => {
+    test("null-prototype objects work", () => {
       const noProto = Object.create(null);
       noProto.x = 1;
       noProto.y = 2;
@@ -126,14 +128,17 @@ describe("Bun.inspect.table() deep edge cases", () => {
       expect(out).toContain("1");
     });
 
-    it("long strings expand column width (no truncation)", () => {
+    test("long strings expand column width (no truncation)", () => {
       const long = "A".repeat(200);
       const out = Bun.inspect.table([{ x: long, y: "short" }]);
       expect(out).toContain(long);
     });
 
-    it("nested arrays as cells use indices as column headers", () => {
-      const out = Bun.inspect.table([[1, 2, 3], [4, 5, 6]]);
+    test("nested arrays as cells use indices as column headers", () => {
+      const out = Bun.inspect.table([
+        [1, 2, 3],
+        [4, 5, 6],
+      ]);
       // Bun.inspect.table uses Unicode box-drawing, not HTML <table>
       expect(out).toContain("┌");
       expect(out).toContain("│ 0 │");
@@ -141,34 +146,34 @@ describe("Bun.inspect.table() deep edge cases", () => {
       expect(out).toContain("│ 2 │");
     });
 
-    it("Map input shows Key/Values columns", () => {
+    test("Map input shows Key/Values columns", () => {
       const out = Bun.inspect.table(new Map([["a", 1]]));
       expect(out).toContain("Key");
       expect(out).toContain("Values");
     });
 
-    it("Set input shows Values column", () => {
+    test("Set input shows Values column", () => {
       const out = Bun.inspect.table(new Set([1, 2, 3]));
       expect(out).toContain("Values");
     });
   });
 
   describe("properties filter", () => {
-    it("non-existent keys show empty columns", () => {
+    test("non-existent keys show empty columns", () => {
       const out = Bun.inspect.table([{ a: 1, b: 2 }], ["x", "y", "z"]);
       expect(out).toContain("x");
       expect(out).toContain("y");
       expect(out).toContain("z");
     });
 
-    it("mix of existing and non-existent keys", () => {
+    test("mix of existing and non-existent keys", () => {
       const out = Bun.inspect.table([{ a: 1, b: 2 }], ["a", "z"]);
       expect(out).toContain("a");
       expect(out).toContain("z");
       expect(out).toContain("1");
     });
 
-    it("empty properties array shows just index column", () => {
+    test("empty properties array shows just index column", () => {
       const out = Bun.inspect.table([{ a: 1, b: 2 }], []);
       // Only the index column (0) appears — no property columns
       expect(out).toContain("│ 0 │");
@@ -178,7 +183,7 @@ describe("Bun.inspect.table() deep edge cases", () => {
   });
 
   describe("custom inspect in table cells", () => {
-    it("custom inspect string output used as cell value", () => {
+    test("custom inspect string output used as cell value", () => {
       class C {
         [Bun.inspect.custom]() {
           return "Custom{...}";
@@ -188,7 +193,7 @@ describe("Bun.inspect.table() deep edge cases", () => {
       expect(out).toContain("Custom{...}");
     });
 
-    it("custom inspect object output rendered inline", () => {
+    test("custom inspect object output rendered inline", () => {
       class C {
         [Bun.inspect.custom]() {
           return { x: 1, y: 2 };
@@ -201,7 +206,7 @@ describe("Bun.inspect.table() deep edge cases", () => {
   });
 
   describe("Bug 19: Symbol keys appear as column headers (empty cells)", () => {
-    it("symbol-keyed properties create column headers from description", () => {
+    test("symbol-keyed properties create column headers from description", () => {
       const s = Symbol("hidden");
       const out = Bun.inspect.table([{ [s]: "val", normal: "yes" }]);
       // Bug: Symbol description "hidden" appears as a column header
@@ -217,29 +222,29 @@ describe("Bun.inspect.table() deep edge cases", () => {
     // but the runtime accepts any input. These tests verify the runtime
     // behavior of passing invalid types — the `as never` cast is needed
     // because the types correctly reject these inputs.
-    it("string input produces empty string (no error)", () => {
+    test("string input produces empty string (no error)", () => {
       expect(Bun.inspect.table("hello" as never)).toBe("");
     });
 
-    it("number input produces empty string (no error)", () => {
+    test("number input produces empty string (no error)", () => {
       expect(Bun.inspect.table(42 as never)).toBe("");
     });
 
-    it("undefined input produces empty string (no error)", () => {
+    test("undefined input produces empty string (no error)", () => {
       expect(Bun.inspect.table(undefined as never)).toBe("");
     });
 
-    it("null input produces empty string (no error)", () => {
+    test("null input produces empty string (no error)", () => {
       expect(Bun.inspect.table(null as never)).toBe("");
     });
 
-    it("boolean input produces empty string (no error)", () => {
+    test("boolean input produces empty string (no error)", () => {
       expect(Bun.inspect.table(true as never)).toBe("");
     });
   });
 
   describe("Bug 21: mixed types create confusing column layout", () => {
-    it("objects + primitives + arrays merge all keys into columns", () => {
+    test("objects + primitives + arrays merge all keys into columns", () => {
       const mixed = [{ a: 1 }, "string", [10, 20], { b: 2 }, 42];
       const out = Bun.inspect.table(mixed);
       // All object property names AND array indices AND "Values" appear as columns
@@ -250,7 +255,7 @@ describe("Bun.inspect.table() deep edge cases", () => {
   });
 
   describe("Bug 22: Error objects render full stack trace in cells", () => {
-    it("Error in cell shows stack trace (not just message)", () => {
+    test("Error in cell shows stack trace (not just message)", () => {
       const out = Bun.inspect.table([{ e: new Error("test error") }]);
       // Bug: Full stack trace with source code context is rendered
       // instead of just "Error: test error"
@@ -261,7 +266,7 @@ describe("Bun.inspect.table() deep edge cases", () => {
   });
 
   describe("depth option (Bug 17 — inverted)", () => {
-    it("depth: 0 shows more nesting than depth: 5", () => {
+    test("depth: 0 shows more nesting than depth: 5", () => {
       const deep = { a: { b: { c: { d: { e: { f: "leaf" } } } } } };
       const out0 = Bun.inspect.table([{ obj: deep }], withDepth(0));
       const out5 = Bun.inspect.table([{ obj: deep }], withDepth(5));

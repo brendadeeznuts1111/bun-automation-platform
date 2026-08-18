@@ -4,7 +4,7 @@
  * Ref: https://bun.com/docs/test/writing-tests
  */
 
-import { describe, expect, it, beforeAll, afterAll } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -70,19 +70,19 @@ afterAll(() => {
 });
 
 describe("guards", () => {
-  it("accepts a valid code block", () => {
+  test("accepts a valid code block", () => {
     expect(isCodeBlock({ lang: "ts", code: "1" })).toBe(true);
     expect(isCodeBlock({ lang: 1, code: "1" })).toBe(false);
   });
 
-  it("accepts pipeline extracted + normalized shapes", () => {
+  test("accepts pipeline extracted + normalized shapes", () => {
     expect(isExtractedRelease(pipelineExtracted())).toBe(true);
     expect(isNormalizedBlock(pipelineNormalized()[0])).toBe(true);
   });
 });
 
 describe("semantics", () => {
-  it("flags empty feature as error", () => {
+  test("flags empty feature as error", () => {
     const extracted = pipelineExtracted({
       code_blocks: [
         {
@@ -99,7 +99,7 @@ describe("semantics", () => {
     expect(errors.some((e) => e.includes("empty feature"))).toBe(true);
   });
 
-  it("warns on pipeline empty code instead of erroring", () => {
+  test("warns on pipeline empty code instead of erroring", () => {
     const extracted = pipelineExtracted({
       code_blocks: [
         {
@@ -124,7 +124,7 @@ describe("semantics", () => {
 });
 
 describe("consistency", () => {
-  it("detects totalCodeBlocks mismatch", () => {
+  test("detects totalCodeBlocks mismatch", () => {
     const extracted = pipelineExtracted({ totalCodeBlocks: 99 });
     const errors = validateConsistency(extracted);
     expect(errors[0]).toContain("Total code blocks mismatch");
@@ -132,14 +132,8 @@ describe("consistency", () => {
 });
 
 describe("CLI parse", () => {
-  it("parses --version, --strict, --report, --cli-version", () => {
-    const opts = parseCliArgs([
-      "--version",
-      "1.3.14",
-      "--strict",
-      "--report=json",
-      "--cli-version",
-    ]);
+  test("parses --version, --strict, --report, --cli-version", () => {
+    const opts = parseCliArgs(["--version", "1.3.14", "--strict", "--report=json", "--cli-version"]);
     expect(opts.version).toBe("1.3.14");
     expect(opts.strict).toBe(true);
     expect(opts.reportFormat).toBe("json");
@@ -148,7 +142,7 @@ describe("CLI parse", () => {
 });
 
 describe("JUnit + grouping", () => {
-  it("escapes XML and emits failures", () => {
+  test("escapes XML and emits failures", () => {
     expect(escapeXml(`a<b>&"c'`)).toBe("a&lt;b&gt;&amp;&quot;c&apos;");
     const xml = generateJUnit({
       valid: false,
@@ -176,7 +170,7 @@ describe("JUnit + grouping", () => {
 });
 
 describe("validateAll against temp fixtures", () => {
-  it("passes a valid release dir", async () => {
+  test("passes a valid release dir", async () => {
     const report = await validateAll("1.0.0", {
       baseDir: join(fixtureRoot, "bun-v1.0.0"),
       reportsDir: join(fixtureRoot, "reports"),
@@ -187,7 +181,7 @@ describe("validateAll against temp fixtures", () => {
     expect(report.errorsByCategory.semantic).toEqual([]);
   });
 
-  it("fails when extracted is missing", async () => {
+  test("fails when extracted is missing", async () => {
     const report = await validateAll("9.9.9", {
       baseDir: join(fixtureRoot, "missing"),
       reportsDir: join(fixtureRoot, "reports"),
