@@ -1,6 +1,7 @@
 {
   "name": "bun-automation-platform",
   "private": true,
+  "workspaces": ["packages/*"],
   "bin": {
     "render-mermaid": "render-mermaid.ts",
     "bun-validate": "packages/bun-validation/src/bin.ts"

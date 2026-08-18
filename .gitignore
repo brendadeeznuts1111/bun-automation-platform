@@ -40,6 +40,9 @@ dev-key.pem
 # SQLite database files (runtime data, not source)
 data/
 
+# Test temp dirs that leak into project root on macOS (mkdtemp quirk)
+var/
+
 # Compiled standalone executable (bun build --compile)
 server
 server.exe
