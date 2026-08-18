@@ -1,0 +1,71 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "files": {
+    "includes": [
+      "**",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/data",
+      "!**/public",
+      "!**/docs",
+      "!**/packages/bun-validation",
+      "!**/*.db",
+      "!**/*.db-wal",
+      "!**/*.db-shm",
+      "!**/*.html",
+      "!**/*.css",
+      "!**/*.svg",
+      "!render-mermaid.ts"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 120,
+    "lineEnding": "lf"
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "style": {
+        "useImportType": "off",
+        "noNonNullAssertion": "off",
+        "useTemplate": "off",
+        "useNodejsImportProtocol": "off"
+      },
+      "suspicious": {
+        "noExplicitAny": "off",
+        "noConfusingLabels": "off",
+        "noTemplateCurlyInString": "off",
+        "noAssignInExpressions": "off",
+        "noControlCharactersInRegex": "off",
+        "useIterableCallbackReturn": "off"
+      },
+      "correctness": {
+        "noUnusedVariables": "off",
+        "noUnknownTypeSelector": "off"
+      },
+      "complexity": {
+        "noImportantStyles": "off",
+        "noUselessLoneBlockStatements": "off",
+        "noCommaOperator": "off",
+        "useLiteralKeys": "off",
+        "useOptionalChain": "off"
+      }
+    }
+  },
+  "css": {
+    "linter": {
+      "enabled": false
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "semicolons": "always",
+      "trailingCommas": "all"
+    }
+  }
+}

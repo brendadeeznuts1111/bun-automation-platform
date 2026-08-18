@@ -7,7 +7,8 @@
  * allows one probe request; if it succeeds, the circuit resets.
  */
 
-import { write, read } from "../db";
+import { read, write } from "../db";
+import { CircuitStatusRow } from "../types/models";
 
 const FAILURE_THRESHOLD = parseInt(process.env.CIRCUIT_BREAKER_THRESHOLD ?? "5", 10);
 const COOLDOWN_MS = parseInt(process.env.CIRCUIT_BREAKER_COOLDOWN_MS ?? "300000", 10); // 5 min
@@ -28,10 +29,7 @@ function parseSqliteDate(dateStr: string): number {
 /** Get the current state of a site's circuit breaker. */
 export function getCircuitStatus(site: string): CircuitStatus {
   const row = read((db) => {
-    // JUSTIFIED: bun:sqlite .get() returns unknown; narrowing to the circuit breaker row type
-    return db.query("SELECT failures, tripped_at FROM circuit_breakers WHERE site = ?").get(site) as
-      | { failures: number; tripped_at: string | null }
-      | null;
+    return db.query("SELECT failures, tripped_at FROM circuit_breakers WHERE site = ?").as(CircuitStatusRow).get(site);
   });
 
   if (!row || row.failures < FAILURE_THRESHOLD) {

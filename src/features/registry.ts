@@ -73,10 +73,12 @@ const FEATURES: Record<string, FeatureFlag> = {
     key: "http3",
     envVar: "ENABLE_HTTP3",
     status: "experimental",
-    description: "Enable HTTP/3 (QUIC) over UDP on the same port alongside HTTP/1.1. Browsers auto-upgrade via Alt-Svc.",
+    description:
+      "Enable HTTP/3 (QUIC) over UDP on the same port alongside HTTP/1.1. Browsers auto-upgrade via Alt-Svc.",
     dependencies: ["tls"],
     readyForPromotion: false,
-    notes: "Experimental per v1.3.14 blog: 'Do not deploy http3: true to production yet.' WebSocket over HTTP/3 not supported. 0-RTT disabled. Ref: https://bun.sh/blog/bun-v1.3.14#http-3-quic-support-in-bun-serve",
+    notes:
+      "Experimental per v1.3.14 blog: 'Do not deploy http3: true to production yet.' WebSocket over HTTP/3 not supported. 0-RTT disabled. Ref: https://bun.sh/blog/bun-v1.3.14#http-3-quic-support-in-bun-serve",
   },
 
   devDashboard: {
@@ -96,7 +98,8 @@ const FEATURES: Record<string, FeatureFlag> = {
     description: "Enable WebSocket endpoints for live task progress streaming and remote browser control.",
     dependencies: [],
     readyForPromotion: false,
-    notes: "WebSocket endpoints /ws/task/:id and /ws/control/:id. Not yet implemented (OPEN_TASKS C1, C2). WebSocket over HTTP/3 is not supported in v1.3.14.",
+    notes:
+      "WebSocket endpoints /ws/task/:id and /ws/control/:id. Not yet implemented (OPEN_TASKS C1, C2). WebSocket over HTTP/3 is not supported in v1.3.14.",
   },
 
   noOrphans: {
@@ -106,7 +109,8 @@ const FEATURES: Record<string, FeatureFlag> = {
     description: "Exit automatically when parent process dies. Set on worker subprocesses in pool.ts.",
     dependencies: [],
     readyForPromotion: true,
-    notes: "Enabled by default on all worker subprocesses. Ref: https://bun.sh/blog/bun-v1.3.14#no-orphans-exit-when-the-parent-process-dies",
+    notes:
+      "Enabled by default on all worker subprocesses. Ref: https://bun.sh/blog/bun-v1.3.14#no-orphans-exit-when-the-parent-process-dies",
   },
 
   http3Client: {
@@ -133,7 +137,8 @@ const FEATURES: Record<string, FeatureFlag> = {
     key: "htmlRewriter",
     envVar: "ENABLE_HTML_REWRITER",
     status: "experimental",
-    description: "Use HTMLRewriter to dynamically inject theme-color meta, feature flags script, and nonce attributes into HTML responses.",
+    description:
+      "Use HTMLRewriter to dynamically inject theme-color meta, feature flags script, and nonce attributes into HTML responses.",
     dependencies: [],
     readyForPromotion: false,
     notes: "HTMLRewriter is a built-in Bun API (like Cloudflare's). Ref: https://bun.com/docs/runtime/htmlrewriter",
@@ -143,7 +148,8 @@ const FEATURES: Record<string, FeatureFlag> = {
     key: "pwa",
     envVar: "ENABLE_PWA",
     status: "experimental",
-    description: "Serve a PWA manifest and icons so the dashboard can be installed as a Chrome standalone app (BUN-DEV).",
+    description:
+      "Serve a PWA manifest and icons so the dashboard can be installed as a Chrome standalone app (BUN-DEV).",
     dependencies: [],
     readyForPromotion: false,
     notes: "Manifest at /manifest.json, icons at /icons/*.png. Install from Chrome > Install App.",
@@ -156,6 +162,12 @@ const activeFeatures = new Set<string>();
 
 // Tracks why a requested feature couldn't be activated.
 const blockedFeatures = new Map<string, string>();
+
+// --- Dynamic runtime overrides ---
+// Allows toggling features at runtime without restarting the server.
+// Set via POST /api/features/toggle — values override env var checks.
+// Declared here (before isFeatureEnabled) so the override check can access it.
+const runtimeOverrides = new Map<string, boolean>();
 
 // --- Public API ------------------------------------------------------------
 
@@ -170,6 +182,11 @@ export function isFeatureEnabled(key: string): boolean {
     console.warn(`[features] unknown feature: ${key}`);
     return false;
   }
+
+  // Runtime overrides take precedence over env vars.
+  // Set by toggleFeature() — allows toggling features without restarting.
+  const override = runtimeOverrides.get(key);
+  if (override !== undefined) return override;
 
   const value = process.env[feature.envVar];
   return value === "1" || value === "true";
@@ -286,17 +303,15 @@ export function _reset(): void {
   runtimeOverrides.clear();
 }
 
-// --- Dynamic runtime overrides ---
-// Allows toggling features at runtime without restarting the server.
-// Set via POST /api/features/toggle — values override env var checks.
-const runtimeOverrides = new Map<string, boolean>();
-
 /**
  * Toggle a feature at runtime without restarting the server.
  * This updates the in-memory override map and the active set.
  * Returns the result with the new active state.
  */
-export function toggleFeature(key: string, enabled: boolean): {
+export function toggleFeature(
+  key: string,
+  enabled: boolean,
+): {
   ok: boolean;
   error?: string;
   active: boolean;

@@ -8,6 +8,7 @@
  */
 
 import { read } from "../db";
+import { AuditLogRow, SessionRow, TaskRow } from "../types/models";
 
 /**
  * Generate a tar archive containing all JSONL exports + manifest.
@@ -23,26 +24,30 @@ export function createExportBundle(): {
 
   // Collect all JSONL exports from the database
   const tasks = read((db) => {
-    return db.query("SELECT * FROM tasks").all();
+    return db.query("SELECT * FROM tasks").as(TaskRow).all();
   });
   const sessions = read((db) => {
-    return db.query("SELECT * FROM sessions").all();
+    return db.query("SELECT * FROM sessions").as(SessionRow).all();
   });
   const auditLog = read((db) => {
-    return db.query("SELECT * FROM audit_log ORDER BY created_at DESC").all();
+    return db.query("SELECT * FROM audit_log ORDER BY created_at DESC").as(AuditLogRow).all();
   });
 
   const files: Record<string, string> = {
     [`tasks-${date}.jsonl`]: tasks.map((t) => JSON.stringify(t)).join("\n"),
     [`sessions-${date}.jsonl`]: sessions.map((s) => JSON.stringify(s)).join("\n"),
     [`audit-${date}.jsonl`]: auditLog.map((a) => JSON.stringify(a)).join("\n"),
-    [`manifest-${date}.json`]: JSON.stringify({
-      exported_at: new Date().toISOString(),
-      bun_version: Bun.version,
-      task_count: tasks.length,
-      session_count: sessions.length,
-      audit_count: auditLog.length,
-    }, null, 2),
+    [`manifest-${date}.json`]: JSON.stringify(
+      {
+        exported_at: new Date().toISOString(),
+        bun_version: Bun.version,
+        task_count: tasks.length,
+        session_count: sessions.length,
+        audit_count: auditLog.length,
+      },
+      null,
+      2,
+    ),
   };
 
   // JUSTIFIED: Bun.Archive constructor is typed but the return type
@@ -68,21 +73,25 @@ export async function createCompressedExportBundle(): Promise<{
   const date = new Date().toISOString().slice(0, 10);
 
   // Collect all JSONL exports from the database
-  const tasks = read((db) => db.query("SELECT * FROM tasks").all());
-  const sessions = read((db) => db.query("SELECT * FROM sessions").all());
-  const auditLog = read((db) => db.query("SELECT * FROM audit_log ORDER BY created_at DESC").all());
+  const tasks = read((db) => db.query("SELECT * FROM tasks").as(TaskRow).all());
+  const sessions = read((db) => db.query("SELECT * FROM sessions").as(SessionRow).all());
+  const auditLog = read((db) => db.query("SELECT * FROM audit_log ORDER BY created_at DESC").as(AuditLogRow).all());
 
   const files: Record<string, string> = {
     [`tasks-${date}.jsonl`]: tasks.map((t) => JSON.stringify(t)).join("\n"),
     [`sessions-${date}.jsonl`]: sessions.map((s) => JSON.stringify(s)).join("\n"),
     [`audit-${date}.jsonl`]: auditLog.map((a) => JSON.stringify(a)).join("\n"),
-    [`manifest-${date}.json`]: JSON.stringify({
-      exported_at: new Date().toISOString(),
-      bun_version: Bun.version,
-      task_count: tasks.length,
-      session_count: sessions.length,
-      audit_count: auditLog.length,
-    }, null, 2),
+    [`manifest-${date}.json`]: JSON.stringify(
+      {
+        exported_at: new Date().toISOString(),
+        bun_version: Bun.version,
+        task_count: tasks.length,
+        session_count: sessions.length,
+        audit_count: auditLog.length,
+      },
+      null,
+      2,
+    ),
   };
 
   // Uncompressed archive for size comparison
@@ -95,7 +104,9 @@ export async function createCompressedExportBundle(): Promise<{
   // Compressed archive — Bun.Archive supports compress:"gzip" natively
   // Ref: node_modules/bun-types/docs/runtime/archive.mdx#writing-archives-to-disk
   // JUSTIFIED: compress option per archive.mdx — not in all bun-types versions
-  const gzippedArchive = new Bun.Archive(files, { compress: "gzip" } as unknown as ConstructorParameters<typeof Bun.Archive>[1]);
+  const gzippedArchive = new Bun.Archive(files, { compress: "gzip" } as unknown as ConstructorParameters<
+    typeof Bun.Archive
+  >[1]);
   // JUSTIFIED: .bytes() returns Uint8Array per archive.mdx#getting-archive-bytes
   const compressedBytes = await (gzippedArchive as unknown as { bytes: () => Promise<Uint8Array> }).bytes();
 

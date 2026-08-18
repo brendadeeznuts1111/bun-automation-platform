@@ -162,7 +162,11 @@
     {
       "phase": 1,
       "title": "Evaluate test runner improvements",
-      "items": ["Try bun test --parallel for CI", "Try bun test --changed for local dev", "Try bun test --shard for CI matrix"]
+      "items": [
+        "Try bun test --parallel for CI",
+        "Try bun test --changed for local dev",
+        "Try bun test --shard for CI matrix"
+      ]
     },
     {
       "phase": 2,

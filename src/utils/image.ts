@@ -11,8 +11,8 @@
  * All processing runs off the main thread (except metadata()).
  */
 
-import { resolve, join } from "node:path";
 import { mkdirSync, realpathSync } from "node:fs";
+import { join, resolve } from "node:path";
 
 const SCREENSHOT_DIR = resolve(process.env.SCREENSHOT_DIR ?? "./data/screenshots");
 const THUMBNAIL_WIDTH = parseInt(process.env.THUMBNAIL_WIDTH ?? "400", 10);
@@ -83,9 +83,7 @@ export async function processScreenshot(
   // Ref: node_modules/bun-types/bun.d.ts — write(dest): Promise<number>
   const [fullSize, thumbSize, placeholder, meta, dominantColor] = await Promise.all([
     // Full-size WebP — write() returns bytes written
-    new Bun.Image(input, { maxPixels: 4096 * 4096 })
-      .webp({ quality: FULL_QUALITY })
-      .write(fullPath),
+    new Bun.Image(input, { maxPixels: 4096 * 4096 }).webp({ quality: FULL_QUALITY }).write(fullPath),
     // Thumbnail (resize + WebP) — mks2013 filter for downscaling
     new Bun.Image(input, { maxPixels: 4096 * 4096 })
       .resize(THUMBNAIL_WIDTH, THUMBNAIL_WIDTH, {
@@ -138,10 +136,7 @@ async function extractDominantColor(
   try {
     // Resize to 1x1 — this averages all pixels into a single color.
     // Encode as PNG (lossless, simple to parse) and get the raw bytes.
-    const pngBytes = await new Bun.Image(input, { maxPixels: 4096 * 4096 })
-      .resize(1, 1, { fit: "fill" })
-      .png()
-      .bytes();
+    const pngBytes = await new Bun.Image(input, { maxPixels: 4096 * 4096 }).resize(1, 1, { fit: "fill" }).png().bytes();
 
     // Parse the PNG to find all IDAT chunks.
     // PNG structure: 8-byte signature, then chunks of [length(4), type(4), data(length), crc(4)]
@@ -173,9 +168,10 @@ async function extractDominantColor(
     // JUSTIFIED: new Uint8Array() returns Uint8Array<ArrayBuffer> but TS
     // infers Uint8Array<ArrayBufferLike> in the ternary. The buffer is
     // always a real ArrayBuffer from `new Uint8Array(n)`.
-    const idat: Uint8Array = idatChunks.length === 1
-      ? idatChunks[0]!
-      : new Uint8Array(idatChunks.reduce((sum, chunk) => sum + chunk.length, 0));
+    const idat: Uint8Array =
+      idatChunks.length === 1
+        ? idatChunks[0]!
+        : new Uint8Array(idatChunks.reduce((sum, chunk) => sum + chunk.length, 0));
 
     if (idatChunks.length > 1) {
       let pos = 0;
@@ -264,7 +260,6 @@ export async function serveScreenshot(
     case "png":
       // JUSTIFIED: Bun.Image is a documented Response body; DOM BodyInit omits it
       return new Response(img.png() as unknown as BodyInit);
-    case "webp":
     default:
       // JUSTIFIED: Bun.Image is a documented Response body; DOM BodyInit omits it
       return new Response(img.webp({ quality: FULL_QUALITY }) as unknown as BodyInit);
@@ -280,5 +275,8 @@ export async function screenshotToBase64(
   maxWidth = 1280,
   quality = 70,
 ): Promise<string> {
-  return new Bun.Image(input, { maxPixels: 4096 * 4096 }).resize(maxWidth, maxWidth, { fit: "inside" }).jpeg({ quality }).toBase64();
+  return new Bun.Image(input, { maxPixels: 4096 * 4096 })
+    .resize(maxWidth, maxWidth, { fit: "inside" })
+    .jpeg({ quality })
+    .toBase64();
 }

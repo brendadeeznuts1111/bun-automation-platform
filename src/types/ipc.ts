@@ -8,9 +8,7 @@
  * Ref: https://bun.com/docs/runtime/spawn#ipc
  */
 
-export type ParentToWorkerMessage =
-  | { type: "task"; taskId: number }
-  | { type: "shutdown"; reason?: string };
+export type ParentToWorkerMessage = { type: "task"; taskId: number } | { type: "shutdown"; reason?: string };
 
 export type WorkerToParentMessage =
   | { type: "ready"; pid: number }

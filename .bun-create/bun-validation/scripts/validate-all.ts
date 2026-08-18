@@ -1,12 +1,12 @@
 #!/usr/bin/env bun
 // Validate every bun-v* directory under ./releases
 import {
+  CLI_VERSION,
+  normalizeVersion,
   parseCliArgs,
   renderReport,
-  validateVersionsParallel,
-  normalizeVersion,
   USAGE,
-  CLI_VERSION,
+  validateVersionsParallel,
 } from "bun-validation";
 
 const releasesDir = `${import.meta.dir}/../releases`;

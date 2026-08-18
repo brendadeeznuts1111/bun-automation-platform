@@ -50,16 +50,16 @@ export async function normalizeRelease(version: string): Promise<string> {
   // JUSTIFIED: Bun.file().json() returns Promise<unknown>; narrowing to
   // ExtractedRelease is safe because we control the JSON schema.
   // JUSTIFIED: narrowing unknown to ExtractedRelease (controlled schema)
-  const raw = await Bun.file(`${releaseDir}/extracted.json`).json() as ExtractedRelease;
+  const raw = (await Bun.file(`${releaseDir}/extracted.json`).json()) as ExtractedRelease;
 
   // Extract version number from release string (e.g. "bun-v1.3.14" → "1.3.14")
   const versionNum = raw.release.replace(/^bun-v/, "");
 
   const normalized: NormalizedBlock[] = raw.code_blocks.map((block, i) => {
     // Extract API references from code (Bun.*, process.*, fs.*, etc.)
-    const api = [
-      ...block.code.matchAll(/(?:Bun\.|process\.|fs\.|tls\.|crypto\.|console\.)(?:[A-Za-z0-9_]+)/g),
-    ].map((m) => m[0]);
+    const api = [...block.code.matchAll(/(?:Bun\.|process\.|fs\.|tls\.|crypto\.|console\.)(?:[A-Za-z0-9_]+)/g)].map(
+      (m) => m[0],
+    );
     const uniqueApi = [...new Set(api)];
 
     // Determine if code is runnable (not just config or a shell command)
@@ -76,7 +76,10 @@ export async function normalizeRelease(version: string): Promise<string> {
     const envMatches = block.code.matchAll(/BUN_FEATURE_FLAG_[A-Z_]+/g);
     for (const m of envMatches) dependencies.push(m[0]);
 
-    const slug = block.feature.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    const slug = block.feature
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
 
     return {
       id: `bun-${versionNum}-${slug}-${i + 1}`,

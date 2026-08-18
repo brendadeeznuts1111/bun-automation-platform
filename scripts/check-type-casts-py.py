@@ -33,17 +33,28 @@ for i, line in enumerate(lines):
     # But ONLY when 'as' is NOT inside a string literal
     for match in re.finditer(r'\bas\s+[A-Z{]|as\s+import\(', line):
         pos = match.start()
+        before = line[:pos]
+
+        # Check if inside a double-quoted string literal
         # Count unescaped double-quotes before this position
         # If odd, we're inside a string literal — skip
-        before = line[:pos]
-        # Remove escaped quotes
-        clean = before.replace('\\"', '')
-        quote_count = clean.count('"')
-        if quote_count % 2 == 1:
-            continue  # Inside a string literal — not a type cast
+        clean_dq = before.replace('\\"', '')
+        if clean_dq.count('"') % 2 == 1:
+            continue  # Inside a double-quoted string literal
+
+        # Check if inside a single-quoted string literal
+        # Count unescaped single-quotes before this position
+        # If odd, we're inside a string literal — skip
+        clean_sq = before.replace("\\'", '')
+        if clean_sq.count("'") % 2 == 1:
+            continue  # Inside a single-quoted string literal
 
         # Also skip if the entire line is a string array entry
         if re.match(r'^\s*"', line) and line.rstrip().endswith('",'):
+            continue
+
+        # Skip if the entire line is a single-quoted string entry
+        if re.match(r"^\s*'", line) and (line.rstrip().endswith("',") or line.rstrip().endswith("'")):
             continue
 
         if 'JUSTIFIED' not in line and 'JUSTIFIED' not in prev_line:

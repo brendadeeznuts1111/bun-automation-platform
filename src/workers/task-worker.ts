@@ -12,17 +12,17 @@
  * - per-agent dataStore directory for persistent profiles (D2)
  */
 
-import { resolve } from "node:path";
 import { mkdirSync } from "node:fs";
 import * as os from "node:os";
-import { write, read } from "../db";
-import { withRetry } from "../utils/retry";
-import { recordSuccess, recordFailure } from "../utils/circuit-breaker";
-import { processScreenshot, type ScreenshotResult } from "../utils/image";
-import type { ParentToWorkerMessage, WorkerToParentMessage } from "../types/ipc";
-import type { TaskRow } from "../types/models";
+import { resolve } from "node:path";
 import { IPCChannel } from "../channels/ipc-channel";
+import { read, write } from "../db";
 import type { Channel } from "../types/channel";
+import type { ParentToWorkerMessage, WorkerToParentMessage } from "../types/ipc";
+import { TaskRow } from "../types/models";
+import { recordFailure, recordSuccess } from "../utils/circuit-breaker";
+import { processScreenshot, type ScreenshotResult } from "../utils/image";
+import { withRetry } from "../utils/retry";
 
 // --- Worker log helper -----------------------------------------------------
 // G1: Workers run in a separate process and can't share the server's
@@ -106,8 +106,8 @@ function loadTask(taskId: number): TaskRow | null {
                 geo_lat, geo_lon, error, result, created_at, updated_at, started_at, completed_at
          FROM tasks WHERE id = ?`,
       )
-      // JUSTIFIED: bun:sqlite .get() returns unknown; narrowing to TaskRow | null
-      .get(taskId) as TaskRow | null;
+      .as(TaskRow)
+      .get(taskId);
   });
 }
 
@@ -127,9 +127,10 @@ function completeTask(taskId: number, result: string): void {
 
 function failTask(taskId: number, error: string): void {
   write((db) => {
-    db.query(
-      `UPDATE tasks SET status = 'failed', error = ?, updated_at = datetime('now') WHERE id = ?`,
-    ).run(error, taskId);
+    db.query(`UPDATE tasks SET status = 'failed', error = ?, updated_at = datetime('now') WHERE id = ?`).run(
+      error,
+      taskId,
+    );
   }).catch((e) => workerLog("error", "failTask failed", e));
 }
 
@@ -252,7 +253,7 @@ async function executeTask(task: TaskRow): Promise<string> {
 
   // Step 3: Extract session data for persistence (D2)
   try {
-    cookies = await view.evaluate("document.cookie") ?? "";
+    cookies = (await view.evaluate("document.cookie")) ?? "";
   } catch {
     // Some pages block cookie access — non-fatal
     cookies = "";
@@ -263,7 +264,7 @@ async function executeTask(task: TaskRow): Promise<string> {
       "(() => { const o = {}; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); o[k] = localStorage.getItem(k); } return JSON.stringify(o); })()",
     );
     // JUSTIFIED: evaluate() returns unknown; JSON.parse returns any — narrowing to Record
-    localStorageData = lsJson ? JSON.parse(lsJson as string) as Record<string, string> : {};
+    localStorageData = lsJson ? (JSON.parse(lsJson as string) as Record<string, string>) : {};
   } catch {
     // localStorage may be inaccessible on some pages — non-fatal
     localStorageData = {};
@@ -276,16 +277,18 @@ async function executeTask(task: TaskRow): Promise<string> {
   let sessionId: number | null = null;
   if (screenshotResult) {
     sessionId = await write((db) => {
-      const r = db.query(
-        `INSERT INTO sessions (task_id, screenshot_path, screenshot_color, cookies, local_storage, session_storage, expires_at)
+      const r = db
+        .query(
+          `INSERT INTO sessions (task_id, screenshot_path, screenshot_color, cookies, local_storage, session_storage, expires_at)
          VALUES (?, ?, ?, ?, ?, '{}', datetime('now', '+24 hours'))`,
-      ).run(
-        task.id,
-        screenshotResult.thumbPath,
-        screenshotResult.dominantColor,
-        cookies,
-        JSON.stringify(localStorageData),
-      );
+        )
+        .run(
+          task.id,
+          screenshotResult.thumbPath,
+          screenshotResult.dominantColor,
+          cookies,
+          JSON.stringify(localStorageData),
+        );
       return Number(r.lastInsertRowid);
     });
 
@@ -321,10 +324,7 @@ async function executeTask(task: TaskRow): Promise<string> {
 
 // C5: Create a typed IPC channel wrapping the process object.
 // Worker side: TSend = WorkerToParentMessage, TRecv = ParentToWorkerMessage
-const channel: Channel<WorkerToParentMessage, ParentToWorkerMessage> = new IPCChannel(
-  `worker-${process.pid}`,
-  process,
-);
+const channel: Channel<WorkerToParentMessage, ParentToWorkerMessage> = new IPCChannel(`worker-${process.pid}`, process);
 // G1: Wire the channel into the workerLog helper so subsequent logs flow
 // into the server's ring buffer via IPC instead of just stdout.
 logChannel = channel;
@@ -385,9 +385,7 @@ channel.on("task", async (msg) => {
     completeTask(taskId, result);
     // E6: Catch circuit breaker write rejections — don't let them become
     // unhandled rejections that could crash the worker.
-    recordSuccess(getSiteKey(task.url)).catch((e) =>
-      workerLog("error", "recordSuccess failed", e),
-    );
+    recordSuccess(getSiteKey(task.url)).catch((e) => workerLog("error", "recordSuccess failed", e));
     // D7: If IPC is closed, the task is still completed in the DB — just can't notify
     channel.send({ type: "result", taskId, result });
   } catch (err) {
@@ -398,9 +396,7 @@ channel.on("task", async (msg) => {
     try {
       const task = loadTask(taskId);
       if (task) {
-        recordFailure(getSiteKey(task.url)).catch((e) =>
-          workerLog("error", "recordFailure failed", e),
-        );
+        recordFailure(getSiteKey(task.url)).catch((e) => workerLog("error", "recordFailure failed", e));
       }
     } catch {} // best-effort — don't mask the original error
     channel.send({ type: "error", taskId, error: errMsg });

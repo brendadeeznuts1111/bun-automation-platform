@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { parseCliArgs, renderReport, validateAll, normalizeVersion, USAGE } from "bun-validation";
+import { normalizeVersion, parseCliArgs, renderReport, USAGE, validateAll } from "bun-validation";
 
 const releasesDir = `${import.meta.dir}/../releases`;
 const opts = parseCliArgs(process.argv.slice(2));

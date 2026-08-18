@@ -68,8 +68,7 @@ const ansi: Record<ColorRole, string> = {
   warn: loadBrandColor("warn"),
 };
 
-const wrap = (prefix: string, s: string) =>
-  prefix ? `${prefix}${s}${RESET}` : s;
+const wrap = (prefix: string, s: string) => (prefix ? `${prefix}${s}${RESET}` : s);
 
 const c = {
   label: (s: string) => wrap(ansi.label, s),
@@ -96,9 +95,7 @@ if (bgRaw) {
 // --- Input handling --------------------------------------------------------
 const inputArg = process.argv[2];
 if (!inputArg) {
-  console.error(
-    `${c.err("error:")} usage: bun run render-mermaid.ts <input.mmd | URL> [output]`,
-  );
+  console.error(`${c.err("error:")} usage: bun run render-mermaid.ts <input.mmd | URL> [output]`);
   process.exit(1);
 }
 
@@ -112,9 +109,7 @@ if (isUrl) {
   // but Bun 1.3.14 added "http3"|"h3" per the v1.3.14 blog post. The cast
   // bridges the gap until bun-types ships the updated union.
   // Ref: https://bun.sh/blog/bun-v1.3.14#experimental-http-3-client-for-fetch
-  const tlsOpts = process.env.NODE_TLS_REJECT_UNAUTHORIZED === "0"
-    ? { tls: { rejectUnauthorized: false } }
-    : {};
+  const tlsOpts = process.env.NODE_TLS_REJECT_UNAUTHORIZED === "0" ? { tls: { rejectUnauthorized: false } } : {};
   let content: string;
   try {
     const res = await fetch(inputArg, { protocol: "http3", ...tlsOpts } as any);
@@ -315,7 +310,9 @@ let killed = false;
 const watchdog = setTimeout(() => {
   killed = true;
   console.error(`${c.warn("watchdog:")} render didn't complete after ${WATCHDOG_MS}ms — killing`);
-  try { view.close(); } catch {}
+  try {
+    view.close();
+  } catch {}
 }, WATCHDOG_MS);
 
 try {
@@ -332,7 +329,7 @@ try {
   while (!result && Date.now() < deadline && !killed) {
     await Bun.sleep(50);
     // JUSTIFIED: evaluate() returns Promise<unknown>; narrowing to the result shape
-    result = await view.evaluate("globalThis.__mermaidResult ?? null") as typeof result;
+    result = (await view.evaluate("globalThis.__mermaidResult ?? null")) as typeof result;
   }
 
   if (killed) {
@@ -352,19 +349,19 @@ try {
 
   if (format === "svg") {
     // Extract the serialized SVG from the page
-    const svgXml = await view.evaluate(
+    const svgXml = (await view.evaluate(
       `(() => {
         const svg = document.querySelector("svg");
         if (!svg) throw new Error("SVG element not found in page");
         return new XMLSerializer().serializeToString(svg);
       })()`,
-    ) as string;
+    )) as string;
 
     await write(outPath, svgXml);
     console.log(`${c.ok("done:")} ${c.value(outPath)}`);
   } else {
     // PNG: screenshot the SVG bounding box
-    const clip = await view.evaluate(
+    const clip = (await view.evaluate(
       `(() => {
         const svg = document.querySelector("svg");
         if (!svg) throw new Error("SVG element not found");
@@ -376,8 +373,8 @@ try {
           height: Math.ceil(rect.height),
         };
       })()`,
-    // JUSTIFIED: evaluate() returns Promise<unknown>; narrowing to the clip shape
-    ) as { x: number; y: number; width: number; height: number };
+      // JUSTIFIED: evaluate() returns Promise<unknown>; narrowing to the clip shape
+    )) as { x: number; y: number; width: number; height: number };
 
     // Resize the viewport to fit the SVG, then screenshot
     await view.resize(clip.x + clip.width, clip.y + clip.height);
@@ -396,9 +393,13 @@ try {
   process.exit(1);
 } finally {
   clearTimeout(watchdog);
-  try { view.close(); } catch {}
+  try {
+    view.close();
+  } catch {}
   // Stop the module server
   moduleServer.stop();
   // Clean up temp HTML
-  try { rmSync(tmpHtmlPath, { force: true }); } catch {}
+  try {
+    rmSync(tmpHtmlPath, { force: true });
+  } catch {}
 }

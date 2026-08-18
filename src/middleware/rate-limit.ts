@@ -9,6 +9,7 @@
  */
 
 import { write } from "../db";
+import { CountRow } from "../types/models";
 
 interface RateLimitConfig {
   /** Max requests per window. */
@@ -59,8 +60,8 @@ export async function checkRateLimit(
          ON CONFLICT (key, window_start) DO UPDATE SET count = count + 1
          RETURNING count;`,
       )
-      // JUSTIFIED: bun:sqlite .get() returns unknown; narrowing to the RETURNING row type
-      .get(key, windowStart) as { count: number } | null;
+      .as(CountRow)
+      .get(key, windowStart);
     return row?.count ?? 1;
   });
 

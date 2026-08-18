@@ -18,9 +18,7 @@ const ALLOWED_ORIGINS = (process.env.CORS_ALLOWED_ORIGINS ?? "")
 /** Check if an origin is a localhost dev origin. */
 function isLocalhostOrigin(origin: string): boolean {
   return (
-    origin.startsWith("http://localhost") ||
-    origin.startsWith("http://127.0.0.1") ||
-    origin.startsWith("http://[::1]")
+    origin.startsWith("http://localhost") || origin.startsWith("http://127.0.0.1") || origin.startsWith("http://[::1]")
   );
 }
 

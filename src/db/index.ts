@@ -9,6 +9,7 @@
 import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { MetaRow } from "../types/models";
 
 const DB_PATH = resolve(process.env.DB_PATH ?? "./data/platform.db");
 
@@ -26,7 +27,7 @@ writer.exec("PRAGMA busy_timeout = 5000;");
 /** Reader pool — N read-only connections for concurrent SELECTs.
  *  Opened lazily after the writer creates the DB file + schema. */
 const READER_COUNT = parseInt(process.env.DB_READERS ?? "4", 10);
-let readers: Database[] = [];
+const readers: Database[] = [];
 let readerIdx = 0;
 
 function ensureReaders(): void {
@@ -197,10 +198,7 @@ export function migrate(): void {
   // Run migrations synchronously on the writer connection (before server starts)
   writer.exec("CREATE TABLE IF NOT EXISTS _meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);");
 
-  // JUSTIFIED: bun:sqlite .get() returns unknown; narrowing to the _meta row type
-  const row = writer.query("SELECT value FROM _meta WHERE key = 'schema_version'").get() as
-    | { value: string }
-    | null;
+  const row = writer.query("SELECT value FROM _meta WHERE key = 'schema_version'").as(MetaRow).get();
   const currentVersion = row ? parseInt(row.value, 10) : 0;
 
   for (const m of MIGRATIONS) {
@@ -240,6 +238,11 @@ export function migrate(): void {
  * gracefully via GC.
  */
 export function closeDB(): void {
-  for (const r of readers) try { r.close(); } catch {}
-  try { writer.close(); } catch {}
+  for (const r of readers)
+    try {
+      r.close();
+    } catch {}
+  try {
+    writer.close();
+  } catch {}
 }

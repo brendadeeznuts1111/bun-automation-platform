@@ -21,7 +21,7 @@ interface RetryOptions {
 }
 
 function computeDelay(attempt: number, base: number, max: number, jitter: number): number {
-  const exp = base * Math.pow(2, attempt - 1);
+  const exp = base * 2 ** (attempt - 1);
   const capped = Math.min(exp, max);
   const jitterAmount = capped * jitter * (Math.random() * 2 - 1);
   return Math.max(0, Math.round(capped + jitterAmount));

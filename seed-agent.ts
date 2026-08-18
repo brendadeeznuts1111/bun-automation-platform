@@ -14,4 +14,3 @@ const id = await write((db) => {
   return row?.id ?? 0;
 });
 console.log("agent id:", id);
-

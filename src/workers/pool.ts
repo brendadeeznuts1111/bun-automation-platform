@@ -16,11 +16,11 @@
  */
 
 import { resolve } from "node:path";
-import { trackWorker, isShuttingDown } from "../utils/shutdown";
-import type { WorkerToParentMessage, ParentToWorkerMessage } from "../types/ipc";
 import { IPCChannel } from "../channels/ipc-channel";
 import type { Channel } from "../types/channel";
+import type { ParentToWorkerMessage, WorkerToParentMessage } from "../types/ipc";
 import { log } from "../utils/log";
+import { isShuttingDown, trackWorker } from "../utils/shutdown";
 
 const POOL_SIZE = parseInt(process.env.WORKER_POOL_SIZE ?? "4", 10);
 const WORKER_SCRIPT = resolve(import.meta.dir, "../workers/task-worker.ts");

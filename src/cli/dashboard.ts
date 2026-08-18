@@ -53,12 +53,33 @@ console.log("\n" + sliced + "...");
 
 // Show available Bun APIs
 const apis = [
-  "Bun.serve", "Bun.sqlite", "Bun.WebView", "Bun.cron", "Bun.secrets",
-  "Bun.Image", "Bun.Archive", "Bun.glob", "Bun.shell", "Bun.redis",
-  "Bun.s3", "Bun.sql", "Bun.semver", "Bun.YAML", "Bun.TOML", "Bun.JSON5",
-  "Bun.CryptoHasher", "Bun.CSRF", "Bun.password", "Bun.markdown",
-  "Bun.color", "Bun.JSONL", "Bun.XML", "Bun.CookieMap", "Bun.ffi",
-  "Bun.streams", "Bun.sliceAnsi",
+  "Bun.serve",
+  "Bun.sqlite",
+  "Bun.WebView",
+  "Bun.cron",
+  "Bun.secrets",
+  "Bun.Image",
+  "Bun.Archive",
+  "Bun.glob",
+  "Bun.shell",
+  "Bun.redis",
+  "Bun.s3",
+  "Bun.sql",
+  "Bun.semver",
+  "Bun.YAML",
+  "Bun.TOML",
+  "Bun.JSON5",
+  "Bun.CryptoHasher",
+  "Bun.CSRF",
+  "Bun.password",
+  "Bun.markdown",
+  "Bun.color",
+  "Bun.JSONL",
+  "Bun.XML",
+  "Bun.CookieMap",
+  "Bun.ffi",
+  "Bun.streams",
+  "Bun.sliceAnsi",
 ];
 
 console.log("\n\x1b[36mIntegrated Bun APIs:\x1b[0m");
@@ -70,4 +91,4 @@ if (apiLine.length > termWidth) {
 } else {
   console.log(apiLine);
 }
-console.log(`\n\x1b[2m${apis.length} APIs integrated — ${(apis.length / 30 * 100).toFixed(0)}% coverage\x1b[0m`);
+console.log(`\n\x1b[2m${apis.length} APIs integrated — ${((apis.length / 30) * 100).toFixed(0)}% coverage\x1b[0m`);

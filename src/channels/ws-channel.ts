@@ -49,9 +49,7 @@ interface ServerLike {
   publish(topic: string, data: string | ArrayBuffer | Uint8Array): boolean;
 }
 
-export class WSChannel<TSend extends ChannelMessage, TRecv extends ChannelMessage>
-  extends BaseChannel<TSend, TRecv>
-{
+export class WSChannel<TSend extends ChannelMessage, TRecv extends ChannelMessage> extends BaseChannel<TSend, TRecv> {
   private ws: WSLike;
   private server: ServerLike | null;
 

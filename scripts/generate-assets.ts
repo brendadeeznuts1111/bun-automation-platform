@@ -136,7 +136,8 @@ for (const asset of assets) {
   if (exists && !force) {
     // Regenerate a maskable that is just a copy of the plain icon, even
     // without --force: it's a latent defect, not a valid asset.
-    const isFakeMaskable = asset.kind === "maskable" &&
+    const isFakeMaskable =
+      asset.kind === "maskable" &&
       Bun.SHA256.hash(await Bun.file(asset.path).bytes(), "hex") ===
         Bun.SHA256.hash(await Bun.file(`${ICONS_DIR}/icon-${asset.size}.png`).bytes(), "hex");
     if (!isFakeMaskable) {

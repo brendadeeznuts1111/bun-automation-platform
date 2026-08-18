@@ -85,11 +85,11 @@ if (dirs.length > 0) {
   // JUSTIFIED: Bun.file().json() returns Promise<unknown>; narrowing to our
   // interface is safe because we control the JSON schema.
   // JUSTIFIED: same as above — prev release JSON
-  const prevData = await Bun.file(`${releasesDir}/${prevVersion}/extracted.json`).json() as {
+  const prevData = (await Bun.file(`${releasesDir}/${prevVersion}/extracted.json`).json()) as {
     code_blocks: { feature: string }[];
   };
   // JUSTIFIED: same as above — current release JSON
-  const currData = await Bun.file(`${releaseDir}/extracted.json`).json() as {
+  const currData = (await Bun.file(`${releaseDir}/extracted.json`).json()) as {
     code_blocks: { feature: string; purpose: string; status: string; notes: string }[];
   };
   const prevFeatures = new Set(prevData.code_blocks.map((b) => b.feature));

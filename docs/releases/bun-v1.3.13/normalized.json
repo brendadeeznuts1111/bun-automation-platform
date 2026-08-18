@@ -43,9 +43,7 @@
     "status": "stable",
     "notes": "AUTOMATIC — no code change. Benefits all bun install runs.",
     "api": [],
-    "dependencies": [
-      "BUN_FEATURE_FLAG_DISABLE_STREAMING_INSTALL"
-    ],
+    "dependencies": ["BUN_FEATURE_FLAG_DISABLE_STREAMING_INSTALL"],
     "runnable": true,
     "added_in": "1.3.13"
   },
@@ -152,10 +150,7 @@
     "purpose": "SHA3-224, SHA3-256, SHA3-384, SHA3-512 in crypto.createHash, createHmac, subtle.digest, subtle.sign/verify.",
     "status": "stable",
     "notes": "Available for use. Could adopt for audit log hashing if needed.",
-    "api": [
-      "crypto.createHash",
-      "console.log"
-    ],
+    "api": ["crypto.createHash", "console.log"],
     "dependencies": [],
     "runnable": true,
     "added_in": "1.3.13"
@@ -167,9 +162,7 @@
     "purpose": "X25519 key agreement via crypto.subtle.deriveBits(). RFC 7748 §6.1 small-order rejection.",
     "status": "stable",
     "notes": "Available for use. Could adopt for E2E encryption if needed.",
-    "api": [
-      "crypto.subtle"
-    ],
+    "api": ["crypto.subtle"],
     "dependencies": [],
     "runnable": true,
     "added_in": "1.3.13"

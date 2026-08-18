@@ -7,8 +7,9 @@
  */
 
 import { write } from "../db";
-import { getPoolStatus } from "../workers/pool";
+import { HealthLogRow, TableNameRow } from "../types/models";
 import { log } from "../utils/log";
+import { getPoolStatus } from "../workers/pool";
 
 const AUDIT_RETENTION_DAYS = 30;
 const HEALTH_LOG_MAX = 10_000;
@@ -23,22 +24,23 @@ export function registerCronJobs(): void {
     const pool = getPoolStatus();
     const uptime = process.uptime();
     write((db) => {
-      db.run(
-        `INSERT INTO health_log (ts, pool_status, uptime, bun_version) VALUES (?, ?, ?, ?)`,
-        [Date.now(), JSON.stringify(pool), uptime, Bun.version],
-      );
+      db.run(`INSERT INTO health_log (ts, pool_status, uptime, bun_version) VALUES (?, ?, ?, ?)`, [
+        Date.now(),
+        JSON.stringify(pool),
+        uptime,
+        Bun.version,
+      ]);
       // Cap health_log to last 10k entries
-      db.run(`DELETE FROM health_log WHERE id NOT IN (SELECT id FROM health_log ORDER BY ts DESC LIMIT ${HEALTH_LOG_MAX})`);
+      db.run(
+        `DELETE FROM health_log WHERE id NOT IN (SELECT id FROM health_log ORDER BY ts DESC LIMIT ${HEALTH_LOG_MAX})`,
+      );
     });
     log("cron", "info", `health check: ${pool.idle}/${pool.total} workers idle, uptime ${Math.floor(uptime)}s`);
   });
 
   // Log rotation — daily at 2 AM, purge audit logs older than 30 days
   Bun.cron("0 2 * * *", () => {
-    const cutoff = new Date(Date.now() - AUDIT_RETENTION_DAYS * 86400_000)
-      .toISOString()
-      .replace("T", " ")
-      .slice(0, 19);
+    const cutoff = new Date(Date.now() - AUDIT_RETENTION_DAYS * 86400_000).toISOString().replace("T", " ").slice(0, 19);
     write((db) => {
       const result = db.run(`DELETE FROM audit_log WHERE created_at < ?`, [cutoff]);
       log("cron", "info", `purged ${result.changes} audit log entries older than ${cutoff}`);
@@ -68,7 +70,11 @@ export function registerCronJobs(): void {
       const { s3, write } = await import("bun");
       const file = s3.file(`backups/bun-dev-${bundle.date}.tar.gz`);
       await write(file, bundle.data);
-      log("cron", "info", `S3 backup uploaded: ${bundle.date}.tar.gz (${bundle.compressedSize} bytes, ratio: ${((bundle.compressedSize / bundle.originalSize) * 100).toFixed(1)}%)`);
+      log(
+        "cron",
+        "info",
+        `S3 backup uploaded: ${bundle.date}.tar.gz (${bundle.compressedSize} bytes, ratio: ${((bundle.compressedSize / bundle.originalSize) * 100).toFixed(1)}%)`,
+      );
     } catch (err) {
       log("cron", "error", `S3 backup failed: ${err}`);
     }
@@ -95,14 +101,14 @@ export function getHealthLog(limit = 20): Array<{
   const { read } = require("../db") as typeof import("../db");
   return read((db) => {
     // Check if health_log table exists
-    const tableExists = db.query(
-      `SELECT name FROM sqlite_master WHERE type='table' AND name='health_log'`,
-      // JUSTIFIED: bun:sqlite .get() returns unknown; narrowing to the row type
-    ).get() as { name: string } | null;
+    const tableExists = db
+      .query(`SELECT name FROM sqlite_master WHERE type='table' AND name='health_log'`)
+      .as(TableNameRow)
+      .get();
     if (!tableExists) return [];
-    return db.query(
-      `SELECT ts, pool_status, uptime, bun_version FROM health_log ORDER BY ts DESC LIMIT ?`,
-      // JUSTIFIED: bun:sqlite .all() returns unknown[]; narrowing to the row type
-    ).all(limit) as Array<{ ts: number; pool_status: string; uptime: number; bun_version: string }>;
+    return db
+      .query(`SELECT ts, pool_status, uptime, bun_version FROM health_log ORDER BY ts DESC LIMIT ?`)
+      .as(HealthLogRow)
+      .all(limit);
   });
 }

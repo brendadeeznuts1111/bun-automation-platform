@@ -8,8 +8,8 @@
  * dashboard streaming via /api/audit/stream.
  */
 
-import { write, read } from "../db";
-import type { AuditLogRow } from "../types/models";
+import { read, write } from "../db";
+import { AuditLogRow } from "../types/models";
 
 export interface AuditEntry {
   agent_id?: number;
@@ -45,17 +45,17 @@ export function audit(entry: AuditEntry): Promise<void> {
     // Emit to SSE listeners
     const created_at = new Date().toISOString().replace("T", " ").slice(0, 19);
     for (const listener of sseListeners) {
-      try { listener({ ...entry, created_at }); } catch { /* listener gone */ }
+      try {
+        listener({ ...entry, created_at });
+      } catch {
+        /* listener gone */
+      }
     }
   });
 }
 
 /** Query audit log with pagination. */
-export function getAuditLog(
-  limit = 50,
-  offset = 0,
-  agentId?: number,
-): AuditLogRow[] {
+export function getAuditLog(limit = 50, offset = 0, agentId?: number): AuditLogRow[] {
   // D6: Single parameterized query instead of two variants — avoids filling
   // the db.query() statement cache (default size: 20).
   return read((db) => {
@@ -65,7 +65,7 @@ export function getAuditLog(
          FROM audit_log WHERE (? IS NULL OR agent_id = ?)
          ORDER BY created_at DESC LIMIT ? OFFSET ?`,
       )
-      // JUSTIFIED: bun:sqlite .all() returns unknown[]; narrowing to AuditLogRow[]
-      .all(agentId ?? null, agentId ?? null, limit, offset) as AuditLogRow[];
+      .as(AuditLogRow)
+      .all(agentId ?? null, agentId ?? null, limit, offset);
   });
 }

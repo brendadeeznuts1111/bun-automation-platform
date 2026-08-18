@@ -30,9 +30,9 @@ const newVersion = process.argv[3] ?? "bun-v1.3.14";
 // JUSTIFIED: Bun.file().json() returns Promise<unknown>; narrowing to our
 // ExtractedRelease interface is safe because we control the JSON schema.
 // JUSTIFIED: same as above — narrowing the current release JSON
-const old = await Bun.file(`${import.meta.dir}/${oldVersion}/extracted.json`).json() as ExtractedRelease;
+const old = (await Bun.file(`${import.meta.dir}/${oldVersion}/extracted.json`).json()) as ExtractedRelease;
 // JUSTIFIED: same as above — narrowing the current release JSON
-const current = await Bun.file(`${import.meta.dir}/${newVersion}/extracted.json`).json() as ExtractedRelease;
+const current = (await Bun.file(`${import.meta.dir}/${newVersion}/extracted.json`).json()) as ExtractedRelease;
 
 const oldFeatures = new Set(old.code_blocks.map((b) => b.feature));
 const newFeatures = current.code_blocks.filter((b) => !oldFeatures.has(b.feature));

@@ -1,0 +1,1274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BUN-DEV — Dashboard</title>
+  {{PWA_LINKS}}
+  <style>
+    :root {
+      --bg: #1f2020;
+      --bg-card: #2a2b2b;
+      --bg-nav: #161717;
+      --fg: #f8f8f2;
+      --fg-dim: #a8a8a0;
+      --accent: #50fa7b;
+      --accent-dim: #3a9d5c;
+      --warn: #ffb86c;
+      --err: #ff5555;
+      --info: #8be9fd;
+      --border: #3a3b3b;
+      --radius: 8px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, "SF Mono", "Martian Mono", monospace;
+      background: var(--bg);
+      color: var(--fg);
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 1rem;
+      line-height: 1.6;
+    }
+    .nav-bar {
+      display: flex; gap: 0.25rem; align-items: center; padding: 0.5rem 0.75rem;
+      background: var(--bg-nav); border-radius: var(--radius); margin-bottom: 1.5rem;
+      flex-wrap: wrap; border: 1px solid var(--border);
+    }
+    .nav-bar a {
+      color: var(--info); text-decoration: none; padding: 0.3rem 0.7rem;
+      border-radius: 4px; font-size: 0.85rem;
+    }
+    .nav-bar a:hover { background: var(--border); }
+    .nav-bar a.active { background: var(--accent); color: var(--bg); font-weight: 600; }
+    .nav-bar .nav-sep { color: var(--border); margin: 0 0.1rem; }
+    .nav-bar button {
+      background: var(--accent); color: var(--bg); border: 1px solid var(--accent-dim);
+      padding: 0.3rem 0.7rem; border-radius: 4px; font-size: 0.85rem; cursor: pointer;
+      font-family: inherit;
+    }
+    .nav-bar button:hover { background: #6bff8e; }
+    .nav-bar .pwa-install {
+      background: var(--info); color: var(--bg); border-color: #5ab8d0;
+      display: none; margin-left: auto;
+    }
+    .nav-bar .pwa-install:hover { background: #a3e6f5; }
+    h1 { color: var(--accent); font-size: 1.6rem; margin-bottom: 0.25rem; }
+    h1 .version { color: var(--fg-dim); font-size: 0.9rem; font-weight: normal; }
+    h2 { color: var(--fg); font-size: 1.1rem; margin: 1.5rem 0 0.5rem; padding-bottom: 0.25rem; border-bottom: 1px solid var(--border); }
+    .header-row { display: flex; justify-content: space-between; align-items: center; }
+    .sw-badge {
+      font-size: 0.75rem; padding: 0.2rem 0.6rem; border-radius: 12px;
+      background: var(--border); color: var(--fg-dim);
+    }
+    .sw-badge.active { background: var(--accent-dim); color: var(--accent); }
+    .sw-badge.inactive { background: #4a2b2b; color: var(--err); }
+    .status-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 0.75rem; margin: 0.5rem 0;
+    }
+    .stat-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 0.75rem 1rem;
+    }
+    .stat-card .label { font-size: 0.75rem; color: var(--fg-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+    .stat-card .value { font-size: 1.3rem; color: var(--accent); font-weight: 600; }
+    .stat-card .value.warn { color: var(--warn); }
+    .stat-card .value.err { color: var(--err); }
+    table { width: 100%; border-collapse: collapse; margin: 0.5rem 0; font-size: 0.85rem; }
+    th, td { padding: 0.4rem 0.6rem; text-align: left; border-bottom: 1px solid var(--border); }
+    th { color: var(--fg-dim); font-weight: 600; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.05em; }
+    td { color: var(--fg); }
+    tr:hover td { background: var(--bg-card); }
+    ul { list-style: none; padding: 0; }
+    ul li { padding: 0.3rem 0; font-size: 0.9rem; }
+    ul li a { color: var(--info); text-decoration: none; }
+    ul li a:hover { text-decoration: underline; }
+    ul li code { color: var(--warn); font-size: 0.85rem; }
+    #features-panel {
+      display: none; margin-top: 0.5rem; padding: 1rem;
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
+    }
+    #features-panel pre { font-size: 0.8rem; overflow-x: auto; color: var(--accent); }
+    .pwa-section {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1rem; margin: 0.5rem 0;
+    }
+    .pwa-section .pwa-row { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+    .pwa-section .pwa-icon { width: 48px; height: 48px; border-radius: 8px; }
+    .pwa-section .pwa-info { flex: 1; min-width: 200px; }
+    .pwa-section .pwa-info h3 { color: var(--accent); font-size: 1rem; margin-bottom: 0.2rem; }
+    .pwa-section .pwa-info p { color: var(--fg-dim); font-size: 0.8rem; }
+    .pwa-section .pwa-links { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .pwa-section .pwa-links a {
+      color: var(--info); font-size: 0.8rem; padding: 0.2rem 0.5rem;
+      border: 1px solid var(--border); border-radius: 4px; text-decoration: none;
+    }
+    .pwa-section .pwa-links a:hover { background: var(--border); }
+    .pwa-section .pwa-links button {
+      background: var(--border); color: var(--info); border: 1px solid var(--border);
+      padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.8rem; cursor: pointer;
+      font-family: inherit;
+    }
+    .pwa-section .pwa-links button:hover { background: var(--accent-dim); color: var(--accent); }
+    .icon-gallery { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem; }
+    .icon-gallery .icon-item {
+      text-align: center; padding: 0.4rem; background: var(--bg-nav);
+      border: 1px solid var(--border); border-radius: 6px;
+    }
+    .icon-gallery .icon-item img { display: block; margin: 0 auto 0.2rem; border-radius: 4px; }
+    .icon-gallery .icon-item .icon-size { font-size: 0.65rem; color: var(--fg-dim); }
+    .icon-gallery .icon-item .icon-label { font-size: 0.65rem; color: var(--info); }
+    .icon-vs { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.5rem; }
+    .icon-vs .icon-col h4 { color: var(--accent); font-size: 0.85rem; margin-bottom: 0.3rem; }
+    .icon-vs .icon-col .icon-grid { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+    .icon-vs .icon-col .icon-grid img { border-radius: 4px; border: 1px solid var(--border); }
+    .net-badge {
+      font-size: 0.75rem; padding: 0.2rem 0.6rem; border-radius: 12px;
+      background: var(--accent-dim); color: var(--accent);
+    }
+    .net-badge.offline { background: #4a2b2b; color: var(--err); }
+    .sw-cache-bar { height: 6px; background: var(--bg-nav); border-radius: 3px; margin-top: 0.3rem; overflow: hidden; }
+    .sw-cache-bar .sw-cache-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.3s; }
+    .kbd { font-size: 0.7rem; padding: 0.1rem 0.35rem; border: 1px solid var(--border); border-radius: 3px; background: var(--bg-nav); color: var(--fg-dim); }
+    .toast {
+      position: fixed; bottom: 1rem; right: 1rem; background: var(--bg-card);
+      border: 1px solid var(--accent); border-radius: 6px; padding: 0.6rem 1rem;
+      color: var(--accent); font-size: 0.85rem; z-index: 999;
+      opacity: 0; transition: opacity 0.3s; pointer-events: none;
+    }
+    .toast.show { opacity: 1; }
+    .health-pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 0.3rem; }
+    .health-pulse.ok { background: var(--accent); animation: pulse 2s infinite; }
+    .health-pulse.err { background: var(--err); }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+    .copy-btn { cursor: pointer; font-size: 0.75rem; color: var(--info); }
+    .copy-btn:hover { color: var(--accent); }
+    footer { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border); color: var(--fg-dim); font-size: 0.75rem; text-align: center; }
+    /* Dark/light mode — respects OS preference */
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #ffffff;
+        --bg-card: #f5f5f5;
+        --bg-nav: #e8e8e8;
+        --fg: #1a1a1a;
+        --fg-dim: #666666;
+        --accent: #0066cc;
+        --accent-dim: #004499;
+        --warn: #cc7700;
+        --err: #cc0000;
+        --info: #0066aa;
+        --border: #dddddd;
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav-bar">
+    <a href="/dashboard" class="active">Dashboard</a>
+    <span class="nav-sep">/</span>
+    <a href="/diagrams">Diagrams</a>
+    <span class="nav-sep">/</span>
+    <a href="/features">Features JSON</a>
+    <span class="nav-sep">/</span>
+    <a href="/health">Health</a>
+    <span class="nav-sep">/</span>
+    <a href="/protocol">Protocol</a>
+    {{DEV_FEATURES_BUTTON}}
+    {{PWA_INSTALL_BUTTON}}
+  </nav>
+  <div class="header-row">
+    <h1>BUN-DEV <span class="version">v{{BUN_VERSION}}</span></h1>
+    <div style="display: flex; gap: 0.5rem; align-items: center;">
+      <span class="net-badge" id="net-status">● Online</span>
+      {{PWA_SW_BADGE}}
+    </div>
+  </div>
+  <p style="color: var(--fg-dim); font-size: 0.85rem; margin-bottom: 1rem;">Bun Automation Platform — Player Health Dashboard</p>
+
+  <h2>Status <span class="health-pulse ok" id="health-pulse"></span></h2>
+  <div class="status-grid">
+    <div class="stat-card">
+      <div class="label">Environment</div>
+      <div class="value">{{NODE_ENV}}</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">TLS</div>
+      <div class="value {{TLS_CLASS}}">{{TLS_STATUS}}</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">HTTP/3</div>
+      <div class="value {{HTTP3_CLASS}}">{{HTTP3_STATUS}}</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Workers</div>
+      <div class="value" id="workers-stat">{{POOL_IDLE}}/{{POOL_TOTAL}} idle</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Uptime</div>
+      <div class="value" id="uptime">{{UPTIME}}s</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">PWA</div>
+      <div class="value {{PWA_CLASS}}">{{PWA_STATUS}}</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Health</div>
+      <div class="value" id="health-stat" style="font-size: 0.9rem;">checking...</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Routes</div>
+      <div class="value" id="routes-stat">—</div>
+    </div>
+  </div>
+
+  <h2>Feature Flags <span style="font-size:0.75rem; color:var(--fg-dim);">(click toggle to change at runtime — no restart)</span></h2>
+  <table id="feature-flag-table">
+    <tr><th>Feature</th><th>Status</th><th>State</th><th>Description</th><th>Toggle</th></tr>
+    {{FEATURES_TABLE}}
+  </table>
+  <div id="features-panel">
+    <h3 style="cursor:pointer; color:var(--accent);" onclick="document.getElementById('features-panel').style.display='none'">Live Feature Flags ✕</h3>
+    <pre id="features-output">Loading...</pre>
+  </div>
+
+  <div class="pwa-section" style="margin-top: 0.5rem;">
+    <h3 style="color: var(--accent); cursor: pointer;" onclick="toggleSection('audit-terminal-content', this)">
+      Live Audit Log Terminal (SSE) ▸
+    </h3>
+    <div id="audit-terminal-content" style="display: none; margin-top: 0.5rem;">
+      <pre id="audit-terminal" style="background: var(--bg-nav); border: 1px solid var(--border); border-radius: 4px; padding: 0.5rem; font-size: 0.75rem; max-height: 300px; overflow-y: auto; color: var(--accent);"></pre>
+      <button onclick="startAuditStream()" id="audit-stream-btn" style="background:var(--accent); color:var(--bg); border:none; padding:0.3rem 0.7rem; border-radius:4px; cursor:pointer; font-family:inherit;">Start Streaming</button>
+    </div>
+  </div>
+
+  <div class="pwa-section" style="margin-top: 0.5rem;">
+    <h3 style="color: var(--accent); cursor: pointer;" onclick="toggleSection('mermaid-content', this)">
+      Mermaid Live Renderer ▸
+    </h3>
+    <div id="mermaid-content" style="display: none; margin-top: 0.5rem;">
+      <textarea id="mermaid-input" rows="5" style="width:100%; background:var(--bg-nav); color:var(--fg); border:1px solid var(--border); border-radius:4px; padding:0.5rem; font-family:inherit; font-size:0.8rem;" placeholder="graph TD; A-->B; B-->C;"></textarea>
+      <button onclick="renderMermaid()" style="background:var(--accent); color:var(--bg); border:none; padding:0.3rem 0.7rem; border-radius:4px; cursor:pointer; font-family:inherit; margin-top:0.3rem;">Render SVG</button>
+      <div id="mermaid-output" style="margin-top:0.5rem; background:var(--bg-nav); border:1px solid var(--border); border-radius:4px; padding:0.5rem; min-height:100px;"></div>
+    </div>
+  </div>
+
+  <div class="pwa-section" style="margin-top: 0.5rem;">
+    <h3 style="color: var(--accent); cursor: pointer;" onclick="toggleSection('swagger-content', this)">
+      API Docs (OpenAPI) ▸
+    </h3>
+    <div id="swagger-content" style="display: none; margin-top: 0.5rem;">
+      <div id="swagger-output" style="color: var(--fg-dim); font-size: 0.8rem;">Loading...</div>
+    </div>
+  </div>
+
+  {{PWA_SECTIONS_START}}
+  <h2>PWA — Installable App</h2>
+  <div class="pwa-section">
+    <div class="pwa-row">
+      <img src="/icons/icon-128.png" alt="BUN-DEV" class="pwa-icon">
+      <div class="pwa-info">
+        <h3>BUN-DEV</h3>
+        <p>Install this dashboard as a standalone Chrome app. Works offline with cached assets.</p>
+      </div>
+    </div>
+    <div class="pwa-links" style="margin-top: 0.75rem;">
+      <a href="/manifest.json">manifest.json</a>
+      <a href="/sw.js">sw.js</a>
+      <a href="/icons/icon-512.png">icon (512px)</a>
+      <a href="/api/pwa/validate">validate</a>
+      <a href="/api/pwa/compare">vs bun.com</a>
+      <a href="/bun-com/manifest.json">bun.com manifest</a>
+      <a href="/bun-com/icons/icon-512x512.png">bun.com icon</a>
+      <button onclick="copyManifest()">Copy Manifest JSON</button>
+    </div>
+  </div>
+
+  <div class="pwa-section" style="margin-top: 0.5rem;">
+    <h3 style="color: var(--accent); cursor: pointer;" onclick="toggleSection('icon-gallery-content', this)">
+      Icon Gallery ▸
+    </h3>
+    <div id="icon-gallery-content" style="display: none; margin-top: 0.5rem;">
+      <h4 style="color:var(--info); font-size:0.85rem; margin-bottom:0.3rem;">BUN-DEV Icons</h4>
+      <div class="icon-gallery">
+        <div class="icon-item"><img src="/icons/icon-16.png" width="16" height="16"><span class="icon-size">16px</span></div>
+        <div class="icon-item"><img src="/icons/icon-32.png" width="32" height="32"><span class="icon-size">32px</span></div>
+        <div class="icon-item"><img src="/icons/icon-48.png" width="48" height="48"><span class="icon-size">48px</span></div>
+        <div class="icon-item"><img src="/icons/icon-64.png" width="64" height="64"><span class="icon-size">64px</span></div>
+        <div class="icon-item"><img src="/icons/icon-96.png" width="96" height="96"><span class="icon-size">96px</span></div>
+        <div class="icon-item"><img src="/icons/icon-128.png" width="128" height="128"><span class="icon-size">128px</span></div>
+        <div class="icon-item"><img src="/icons/icon-192.png" width="64" height="64"><span class="icon-size">192px</span></div>
+        <div class="icon-item"><img src="/icons/icon-256.png" width="64" height="64"><span class="icon-size">256px</span></div>
+        <div class="icon-item"><img src="/icons/icon-512.png" width="64" height="64"><span class="icon-size">512px</span></div>
+        <div class="icon-item"><img src="/icons/icon-1024.png" width="64" height="64"><span class="icon-size">1024px</span></div>
+        <div class="icon-item"><img src="/icons/maskable-512.png" width="64" height="64"><span class="icon-label">maskable</span></div>
+      </div>
+      <h4 style="color:var(--info); font-size:0.85rem; margin: 0.75rem 0 0.3rem;">bun.com Icons</h4>
+      <div class="icon-gallery">
+        <div class="icon-item"><img src="/bun-com/icons/favicon-16x16.png" width="16" height="16"><span class="icon-size">16px</span></div>
+        <div class="icon-item"><img src="/bun-com/icons/favicon-32x32.png" width="32" height="32"><span class="icon-size">32px</span></div>
+        <div class="icon-item"><img src="/bun-com/icons/favicon-96x96.png" width="48" height="48"><span class="icon-size">96px</span></div>
+        <div class="icon-item"><img src="/bun-com/icons/icon-192x192.png" width="64" height="64"><span class="icon-size">192px</span></div>
+        <div class="icon-item"><img src="/bun-com/icons/icon-512x512.png" width="64" height="64"><span class="icon-size">512px</span></div>
+        <div class="icon-item"><img src="/bun-com/icons/logo@1024x.png" width="64" height="64"><span class="icon-size">1024px</span></div>
+        <div class="icon-item"><img src="/bun-com/icons/logo.svg" width="48" height="48"><span class="icon-label">SVG</span></div>
+        <div class="icon-item"><img src="/bun-com/icons/apple-touch-icon.png" width="48" height="48"><span class="icon-label">apple</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pwa-section" style="margin-top: 0.5rem;">
+    <h3 style="color: var(--accent); cursor: pointer;" onclick="toggleSection('icon-vs-content', this)">
+      Visual Icon Comparison ▸
+    </h3>
+    <div id="icon-vs-content" style="display: none; margin-top: 0.5rem;">
+      <div class="icon-vs">
+        <div class="icon-col">
+          <h4>BUN-DEV (ours)</h4>
+          <div class="icon-grid">
+            <img src="/icons/icon-128.png" width="64" height="64" title="128px">
+            <img src="/icons/icon-256.png" width="64" height="64" title="256px">
+            <img src="/icons/icon-512.png" width="64" height="64" title="512px">
+            <img src="/icons/maskable-512.png" width="64" height="64" title="maskable">
+          </div>
+        </div>
+        <div class="icon-col">
+          <h4>bun.com (theirs)</h4>
+          <div class="icon-grid">
+            <img src="/bun-com/icons/favicon-96x96.png" width="64" height="64" title="96px">
+            <img src="/bun-com/icons/icon-192x192.png" width="64" height="64" title="192px">
+            <img src="/bun-com/icons/icon-512x512.png" width="64" height="64" title="512px">
+            <img src="/bun-com/icons/logo.svg" width="64" height="64" title="SVG">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pwa-section" style="margin-top: 0.5rem;">
+    <h3 style="color: var(--accent); cursor: pointer;" onclick="toggleSection('sw-cache-content', this)">
+      Service Worker Cache Status ▸
+    </h3>
+    <div id="sw-cache-content" style="display: none; margin-top: 0.5rem;">
+      <div id="sw-cache-info" style="color: var(--fg-dim); font-size: 0.8rem;">Checking cache status...</div>
+      <div class="sw-cache-bar"><div class="sw-cache-fill" id="sw-cache-fill" style="width: 0%"></div></div>
+      <div id="sw-cache-detail" style="margin-top: 0.3rem; font-size: 0.8rem;"></div>
+    </div>
+  </div>
+
+  <div class="pwa-section" id="pwa-compare-panel" style="margin-top: 0.5rem;">
+    <h3 style="color: var(--accent); cursor: pointer;" onclick="loadPWACompare()">
+      Manifest Comparison: BUN-DEV vs bun.com ▸
+    </h3>
+    <div id="pwa-compare-content" style="display: none; margin-top: 0.5rem;">
+      <p style="color: var(--fg-dim); font-size: 0.8rem;">Loading comparison...</p>
+    </div>
+  </div>
+
+  <div class="pwa-section" id="pwa-validate-panel" style="margin-top: 0.5rem;">
+    <h3 style="color: var(--accent); cursor: pointer;" onclick="loadPWAValidate()">
+      Installability Validation ▸
+    </h3>
+    <div id="pwa-validate-content" style="display: none; margin-top: 0.5rem;">
+      <p style="color: var(--fg-dim); font-size: 0.8rem;">Loading validation...</p>
+    </div>
+  </div>
+  {{PWA_SECTIONS_END}}
+
+  <h2>API Reference <span style="font-size:0.75rem; color:var(--fg-dim);">— searchable, categorized, 40+ endpoints</span></h2>
+  <input type="text" id="api-search" placeholder="Search endpoints... (e.g. hash, image, sql, auth)" style="width:100%; background:var(--bg-nav); color:var(--fg); border:1px solid var(--border); border-radius:4px; padding:0.4rem 0.6rem; font-family:inherit; font-size:0.85rem; margin-bottom:0.5rem;" oninput="filterEndpoints()">
+  <div id="api-reference">
+    <style>
+      .api-cat { margin-top: 0.8rem; }
+      .api-cat h3 { color: var(--info); font-size: 0.85rem; margin: 0 0 0.3rem 0; border-bottom: 1px solid var(--border); padding-bottom: 0.2rem; }
+      .api-row { display: flex; align-items: center; gap: 0.4rem; padding: 0.2rem 0.3rem; border-radius: 3px; font-size: 0.78rem; }
+      .api-row:hover { background: var(--bg-nav); }
+      .api-method { font-size: 0.65rem; font-weight: bold; padding: 0.1rem 0.35rem; border-radius: 3px; min-width: 38px; text-align: center; }
+      .api-get { background: #2a5a2a; color: #50fa7b; }
+      .api-post { background: #5a4a2a; color: #ffb86c; }
+      .api-ws { background: #2a3a5a; color: #8be9fd; }
+      .api-sse { background: #4a2a5a; color: #bd93f9; }
+      .api-path { font-family: monospace; color: var(--accent); flex-shrink: 0; }
+      .api-desc { color: var(--fg-dim); }
+      .api-auth { font-size: 0.6rem; color: var(--warn); padding: 0.05rem 0.3rem; border: 1px solid var(--warn); border-radius: 2px; }
+      .api-csrf { font-size: 0.6rem; color: var(--err); padding: 0.05rem 0.3rem; border: 1px solid var(--err); border-radius: 2px; }
+      .api-bun { font-size: 0.6rem; color: var(--info); padding: 0.05rem 0.3rem; background: rgba(139,233,253,0.1); border-radius: 2px; }
+    </style>
+
+    <div class="api-cat">
+      <h3>🏥 Health &amp; Metrics</h3>
+      <div class="api-row"><a href="/health" class="api-method api-get">GET</a><span class="api-path">/health</span><span class="api-desc">health check + worker pool status</span></div>
+      <div class="api-row"><a href="/metrics" class="api-method api-get">GET</a><span class="api-path">/metrics</span><span class="api-desc">Prometheus-format metrics</span></div>
+      <div class="api-row"><a href="/api/health-log" class="api-method api-get">GET</a><span class="api-path">/api/health-log</span><span class="api-desc">cron health check history</span><span class="api-bun">Bun.cron</span></div>
+      <div class="api-row"><a href="/api/runtime" class="api-method api-get">GET</a><span class="api-path">/api/runtime</span><span class="api-desc">runtime introspection (gc, nanoseconds, shrink)</span><span class="api-auth">auth</span><span class="api-bun">Bun.gc</span></div>
+    </div>
+
+    <div class="api-cat">
+      <h3>🔐 Authentication &amp; Admin</h3>
+      <div class="api-row"><span class="api-method api-post">POST</span><span class="api-path">/login</span><span class="api-desc">agent auth → token + csrf_token + session cookie</span><span class="api-bun">Bun.CookieMap</span></div>
+      <div class="api-row"><span class="api-method api-post">POST</span><span class="api-path">/api/admin/shell</span><span class="api-desc">safe admin commands (vacuum, status, workers, git, disk, env)</span><span class="api-auth">auth</span><span class="api-csrf">CSRF</span><span class="api-bun">Bun.shell</span></div>
+      <div class="api-row"><span class="api-method api-post">POST</span><span class="api-path">/api/features/toggle</span><span class="api-desc">toggle feature flag at runtime — no restart</span><span class="api-auth">auth</span><span class="api-csrf">CSRF</span></div>
+    </div>
+
+    <div class="api-cat">
+      <h3>📋 Tasks &amp; Sessions</h3>
+      <div class="api-row"><span class="api-method api-get">GET</span><span class="api-path">/tasks</span><span class="api-desc">paginated task list</span><span class="api-auth">auth</span></div>
+      <div class="api-row"><span class="api-method api-post">POST</span><span class="api-path">/task</span><span class="api-desc">create automation task (WebView screenshot)</span><span class="api-auth">auth</span><span class="api-csrf">CSRF</span></div>
+      <div class="api-row"><span class="api-method api-get">GET</span><span class="api-path">/task/:id</span><span class="api-desc">get task by ID</span><span class="api-auth">auth</span></div>
+      <div class="api-row"><span class="api-method api-get">GET</span><span class="api-path">/sessions</span><span class="api-desc">list sessions</span><span class="api-auth">auth</span></div>
+      <div class="api-row"><span class="api-method api-get">GET</span><span class="api-path">/screenshot/:id</span><span class="api-desc">serve task screenshot</span><span class="api-auth">auth</span></div>
+    </div>
+
+    <div class="api-cat">
+      <h3>📤 Data Export &amp; Streaming</h3>
+      <div class="api-row"><span class="api-method api-get">GET</span><span class="api-path">/api/tasks.jsonl</span><span class="api-desc">tasks JSONL stream</span><span class="api-auth">auth</span><span class="api-bun">Bun.JSONL</span></div>
+      <div class="api-row"><span class="api-method api-get">GET</span><span class="api-path">/api/sessions.jsonl</span><span class="api-desc">sessions JSONL stream</span><span class="api-auth">auth</span></div>
+      <div class="api-row"><span class="api-method api-get">GET</span><span class="api-path">/api/audit.jsonl</span><span class="api-desc">audit log JSONL stream</span><span class="api-auth">auth</span></div>
+      <div class="api-row"><span class="api-method api-get">GET</span><span class="api-path">/api/export/bundle.tar</span><span class="api-desc">tar bundle of all JSONL + manifest</span><span class="api-auth">auth</span><span class="api-bun">Bun.Archive</span></div>
+      <div class="api-row"><span class="api-method api-get">GET</span><span class="api-path">/api/export/bundle.tar?gzip=1</span><span class="api-desc">gzip-compressed tar with ratio header</span><span class="api-auth">auth</span><span class="api-bun">Bun.Archive</span></div>
+      <div class="api-row"><span class="api-method api-get">GET</span><span class="api-path">/api/stream/:path</span><span class="api-desc">streaming file response (public dir)</span><span class="api-bun">Bun.file</span></div>
+      <div class="api-row"><span class="api-method api-sse">SSE</span><a href="/api/audit/stream" class="api-path">/api/audit/stream</a><span class="api-desc">real-time audit log stream</span><span class="api-auth">auth</span></div>
+    </div>
+
+    <div class="api-cat">
+      <h3>🎨 Bun Runtime APIs</h3>
+      <div class="api-row"><a href="/api/color?color=red&format=css" class="api-method api-get">GET</a><span class="api-path">/api/color</span><span class="api-desc">color conversion (hex/rgb/hsl/css)</span><span class="api-bun">Bun.color</span></div>
+      <div class="api-row"><a href="/api/hash?input=hello" class="api-method api-get">GET</a><span class="api-path">/api/hash</span><span class="api-desc">hash computation (sha256/sha512/md5)</span><span class="api-bun">Bun.CryptoHasher</span></div>
+      <div class="api-row"><a href="/api/transpile?code=const%20x:number=1" class="api-method api-get">GET</a><span class="api-path">/api/transpile</span><span class="api-desc">TS/JSX → JS transpiler</span><span class="api-bun">Bun.Transpiler</span></div>
+      <div class="api-row"><a href="/api/compress?input=hello&action=compress" class="api-method api-get">GET</a><span class="api-path">/api/compress</span><span class="api-desc">compress/decompress (zlib + base64)</span><span class="api-bun">Bun.deflateSync</span></div>
+      <div class="api-row"><a href="/api/utils?tool=escape&input=<test>" class="api-method api-get">GET</a><span class="api-path">/api/utils</span><span class="api-desc">escape HTML, base64, URL encode/decode</span><span class="api-bun">Bun.escapeHTML</span></div>
+      <div class="api-row"><span class="api-method api-post">POST</span><span class="api-path">/api/markdown</span><span class="api-desc">render markdown → HTML</span><span class="api-bun">Bun.markdown</span></div>
+      <div class="api-row"><a href="/api/semver" class="api-method api-get">GET</a><span class="api-path">/api/semver</span><span class="api-desc">version negotiation + feature detection</span><span class="api-bun">Bun.semver</span></div>
+      <div class="api-row"><a href="/api/env" class="api-method api-get">GET</a><span class="api-path">/api/env</span><span class="api-desc">environment variable inspection</span></div>
+    </div>
+
+    <div class="api-cat">
+      <h3>🌐 Network &amp; Process</h3>
+      <div class="api-row"><span class="api-method api-post">POST</span><span class="api-path">/api/dns</span><span class="api-desc">DNS lookup (async, returns address + family)</span><span class="api-bun">Bun.dns</span></div>
+      <div class="api-row"><a href="/api/processes" class="api-method api-get">GET</a><span class="api-path">/api/processes</span><span class="api-desc">top 20 processes (ps aux)</span><span class="api-auth">auth</span><span class="api-bun">Bun.spawn</span></div>
+      <div class="api-row"><a href="/api/ffi" class="api-method api-get">GET</a><span class="api-path">/api/ffi</span><span class="api-desc">native library loading (libsqlite3 version)</span><span class="api-bun">Bun.ffi</span></div>
+      <div class="api-row"><a href="/api/redis" class="api-method api-get">GET</a><span class="api-path">/api/redis</span><span class="api-desc">Redis rate limit status</span><span class="api-bun">Bun.redis</span></div>
+      <div class="api-row"><a href="/api/s3/backup" class="api-method api-get">GET</a><span class="api-path">/api/s3/backup</span><span class="api-desc">S3 offsite backup status</span><span class="api-auth">auth</span><span class="api-bun">Bun.s3</span></div>
+      <div class="api-row"><span class="api-method api-ws">WS</span><span class="api-path">/ws/metrics</span><span class="api-desc">live metrics push (500ms interval)</span></div>
+      <div class="api-row"><span class="api-method api-ws">WS</span><span class="api-path">/ws/task/:id</span><span class="api-desc">task progress updates</span></div>
+    </div>
+
+    <div class="api-cat">
+      <h3>🖼️ Image &amp; Screenshot</h3>
+      <div class="api-row"><span class="api-method api-get">GET</span><span class="api-path">/api/image</span><span class="api-desc">resize/convert (png/webp/jpeg)</span><span class="api-auth">auth</span><span class="api-bun">Bun.Image</span></div>
+      <div class="api-row"><span class="api-method api-get">GET</span><span class="api-path">/api/screenshot</span><span class="api-desc">capture PNG of any URL</span><span class="api-auth">auth</span><span class="api-bun">Bun.WebView</span></div>
+      <div class="api-row"><span class="api-method api-post">POST</span><span class="api-path">/api/mermaid</span><span class="api-desc">Mermaid diagram → SVG render</span><span class="api-auth">auth</span><span class="api-bun">Bun.WebView</span></div>
+    </div>
+
+    <div class="api-cat">
+      <h3>💾 Database &amp; Config</h3>
+      <div class="api-row"><span class="api-method api-post">POST</span><span class="api-path">/api/sql</span><span class="api-desc">SELECT-only SQL query</span><span class="api-auth">auth</span><span class="api-bun">bun:sqlite</span></div>
+      <div class="api-row"><a href="/api/config" class="api-method api-get">GET</a><span class="api-path">/api/config</span><span class="api-desc">multi-format config parser</span><span class="api-bun">Bun.YAML/TOML/JSON5</span></div>
+      <div class="api-row"><span class="api-method api-post">POST</span><span class="api-path">/api/config/write</span><span class="api-desc">write YAML/TOML/JSON5 config file</span><span class="api-auth">auth</span><span class="api-csrf">CSRF</span></div>
+      <div class="api-row"><a href="/api/fs" class="api-method api-get">GET</a><span class="api-path">/api/fs</span><span class="api-desc">filesystem browser (dirs + files)</span><span class="api-auth">auth</span><span class="api-bun">Bun.file</span></div>
+      <div class="api-row"><a href="/api/logs" class="api-method api-get">GET</a><span class="api-path">/api/logs</span><span class="api-desc">structured log ring buffer</span><span class="api-auth">auth</span></div>
+    </div>
+
+    <div class="api-cat">
+      <h3>📐 Diagrams &amp; Docs</h3>
+      <div class="api-row"><a href="/api/diagrams" class="api-method api-get">GET</a><span class="api-path">/api/diagrams</span><span class="api-desc">auto-discovered .mmd files</span><span class="api-bun">Bun.glob</span></div>
+      <div class="api-row"><a href="/api/openapi.json" class="api-method api-get">GET</a><span class="api-path">/api/openapi.json</span><span class="api-desc">OpenAPI 3.1 spec (auto-generated)</span></div>
+      <div class="api-row"><a href="/api/pwa/validate" class="api-method api-get">GET</a><span class="api-path">/api/pwa/validate</span><span class="api-desc">PWA installability validation</span></div>
+      <div class="api-row"><a href="/api/pwa/compare" class="api-method api-get">GET</a><span class="api-path">/api/pwa/compare</span><span class="api-desc">BUN-DEV vs bun.com manifest</span></div>
+    </div>
+
+    <div class="api-cat">
+      <h3>📦 PWA &amp; Static</h3>
+      <div class="api-row"><a href="/manifest.json" class="api-method api-get">GET</a><span class="api-path">/manifest.json</span><span class="api-desc">dynamic PWA manifest (runtime-injected)</span><span class="api-bun">Bun.file</span></div>
+      <div class="api-row"><span class="api-method api-post">POST</span><span class="api-path">/api/manifest</span><span class="api-desc">update manifest field at runtime</span><span class="api-auth">auth</span><span class="api-csrf">CSRF</span></div>
+      <div class="api-row"><span class="api-method api-post">POST</span><span class="api-path">/api/share-target</span><span class="api-desc">PWA share target (receive shared content)</span></div>
+      <div class="api-row"><a href="/sw.js" class="api-method api-get">GET</a><span class="api-path">/sw.js</span><span class="api-desc">service worker</span></div>
+      {{SITEMAP_API_ROW}}
+      <div class="api-row"><a href="/protocol" class="api-method api-get">GET</a><span class="api-path">/protocol</span><span class="api-desc">protocol info (HTTP/3 status)</span></div>
+      <div class="api-row"><a href="/features" class="api-method api-get">GET</a><span class="api-path">/features</span><span class="api-desc">feature flags (JSON)</span></div>
+      <div class="api-row"><a href="/dashboard" class="api-method api-get">GET</a><span class="api-path">/dashboard</span><span class="api-desc">this page</span></div>
+    </div>
+  </div>
+  <p style="margin-top:0.5rem; font-size:0.7rem; color:var(--fg-dim);">
+    <span class="api-auth">auth</span> = requires Bearer token &nbsp;
+    <span class="api-csrf">CSRF</span> = requires X-CSRF-Token header &nbsp;
+    <span class="api-bun">Bun.*</span> = Bun-native API used
+  </p>
+
+  <div class="pwa-section" style="margin-top: 0.5rem;">
+    <h3 style="color: var(--accent); cursor: pointer;" onclick="toggleSection('transpiler-content', this)">
+      Code Transpiler Playground ▸
+    </h3>
+    <div id="transpiler-content" style="display: none; margin-top: 0.5rem;">
+      <textarea id="transpile-input" rows="4" style="width:100%; background:var(--bg-nav); color:var(--fg); border:1px solid var(--border); border-radius:4px; padding:0.5rem; font-family:inherit; font-size:0.8rem;" placeholder="const x: number = 42; const fn = (a: string) => a.toUpperCase();"></textarea>
+      <button onclick="runTranspile()" style="background:var(--accent); color:var(--bg); border:none; padding:0.3rem 0.7rem; border-radius:4px; cursor:pointer; font-family:inherit; margin-top:0.3rem;">Transpile</button>
+      <pre id="transpile-output" style="margin-top:0.5rem; background:var(--bg-nav); border:1px solid var(--border); border-radius:4px; padding:0.5rem; font-size:0.75rem; max-height:200px; overflow-y:auto; color:var(--info);"></pre>
+    </div>
+  </div>
+
+  <div class="pwa-section" style="margin-top: 0.5rem;">
+    <h3 style="color: var(--accent); cursor: pointer;" onclick="toggleSection('fs-browser-content', this)">
+      Filesystem Browser ▸
+    </h3>
+    <div id="fs-browser-content" style="display: none; margin-top: 0.5rem;">
+      <div id="fs-browser-output" style="color: var(--fg-dim); font-size: 0.8rem;">Loading...</div>
+    </div>
+  </div>
+
+  <div class="pwa-section" style="margin-top: 0.5rem;">
+    <h3 style="color: var(--accent); cursor: pointer;" onclick="toggleSection('utils-content', this)">
+      Developer Utilities ▸
+    </h3>
+    <div id="utils-content" style="display: none; margin-top: 0.5rem;">
+      <select id="utils-tool" style="background:var(--bg-nav); color:var(--fg); border:1px solid var(--border); border-radius:4px; padding:0.3rem;">
+        <option value="escape">Escape HTML</option>
+        <option value="base64-encode">Base64 Encode</option>
+        <option value="base64-decode">Base64 Decode</option>
+        <option value="urlencode">URL Encode</option>
+        <option value="urldecode">URL Decode</option>
+      </select>
+      <input id="utils-input" type="text" placeholder="Enter input..." style="width:60%; background:var(--bg-nav); color:var(--fg); border:1px solid var(--border); border-radius:4px; padding:0.3rem; margin-left:0.3rem;">
+      <button onclick="runUtil()" style="background:var(--accent); color:var(--bg); border:none; padding:0.3rem 0.7rem; border-radius:4px; cursor:pointer; font-family:inherit; margin-left:0.3rem;">Run</button>
+      <pre id="utils-output" style="margin-top:0.5rem; background:var(--bg-nav); border:1px solid var(--border); border-radius:4px; padding:0.5rem; font-size:0.75rem; color:var(--info);"></pre>
+    </div>
+  </div>
+
+  <div class="pwa-section" style="margin-top: 0.5rem;">
+    <h3 style="color: var(--accent); cursor: pointer;" onclick="toggleSection('runtime-content', this)">
+      Runtime Info (gc/nanoseconds/shrink) ▸
+    </h3>
+    <div id="runtime-content" style="display: none; margin-top: 0.5rem;">
+      <div id="runtime-output" style="color: var(--fg-dim); font-size: 0.8rem;">Loading...</div>
+      <button onclick="runGC()" style="background:var(--warn); color:var(--bg); border:none; padding:0.3rem 0.7rem; border-radius:4px; cursor:pointer; font-family:inherit; margin-top:0.3rem;">Force GC</button>
+      <button onclick="runShrink()" style="background:var(--warn); color:var(--bg); border:none; padding:0.3rem 0.7rem; border-radius:4px; cursor:pointer; font-family:inherit; margin-left:0.3rem;">Shrink Memory</button>
+      <button onclick="runNano()" style="background:var(--info); color:var(--bg); border:none; padding:0.3rem 0.7rem; border-radius:4px; cursor:pointer; font-family:inherit; margin-left:0.3rem;">Benchmark (ns)</button>
+    </div>
+  </div>
+
+  <div class="pwa-section" style="margin-top: 0.5rem;">
+    <h3 style="color: var(--accent); cursor: pointer;" onclick="toggleSection('ws-chart-content', this)">
+      Live Worker Metrics Chart (WebSocket) ▸
+    </h3>
+    <div id="ws-chart-content" style="display: none; margin-top: 0.5rem;">
+      <canvas id="worker-chart" width="600" height="200" style="background: var(--bg-nav); border-radius: 4px; border: 1px solid var(--border);"></canvas>
+      <div style="margin-top: 0.3rem; font-size: 0.75rem; color: var(--fg-dim);">
+        <span style="color:var(--accent);">●</span> Idle workers
+        <span style="color:var(--warn); margin-left:1rem;">●</span> Busy workers
+        <span id="ws-status-text" style="margin-left:1rem;">Disconnected</span>
+      </div>
+    </div>
+  </div>
+
+  <footer>BUN-DEV — Bun Automation Platform | Powered by Bun v{{BUN_VERSION}}</footer>
+  <div style="margin-top: 0.5rem; color: var(--fg-dim); font-size: 0.7rem; text-align: center;">
+    Shortcuts: <span class="kbd">R</span> refresh <span class="kbd">I</span> install <span class="kbd">C</span> compare <span class="kbd">V</span> validate <span class="kbd">G</span> gallery
+  </div>
+  <div class="toast" id="toast"></div>
+
+  <script>
+    async function fetchFeatures() {
+      const panel = document.getElementById('features-panel');
+      const output = document.getElementById('features-output');
+      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+      if (panel.style.display === 'none') return;
+      output.textContent = 'Loading...';
+      try {
+        const res = await fetch('/features');
+        const data = await res.json();
+        const rows = data.features.map(f =>
+          '  ' + f.key.padEnd(15) + ' ' +
+          (f.active ? '✅ active' : f.blocked ? '⚠️  blocked' : '❌ off') +
+          '  ' + f.status
+        ).join('\\n');
+        output.textContent = 'Feature              State          Status\\n' +
+                             '───────              ─────          ──────\\n' + rows;
+      } catch (e) {
+        output.textContent = 'Error: ' + e.message;
+      }
+    }
+    // Live uptime counter
+    let uptimeStart = {{UPTIME}};
+    setInterval(() => {
+      uptimeStart++;
+      const m = Math.floor(uptimeStart / 60);
+      const s = uptimeStart % 60;
+      document.getElementById('uptime').textContent = m > 0 ? m + 'm ' + s + 's' : s + 's';
+    }, 1000);
+
+    // Live health polling — every 5s
+    async function pollHealth() {
+      try {
+        const res = await fetch('/health');
+        const data = await res.json();
+        const pulse = document.getElementById('health-pulse');
+        const stat = document.getElementById('health-stat');
+        const workers = document.getElementById('workers-stat');
+        if (data.status === 'ok') {
+          pulse.className = 'health-pulse ok';
+          stat.textContent = '✅ OK';
+          stat.style.color = 'var(--accent)';
+          workers.textContent = data.workers.idle + '/' + data.workers.total + ' idle';
+        } else {
+          pulse.className = 'health-pulse err';
+          stat.textContent = '❌ Down';
+          stat.style.color = 'var(--err)';
+        }
+      } catch (e) {
+        const pulse = document.getElementById('health-pulse');
+        const stat = document.getElementById('health-stat');
+        pulse.className = 'health-pulse err';
+        stat.textContent = '❌ Error';
+        stat.style.color = 'var(--err)';
+      }
+    }
+    pollHealth();
+    setInterval(pollHealth, 5000);
+
+    // Fetch metrics for routes count
+    async function fetchMetrics() {
+      try {
+        const res = await fetch('/metrics');
+        const text = await res.text();
+        const totalMatch = text.match(/routes{type="total"} (\\d+)/);
+        const pwaMatch = text.match(/routes{type="pwa"} (\\d+)/);
+        if (totalMatch) document.getElementById('routes-stat').textContent = totalMatch[1] + ' total';
+      } catch (e) {}
+    }
+    fetchMetrics();
+
+    // Network status indicator
+    function updateNetStatus() {
+      const badge = document.getElementById('net-status');
+      if (navigator.onLine) {
+        badge.textContent = '● Online';
+        badge.className = 'net-badge';
+      } else {
+        badge.textContent = '● Offline';
+        badge.className = 'net-badge offline';
+      }
+    }
+    updateNetStatus();
+    window.addEventListener('online', updateNetStatus);
+    window.addEventListener('offline', updateNetStatus);
+
+    // Toast helper
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2000);
+    }
+
+    // Copy manifest to clipboard
+    async function copyManifest() {
+      try {
+        const res = await fetch('/manifest.json');
+        const text = await res.text();
+        await navigator.clipboard.writeText(text);
+        showToast('✅ Manifest copied to clipboard');
+      } catch (e) {
+        showToast('❌ Copy failed: ' + e.message);
+      }
+    }
+
+    // Toggle section helper
+    function toggleSection(id, h3) {
+      const el = document.getElementById(id);
+      if (el.style.display === 'none') {
+        el.style.display = 'block';
+        h3.textContent = h3.textContent.replace('▸', '▾');
+      } else {
+        el.style.display = 'none';
+        h3.textContent = h3.textContent.replace('▾', '▸');
+      }
+    }
+
+    // SSE audit log terminal
+    let auditEventSource = null;
+    function startAuditStream() {
+      const terminal = document.getElementById('audit-terminal');
+      const btn = document.getElementById('audit-stream-btn');
+      if (auditEventSource) {
+        auditEventSource.close();
+        auditEventSource = null;
+        btn.textContent = 'Start Streaming';
+        return;
+      }
+      // Need auth token for SSE — use cookie if available
+      auditEventSource = new EventSource('/api/audit/stream');
+      auditEventSource.onmessage = function(e) {
+        const entry = JSON.parse(e.data);
+        const time = new Date(entry.created_at).toLocaleTimeString();
+        const line = '[' + time + '] ' + entry.action + (entry.resource ? ' → ' + entry.resource : '') + '\\n';
+        terminal.textContent += line;
+        terminal.scrollTop = terminal.scrollHeight;
+      };
+      auditEventSource.onerror = function() {
+        terminal.textContent += '--- connection lost ---\\n';
+        auditEventSource.close();
+        auditEventSource = null;
+        btn.textContent = 'Start Streaming';
+      };
+      btn.textContent = 'Stop Streaming';
+      terminal.textContent = '--- streaming live audit events ---\\n';
+    }
+
+    // Mermaid live render
+    async function renderMermaid() {
+      const input = document.getElementById('mermaid-input').value;
+      const output = document.getElementById('mermaid-output');
+      if (!input.trim()) { output.innerHTML = '<span style="color:var(--err);">Enter mermaid code</span>'; return; }
+      output.innerHTML = '<span style="color:var(--fg-dim);">Rendering via Bun.WebView...</span>';
+      try {
+        const res = await fetch('/api/mermaid', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: input }),
+        });
+        if (res.ok) {
+          const svg = await res.text();
+          output.innerHTML = svg;
+        } else {
+          const err = await res.json();
+          output.innerHTML = '<span style="color:var(--err);">' + (err.error || 'render failed') + '</span>';
+        }
+      } catch (e) {
+        output.innerHTML = '<span style="color:var(--err);">Error: ' + e.message + '</span>';
+      }
+    }
+
+    // Load OpenAPI spec for Swagger panel
+    async function loadSwagger() {
+      const output = document.getElementById('swagger-output');
+      try {
+        const res = await fetch('/api/openapi.json');
+        const spec = await res.json();
+        let html = '<table><tr><th>Path</th><th>Methods</th></tr>';
+        for (const [path, methods] of Object.entries(spec.paths)) {
+          // JUSTIFIED: methods is unknown from JSON; narrowing to object
+          const m = methods;
+          const methodList = Object.keys(m).map(method =>
+            '<span style="color:var(--info); font-size:0.75rem; padding:0.1rem 0.3rem; border:1px solid var(--border); border-radius:3px;">' + method.toUpperCase() + '</span>'
+          ).join(' ');
+          html += '<tr><td style="font-family:monospace; color:var(--accent);">' + path + '</td><td>' + methodList + '</td></tr>';
+        }
+        html += '</table>';
+        html += '<p style="margin-top:0.5rem; color:var(--fg-dim); font-size:0.75rem;">OpenAPI ' + spec.openapi + ' • ' + spec.info.title + ' v' + spec.info.version + '</p>';
+        output.innerHTML = html;
+      } catch (e) {
+        output.innerHTML = '<span style="color:var(--err);">Error: ' + e.message + '</span>';
+      }
+    }
+
+    // Feature toggle buttons — add onclick handlers to toggle cells
+    function setupFeatureToggles() {
+      const table = document.getElementById('feature-flag-table');
+      if (!table) return;
+      // Add toggle button column to each row (skip header)
+      const rows = table.querySelectorAll('tr');
+      rows.forEach((row, i) => {
+        if (i === 0) return; // skip header
+        const cells = row.querySelectorAll('td');
+        if (cells.length >= 3) {
+          const key = cells[0].textContent;
+          const stateCell = cells[2];
+          const isActive = stateCell.textContent.includes('active');
+          const toggleCell = cells[4] || document.createElement('td');
+          toggleCell.innerHTML = '<button onclick="toggleFeature(\\'' + key + '\\', ' + !isActive + ')" style="background:' + (isActive ? 'var(--err)' : 'var(--accent)') + '; color:var(--bg); border:none; padding:0.2rem 0.5rem; border-radius:4px; cursor:pointer; font-family:inherit; font-size:0.75rem;">' + (isActive ? 'Disable' : 'Enable') + '</button>';
+          if (cells.length < 5) row.appendChild(toggleCell);
+        }
+      });
+    }
+
+    async function toggleFeature(key, enabled) {
+      try {
+        const res = await fetch('/api/features/toggle', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key, enabled }),
+        });
+        if (res.ok) {
+          showToast('✅ ' + key + ' ' + (enabled ? 'enabled' : 'disabled'));
+          setTimeout(() => location.reload(), 500);
+        } else {
+          const err = await res.json();
+          showToast('❌ ' + (err.error || 'toggle failed'));
+        }
+      } catch (e) {
+        showToast('❌ ' + e.message);
+      }
+    }
+
+    // Auto-load swagger when panel is opened
+    document.querySelector('#swagger-content').previousElementSibling?.addEventListener('click', () => {
+      if (document.getElementById('swagger-content').style.display === 'block') loadSwagger();
+    });
+
+    // Setup feature toggles on page load
+    setTimeout(setupFeatureToggles, 100);
+
+    // WebSocket live worker metrics chart
+    let wsChart = null;
+    let wsChartData = []; // {time, idle, busy}
+    const WS_CHART_MAX_POINTS = 60;
+
+    function startWSChart() {
+      const canvas = document.getElementById('worker-chart');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const statusText = document.getElementById('ws-status-text');
+
+      // Connect to /ws/metrics
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = protocol + '//' + location.host + '/ws/metrics';
+
+      try {
+        wsChart = new WebSocket(wsUrl);
+      } catch (e) {
+        statusText.textContent = 'WebSocket not available (ENABLE_WEBSOCKET=0)';
+        statusText.style.color = 'var(--warn)';
+        return;
+      }
+
+      wsChart.onopen = function() {
+        statusText.textContent = 'Connected';
+        statusText.style.color = 'var(--accent)';
+      };
+
+      wsChart.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+        if (data.type !== 'metrics') return;
+        wsChartData.push({ time: Date.now(), idle: data.idle, busy: data.busy });
+        if (wsChartData.length > WS_CHART_MAX_POINTS) wsChartData.shift();
+        drawChart(ctx, canvas, wsChartData);
+      };
+
+      wsChart.onclose = function() {
+        statusText.textContent = 'Disconnected';
+        statusText.style.color = 'var(--err)';
+      };
+
+      wsChart.onerror = function() {
+        statusText.textContent = 'Error';
+        statusText.style.color = 'var(--err)';
+      };
+    }
+
+    function drawChart(ctx, canvas, data) {
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+
+      if (data.length < 2) return;
+
+      const maxWorkers = Math.max(...data.map(d => d.idle + d.busy), 4);
+      const stepX = w / (WS_CHART_MAX_POINTS - 1);
+      const scaleY = (h - 20) / maxWorkers;
+
+      // Draw grid
+      ctx.strokeStyle = '#3a3b3b';
+      ctx.lineWidth = 0.5;
+      for (let i = 0; i <= maxWorkers; i++) {
+        const y = h - 10 - i * scaleY;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+      }
+
+      // Draw idle workers (green area)
+      ctx.fillStyle = 'rgba(80, 250, 123, 0.2)';
+      ctx.strokeStyle = '#50fa7b';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, h - 10);
+      data.forEach((d, i) => {
+        ctx.lineTo(i * stepX, h - 10 - d.idle * scaleY);
+      });
+      ctx.lineTo((data.length - 1) * stepX, h - 10);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Draw busy workers (orange line)
+      ctx.strokeStyle = '#ffb86c';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      data.forEach((d, i) => {
+        const y = h - 10 - d.busy * scaleY;
+        if (i === 0) ctx.moveTo(i * stepX, y);
+        else ctx.lineTo(i * stepX, y);
+      });
+      ctx.stroke();
+
+      // Labels
+      ctx.fillStyle = '#a8a8a0';
+      ctx.font = '10px monospace';
+      ctx.fillText('workers: ' + maxWorkers, 5, 15);
+      ctx.fillText('idle: ' + data[data.length-1].idle + ' busy: ' + data[data.length-1].busy, w - 120, 15);
+    }
+
+    // Auto-start chart when panel is opened
+    document.querySelector('#ws-chart-content').previousElementSibling?.addEventListener('click', () => {
+      if (document.getElementById('ws-chart-content').style.display === 'block' && !wsChart) {
+        startWSChart();
+      }
+    });
+
+    // API reference search filter
+    function filterEndpoints() {
+      const query = document.getElementById('api-search').value.toLowerCase();
+      const rows = document.querySelectorAll('#api-reference .api-row');
+      let visibleCount = 0;
+      rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        if (!query || text.includes(query)) {
+          row.style.display = '';
+          visibleCount++;
+        } else {
+          row.style.display = 'none';
+        }
+      });
+      // Hide empty categories
+      document.querySelectorAll('#api-reference .api-cat').forEach(cat => {
+        const visible = cat.querySelectorAll('.api-row:not([style*="display: none"])');
+        cat.style.display = visible.length > 0 ? '' : 'none';
+      });
+    }
+
+    // Code Transpiler Playground
+    async function runTranspile() {
+      const input = document.getElementById('transpile-input').value;
+      const output = document.getElementById('transpile-output');
+      if (!input.trim()) { output.textContent = 'Enter code to transpile'; return; }
+      output.textContent = 'Transpiling...';
+      try {
+        const res = await fetch('/api/transpile?code=' + encodeURIComponent(input));
+        // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+        const data = await res.json();
+        if (data.error) {
+          output.textContent = 'Error: ' + data.error;
+          output.style.color = 'var(--err)';
+        } else {
+          output.textContent = data.output;
+          output.style.color = 'var(--info)';
+          output.innerHTML += '\\n\\n--- ' + data.inputSize + 'B → ' + data.outputSize + 'B ---';
+        }
+      } catch (e) {
+        output.textContent = 'Error: ' + e.message;
+      }
+    }
+
+    // Filesystem Browser
+    async function loadFsBrowser(path) {
+      const output = document.getElementById('fs-browser-output');
+      path = path || '.';
+      output.textContent = 'Browsing ' + path + '...';
+      try {
+        const res = await fetch('/api/fs?path=' + encodeURIComponent(path));
+        // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+        const data = await res.json();
+        if (data.error) { output.innerHTML = '<span style="color:var(--err);">' + data.error + '</span>'; return; }
+        let html = '<table style="width:100%; font-size:0.75rem;"><tr><th>Name</th><th>Size</th><th>Type</th></tr>';
+        for (const f of data.files) {
+          const icon = f.type === 'directory' ? '📁' : '📄';
+          const size = f.type === 'directory' ? '-' : (f.size < 1024 ? f.size + 'B' : (f.size / 1024).toFixed(1) + 'KB');
+          const clickPath = f.type === 'directory' ? 'onclick="loadFsBrowser(\\'' + f.path + '\\')"' : '';
+          html += '<tr style="cursor:pointer;" ' + clickPath + '><td>' + icon + ' ' + f.name + '</td><td>' + size + '</td><td style="color:var(--fg-dim);">' + f.type + '</td></tr>';
+        }
+        html += '</table><p style="color:var(--fg-dim);">' + data.count + ' entries in ' + data.path + '</p>';
+        output.innerHTML = html;
+      } catch (e) {
+        output.innerHTML = '<span style="color:var(--err);">Error: ' + e.message + '</span>';
+      }
+    }
+
+    // Developer Utilities
+    async function runUtil() {
+      const tool = document.getElementById('utils-tool').value;
+      const input = document.getElementById('utils-input').value;
+      const output = document.getElementById('utils-output');
+      if (!input) { output.textContent = 'Enter input'; return; }
+      try {
+        const res = await fetch('/api/utils?tool=' + tool + '&input=' + encodeURIComponent(input));
+        // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+        const data = await res.json();
+        if (data.error) {
+          output.textContent = 'Error: ' + data.error;
+          output.style.color = 'var(--err)';
+        } else {
+          output.textContent = data.output;
+          output.style.color = 'var(--info)';
+        }
+      } catch (e) {
+        output.textContent = 'Error: ' + e.message;
+      }
+    }
+
+    // Runtime info
+    async function loadRuntime() {
+      const output = document.getElementById('runtime-output');
+      try {
+        const res = await fetch('/api/runtime');
+        // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+        const data = await res.json();
+        const mem = data.memory;
+        const fmt = (b) => (b / 1024 / 1024).toFixed(1) + 'MB';
+        output.innerHTML = '<table style="font-size:0.75rem;">' +
+          '<tr><td>Bun version:</td><td style="color:var(--accent);">' + data.bunVersion + '</td></tr>' +
+          '<tr><td>PID:</td><td>' + data.pid + '</td></tr>' +
+          '<tr><td>Uptime:</td><td>' + (data.uptime).toFixed(1) + 's</td></tr>' +
+          '<tr><td>RSS:</td><td style="color:var(--warn);">' + fmt(mem.rss) + '</td></tr>' +
+          '<tr><td>Heap used:</td><td style="color:var(--warn);">' + fmt(mem.heapUsed) + '</td></tr>' +
+          '<tr><td>Heap total:</td><td>' + fmt(mem.heapTotal) + '</td></tr>' +
+          '<tr><td>External:</td><td>' + fmt(mem.external) + '</td></tr>' +
+          '<tr><td>ArrayBuffers:</td><td>' + fmt(mem.arrayBuffers) + '</td></tr>' +
+          '</table>';
+      } catch (e) {
+        output.innerHTML = '<span style="color:var(--err);">Error: ' + e.message + '</span>';
+      }
+    }
+
+    async function runGC() {
+      const output = document.getElementById('runtime-output');
+      const res = await fetch('/api/runtime?action=gc');
+      // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+      const data = await res.json();
+      const fmt = (b) => (b / 1024 / 1024).toFixed(1) + 'MB';
+      output.innerHTML = '<p style="color:var(--accent);">GC freed ' + fmt(data.freed) + '</p>' +
+        '<p style="font-size:0.75rem;">Before: ' + fmt(data.before.heapUsed) + ' → After: ' + fmt(data.after.heapUsed) + '</p>';
+      setTimeout(loadRuntime, 500);
+    }
+
+    async function runShrink() {
+      const output = document.getElementById('runtime-output');
+      const res = await fetch('/api/runtime?action=shrink');
+      // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+      const data = await res.json();
+      const fmt = (b) => (b / 1024 / 1024).toFixed(1) + 'MB';
+      output.innerHTML = '<p style="color:var(--accent);">Shrink freed ' + fmt(data.freed) + ' RSS</p>';
+      setTimeout(loadRuntime, 500);
+    }
+
+    async function runNano() {
+      const output = document.getElementById('runtime-output');
+      const res = await fetch('/api/runtime?action=nanoseconds');
+      // JUSTIFIED: res.json() returns unknown; narrowing to response shape
+      const data = await res.json();
+      output.innerHTML = '<p style="color:var(--accent);">1000x Math.sqrt(): ' + data.elapsedNs + 'ns (' + data.elapsedMs + 'ms)</p>' +
+        '<p style="font-size:0.75rem;">Uptime: ' + (data.uptimeNs / 1e9).toFixed(1) + 's (' + data.uptimeNs + 'ns)</p>';
+    }
+
+    // Auto-load panels when opened
+    document.querySelector('#fs-browser-content').previousElementSibling?.addEventListener('click', () => {
+      if (document.getElementById('fs-browser-content').style.display === 'block') loadFsBrowser('.');
+    });
+    document.querySelector('#runtime-content').previousElementSibling?.addEventListener('click', () => {
+      if (document.getElementById('runtime-content').style.display === 'block') loadRuntime();
+    });
+
+    // SW cache status
+    async function checkSWCache() {
+      const info = document.getElementById('sw-cache-info');
+      const fill = document.getElementById('sw-cache-fill');
+      const detail = document.getElementById('sw-cache-detail');
+      if ('caches' in window) {
+        try {
+          const keys = await caches.keys();
+          if (keys.length === 0) {
+            info.textContent = 'No caches found (SW not yet active)';
+            fill.style.width = '0%';
+            return;
+          }
+          let totalRequests = 0;
+          let cachedRequests = 0;
+          for (const key of keys) {
+            const cache = await caches.open(key);
+            const requests = await cache.keys();
+            totalRequests += requests.length;
+          }
+          info.textContent = 'Cache: ' + keys.join(', ') + ' (' + totalRequests + ' entries)';
+          fill.style.width = Math.min(100, totalRequests * 10) + '%';
+          detail.innerHTML = '<span style="color:var(--accent);">' + totalRequests + '</span> cached responses across <span style="color:var(--info);">' + keys.length + '</span> cache(s)';
+        } catch (e) {
+          info.textContent = 'Cache check failed: ' + e.message;
+        }
+      } else {
+        info.textContent = 'Cache API not supported';
+      }
+    }
+
+    // PWA manifest comparison panel
+    async function loadPWACompare() {
+      const content = document.getElementById('pwa-compare-content');
+      const h3 = document.querySelector('#pwa-compare-panel h3');
+      if (content.style.display === 'none') {
+        content.style.display = 'block';
+        h3.textContent = 'Manifest Comparison: BUN-DEV vs bun.com ▾';
+        content.innerHTML = '<p style="color: var(--fg-dim); font-size: 0.8rem;">Loading...</p>';
+        try {
+          const res = await fetch('/api/pwa/compare');
+          const data = await res.json();
+          const s = data.summary;
+          let html = '<table><tr><th>Metric</th><th>BUN-DEV</th><th>bun.com</th></tr>';
+          html += '<tr><td>Installable</td><td>' + (s.ourInstallable ? '✅ Yes' : '❌ No') + '</td><td>' + (s.theirInstallable ? '✅ Yes' : '❌ No') + '</td></tr>';
+          html += '<tr><td>Score</td><td>' + s.ourScore + '%</td><td>' + s.theirScore + '%</td></tr>';
+          html += '<tr><td>Icon count</td><td>' + s.ourIconCount + '</td><td>' + s.theirIconCount + '</td></tr>';
+          html += '<tr><td>Matching fields</td><td colspan="2">' + s.matchingFields + '/' + s.totalFields + '</td></tr>';
+          html += '</table>';
+
+          html += '<h4 style="color:var(--info); margin: 0.75rem 0 0.25rem; font-size: 0.85rem;">Field Comparison</h4>';
+          html += '<table><tr><th>Field</th><th>BUN-DEV</th><th>bun.com</th><th>Match</th></tr>';
+          data.fields.forEach(f => {
+            html += '<tr><td>' + f.field + '</td><td style="font-size:0.8rem;">' + f.ours + '</td><td style="font-size:0.8rem;">' + f.theirs + '</td><td>' + (f.match ? '✅' : '⚠️') + '</td></tr>';
+          });
+          html += '</table>';
+
+          html += '<h4 style="color:var(--info); margin: 0.75rem 0 0.25rem; font-size: 0.85rem;">Icon Sizes</h4>';
+          html += '<table><tr><th>Size</th><th>BUN-DEV</th><th>bun.com</th></tr>';
+          data.icons.forEach(i => {
+            html += '<tr><td>' + i.size + '</td><td>' + (i.ours ? '✅' : '—') + '</td><td>' + (i.theirs ? '✅' : '—') + '</td></tr>';
+          });
+          html += '</table>';
+
+          // Validation details
+          const v = data.validation;
+          html += '<h4 style="color:var(--info); margin: 0.75rem 0 0.25rem; font-size: 0.85rem;">BUN-DEV Validation (' + v.ours.score + '%)</h4>';
+          html += '<table><tr><th>Check</th><th>Pass</th></tr>';
+          v.ours.checks.forEach(c => {
+            html += '<tr><td>' + c.check + '</td><td>' + (c.pass ? '✅' : '❌') + '</td></tr>';
+          });
+          if (v.ours.errors.length) html += '<tr><td colspan="2" style="color:var(--err);">Errors: ' + v.ours.errors.join(', ') + '</td></tr>';
+          if (v.ours.warnings.length) html += '<tr><td colspan="2" style="color:var(--warn);">Warnings: ' + v.ours.warnings.join(', ') + '</td></tr>';
+          html += '</table>';
+
+          html += '<h4 style="color:var(--info); margin: 0.75rem 0 0.25rem; font-size: 0.85rem;">bun.com Validation (' + v.theirs.score + '%)</h4>';
+          html += '<table><tr><th>Check</th><th>Pass</th></tr>';
+          v.theirs.checks.forEach(c => {
+            html += '<tr><td>' + c.check + '</td><td>' + (c.pass ? '✅' : '❌') + '</td></tr>';
+          });
+          if (v.theirs.errors.length) html += '<tr><td colspan="2" style="color:var(--err);">Errors: ' + v.theirs.errors.join(', ') + '</td></tr>';
+          if (v.theirs.warnings.length) html += '<tr><td colspan="2" style="color:var(--warn);">Warnings: ' + v.theirs.warnings.join(', ') + '</td></tr>';
+          html += '</table>';
+
+          content.innerHTML = html;
+        } catch (e) {
+          content.innerHTML = '<p style="color:var(--err); font-size: 0.8rem;">Error: ' + e.message + '</p>';
+        }
+      } else {
+        content.style.display = 'none';
+        h3.textContent = 'Manifest Comparison: BUN-DEV vs bun.com ▸';
+      }
+    }
+
+    // PWA validation panel
+    async function loadPWAValidate() {
+      const content = document.getElementById('pwa-validate-content');
+      const h3 = document.querySelector('#pwa-validate-panel h3');
+      if (content.style.display === 'none') {
+        content.style.display = 'block';
+        h3.textContent = 'Installability Validation ▾';
+        content.innerHTML = '<p style="color: var(--fg-dim); font-size: 0.8rem;">Loading...</p>';
+        try {
+          const res = await fetch('/api/pwa/validate');
+          const data = await res.json();
+          let html = '<div style="margin-bottom: 0.5rem;">';
+          html += '<span style="font-size: 1.2rem; color: ' + (data.installable ? 'var(--accent)' : 'var(--err)') + ';">';
+          html += data.installable ? '✅ Installable' : '❌ Not Installable';
+          html += '</span> <span style="color: var(--fg-dim); font-size: 0.85rem;">(' + data.score + '% score)</span>';
+          html += '</div>';
+          html += '<table><tr><th>Category</th><th>Check</th><th>Pass</th><th>Detail</th></tr>';
+          data.checks.forEach(c => {
+            const color = c.pass ? 'var(--accent)' : c.severity === 'error' ? 'var(--err)' : c.severity === 'warning' ? 'var(--warn)' : 'var(--fg-dim)';
+            html += '<tr><td style="font-size:0.75rem; color:var(--fg-dim);">' + c.category + '</td><td>' + c.check + '</td><td style="color:' + color + ';">' + (c.pass ? '✅' : '❌') + '</td><td style="font-size:0.8rem; color:var(--fg-dim);">' + c.detail + '</td></tr>';
+          });
+          html += '</table>';
+          content.innerHTML = html;
+        } catch (e) {
+          content.innerHTML = '<p style="color:var(--err); font-size: 0.8rem;">Error: ' + e.message + '</p>';
+        }
+      } else {
+        content.style.display = 'none';
+        h3.textContent = 'Installability Validation ▸';
+      }
+    }
+  </script>
+  {{PWA_SECTIONS_START}}<script>
+    // PWA install prompt
+    let deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      const btn = document.getElementById('pwa-install-btn');
+      if (btn) btn.style.display = 'inline-block';
+      console.log('[PWA] install prompt available');
+    });
+    function installPWA() {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then((choice) => {
+          if (choice.outcome === 'accepted') {
+            console.log('[PWA] user accepted install');
+            const btn = document.getElementById('pwa-install-btn');
+            if (btn) btn.style.display = 'none';
+          } else {
+            console.log('[PWA] user dismissed install');
+          }
+          deferredPrompt = null;
+        });
+      } else {
+        alert('Install option not available. Use Chrome menu > Install BUN-DEV.');
+      }
+    }
+    window.addEventListener('appinstalled', () => {
+      console.log('[PWA] app installed successfully');
+      const btn = document.getElementById('pwa-install-btn');
+      if (btn) btn.style.display = 'none';
+    });
+
+    // Service worker registration + status badge
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(function(reg) {
+        console.log('[PWA] service worker registered', reg.scope);
+        const badge = document.getElementById('sw-status');
+        if (badge) {
+          badge.textContent = 'SW: active';
+          badge.classList.add('active');
+        }
+      }).catch(function(err) {
+        console.warn('[PWA] service worker registration failed', err);
+        const badge = document.getElementById('sw-status');
+        if (badge) {
+          badge.textContent = 'SW: failed';
+          badge.classList.add('inactive');
+        }
+      });
+    } else {
+      const badge = document.getElementById('sw-status');
+      if (badge) {
+        badge.textContent = 'SW: unsupported';
+        badge.classList.add('inactive');
+      }
+    }
+
+    // Check SW cache after registration
+    setTimeout(checkSWCache, 2000);
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      switch (e.key.toLowerCase()) {
+        case 'r': pollHealth(); fetchMetrics(); showToast('🔄 Refreshed'); break;
+        case 'i': installPWA(); break;
+        case 'c': loadPWACompare(); break;
+        case 'v': loadPWAValidate(); break;
+        case 'g':
+          const gal = document.getElementById('icon-gallery-content');
+          const galH3 = document.querySelector('#icon-gallery-content').previousElementSibling;
+          toggleSection('icon-gallery-content', galH3);
+          break;
+      }
+    });
+  </script>{{PWA_SECTIONS_END}}
+</body>
+</html>

@@ -50,9 +50,7 @@ function isProcessSender(s: Sender): s is ProcessSender {
   return typeof (s as ProcessSender).on === "function";
 }
 
-export class IPCChannel<TSend extends ChannelMessage, TRecv extends ChannelMessage>
-  extends BaseChannel<TSend, TRecv>
-{
+export class IPCChannel<TSend extends ChannelMessage, TRecv extends ChannelMessage> extends BaseChannel<TSend, TRecv> {
   private sender: Sender;
   private messageHandler: ((msg: unknown) => void) | null = null;
 

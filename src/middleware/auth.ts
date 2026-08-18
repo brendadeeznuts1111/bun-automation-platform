@@ -11,6 +11,7 @@
  */
 
 import { read } from "../db";
+import { SessionTokenRow } from "../types/models";
 
 export interface AuthContext {
   agentId: number;
@@ -31,8 +32,8 @@ setInterval(() => {
       sessionCache.delete(key);
     }
   }
-// N7: Timer.unref() is always available (per bun-types/globals.d.ts).
-// The previous `?.` was unnecessary defensive coding.
+  // N7: Timer.unref() is always available (per bun-types/globals.d.ts).
+  // The previous `?.` was unnecessary defensive coding.
 }, 60_000).unref(); // unref so it doesn't block process exit
 
 /** Invalidate a cached session (call on logout). */
@@ -73,11 +74,13 @@ export function verifyAuth(req: Request): AuthContext | null {
 
   // Cache miss or expired — query the database
   const session = read((db) => {
-    return db.query(
-      `SELECT id, agent_id FROM auth_sessions
+    return db
+      .query(
+        `SELECT id, agent_id FROM auth_sessions
        WHERE token = ? AND expires_at > datetime('now')`,
-    // JUSTIFIED: bun:sqlite .get() returns unknown; narrowing to the session row type
-    ).get(token) as { id: number; agent_id: number } | null;
+      )
+      .as(SessionTokenRow)
+      .get(token);
   });
 
   if (!session) {
@@ -91,7 +94,10 @@ export function verifyAuth(req: Request): AuthContext | null {
   if (sessionCache.size >= SESSION_CACHE_MAX) {
     const now = Date.now();
     for (const [k, v] of sessionCache) {
-      if (v.expires <= now) { sessionCache.delete(k); break; }
+      if (v.expires <= now) {
+        sessionCache.delete(k);
+        break;
+      }
     }
   }
   // Cache for 1 minute — DB expiry is checked on cache miss
