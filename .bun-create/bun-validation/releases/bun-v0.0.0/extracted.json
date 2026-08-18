@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "1",
+  "release": "bun-v0.0.0",
+  "published": "2026-01-01",
+  "source": "https://example.com/bun-v0.0.0",
+  "code_blocks": [
+    {
+      "id": 1,
+      "feature": "Hello Bun",
+      "code": "console.log(\"hello\");",
+      "purpose": "Sample feature so a fresh scaffold has a passing validate run.",
+      "status": "stable",
+      "notes": "Replace with real extracted blocks."
+    }
+  ]
+}

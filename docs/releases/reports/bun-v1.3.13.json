@@ -1,0 +1,23 @@
+{
+  "version": "1.3.13",
+  "schemaVersion": "1",
+  "valid": true,
+  "errors": [],
+  "warnings": [
+    "Block 5 (Source maps use up to 8x less memory): empty code",
+    "Block 6 (Bun runtime uses 5% less memory): empty code",
+    "Block 7 (Upgraded JavaScriptCore engine): empty code",
+    "Block 8 (Faster addEventListener/dispatchEvent and DOM events): empty code",
+    "Block 10 (5.5x faster gzip compression with zlib-ng): empty code",
+    "Block 11 (Faster array iteration in Bun internals): empty code",
+    "Block 15 (Standalone HTML inlines file-loader assets): empty code",
+    "Block 16 (bunx claude fix): empty code"
+  ],
+  "errorsByCategory": {
+    "shape": [],
+    "semantic": [],
+    "consistency": [],
+    "regression": []
+  },
+  "generatedAt": "2026-08-17T17:34:07.919Z"
+}

@@ -1,0 +1,3 @@
+[install]
+# Prefer the workspace crate when this template is used inside the monorepo.
+# Standalone projects resolve bun-validation from npm (or bun add file:...).

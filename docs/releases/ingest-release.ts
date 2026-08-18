@@ -13,6 +13,7 @@
 //   3. Check for extracted.json (created manually or via future extract.ts)
 //   4. Normalize extracted.json → normalized.json (inline import, no subprocess)
 //   5. Diff against previous release (inline, no subprocess)
+//   6. Validate extracted + normalized output (shape, semantics, consistency)
 //
 // All I/O uses Bun-native APIs: fetch, Bun.write, Bun.file().json().
 // Zero external dependencies (no curl, no fs/promises, no mkdir).
@@ -98,5 +99,19 @@ if (dirs.length > 0) {
 } else {
   console.log(`   No previous release found — skipping diff.`);
 }
+
+// Step 5: Semantic + consistency validation of extracted/normalized output
+console.log(`\n4️⃣  Validating output...`);
+const { validateAll } = await import("bun-validation");
+const report = await validateAll(version, {
+  baseDir: releaseDir,
+  reportsDir: `${import.meta.dir}/reports`,
+});
+if (!report.valid) {
+  console.error("❌ Validation failed.");
+  console.error(report.errors.join("\n"));
+  process.exit(1);
+}
+console.log("✅ Validation passed.");
 
 console.log(`\n✅ Ingestion complete for bun-v${version}`);

@@ -1,0 +1,2 @@
+# Keep regression snapshots here: bun-vX.Y.Z.json
+# Write with: bun docs/releases/validate.ts 1.3.14 --write-snapshot
