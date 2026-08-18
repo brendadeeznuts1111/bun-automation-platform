@@ -7,7 +7,7 @@
       "id": 1,
       "feature": "Bun.Image",
       "code": "await Bun.file(\"photo.jpg\").image().resize(1024, 1024, { fit: \"inside\" }).rotate(90).webp({ quality: 85 }).write(\"thumb.webp\");\nreturn new Response(new Bun.Image(upload).resize(200).jpeg());",
-      "purpose": "Chainable image processing pipeline — decode, transform, encode. Drop-in alternative to sharp.",
+      "purpose": "Chainable image processing pipeline — decode, transform, encode. Drop-in alternative to sharp. Inventory rows 1–2 (pipeline + thumbnail Response).",
       "status": "stable",
       "notes": "ADOPTED in src/utils/image.ts and scripts/generate-assets.ts"
     },
@@ -15,7 +15,7 @@
       "id": 2,
       "feature": "Bun.Image — metadata & placeholder",
       "code": "const meta = await new Bun.Image(buf).metadata();\nconst placeholder = await Bun.file(\"hero.jpg\").image().placeholder();",
-      "purpose": "Extract image metadata and generate thumbhash blur-up placeholders.",
+      "purpose": "Extract image metadata and generate thumbhash blur-up placeholders. Inventory rows 3–4 kept combined for normalize ID stability.",
       "status": "stable",
       "notes": "Could adopt .placeholder() for PWA icon blur-up loading"
     },
@@ -23,7 +23,7 @@
       "id": 3,
       "feature": "Global Virtual Store",
       "code": "[install]\nglobalStore = true",
-      "purpose": "Shared global package store — symlink per-project instead of clonefileat per file.",
+      "purpose": "Shared global package store — symlink per-project instead of clonefileat per file. ~823ms → 115ms warm isolated install.",
       "status": "experimental",
       "notes": "ADOPTED in bunfig.toml. 823ms → 115ms warm install"
     },
@@ -31,7 +31,7 @@
       "id": 4,
       "feature": "HTTP/3 (QUIC) in Bun.serve",
       "code": "Bun.serve({ port: 443, tls: { cert, key }, http3: true, fetch(req) { return new Response(\"hi\"); } });",
-      "purpose": "Serve HTTP/3 over QUIC alongside HTTP/1.1+2 on same port. 509K req/s.",
+      "purpose": "Serve HTTP/3 over QUIC alongside HTTP/1.1+2 on same port. Blog: ~509K req/s static (Linux x64). Inventory rows 6 + 20.",
       "status": "experimental",
       "notes": "ADOPTED behind flag in src/server.ts. Requires ENABLE_TLS=1"
     },
@@ -47,7 +47,7 @@
       "id": 6,
       "feature": "HTTP/3 Client for fetch()",
       "code": "const res = await fetch(\"https://example.com/\", { protocol: \"http3\" });",
-      "purpose": "HTTP/3 client via QUIC. Supports streaming, redirects, connection pooling.",
+      "purpose": "HTTP/3 client via QUIC. Supports streaming, redirects, connection pooling. Highly experimental.",
       "status": "experimental",
       "notes": "PARTIAL — render-mermaid.ts:120 uses protocol: \"http3\" with fallback"
     },
@@ -62,8 +62,8 @@
     {
       "id": 8,
       "feature": "--no-orphans",
-      "code": "BUN_FEATURE_FLAG_NO_ORPHANS=1 bun run my-script",
-      "purpose": "Auto-exit when parent dies. Recursively SIGKILLs descendants.",
+      "code": "bun --no-orphans run my-script\n# or [run] noOrphans = true\nBUN_FEATURE_FLAG_NO_ORPHANS=1 bun run my-script",
+      "purpose": "Auto-exit when parent dies. Recursively SIGKILLs descendants. CLI, bunfig, or env flag.",
       "status": "stable",
       "notes": "ADOPTED in src/workers/pool.ts:145"
     },
@@ -71,15 +71,15 @@
       "id": 9,
       "feature": "process.execve()",
       "code": "process.execve(\"/usr/bin/echo\", [\"echo\", \"hello\"], { PATH: process.env.PATH });",
-      "purpose": "Replace process image in-place. Never returns on success.",
+      "purpose": "Replace process image in-place. Never returns on success. Emits ExperimentalWarning (Node v24-aligned).",
       "status": "experimental",
       "notes": "NOT VIABLE — IPC fd is close-on-exec, breaks worker pool"
     },
     {
       "id": 10,
       "feature": "Bun.Terminal (Windows ConPTY)",
-      "code": "const terminal = new Bun.Terminal({ cols: 80, rows: 24, onData(data) { process.stdout.write(data); } });",
-      "purpose": "Pseudo-terminal on Windows via ConPTY.",
+      "code": "const terminal = new Bun.Terminal({ cols: 80, rows: 24, onData(data) { process.stdout.write(data); } });\nconst proc = Bun.spawn({ cmd: [\"cmd.exe\", \"/c\", \"echo\", \"hello from ConPTY\"], terminal });\nawait proc.exited;\nterminal.close();",
+      "purpose": "Pseudo-terminal on Windows via ConPTY, usable with Bun.spawn.",
       "status": "stable",
       "notes": "NOT APPLICABLE — project targets macOS/Linux"
     },
@@ -94,8 +94,8 @@
     {
       "id": 12,
       "feature": "SIGHUP/SIGBREAK on Windows",
-      "code": "process.on(\"SIGHUP\", () => { cleanup(); process.exit(); });",
-      "purpose": "Windows console-control events map to signals.",
+      "code": "process.on(\"SIGHUP\", () => { cleanup(); process.exit(); });\nprocess.on(\"SIGBREAK\", () => { cleanup(); process.exit(); });",
+      "purpose": "Windows console-control events map to signals (close / Ctrl+Break).",
       "status": "stable",
       "notes": "PARTIAL — SIGHUP in shutdown.ts:111, no SIGBREAK (Windows-only)"
     },
@@ -138,16 +138,34 @@
       "purpose": "No longer breaks downstream pagers (less, fzf, fx).",
       "status": "stable",
       "notes": "AUTOMATIC — no code change needed"
+    },
+    {
+      "id": 18,
+      "feature": "HTTP/3 only Bun.serve",
+      "code": "Bun.serve({ port: 443, tls: { cert, key }, http3: true, http1: false, fetch(req) { return new Response(\"h3 only\"); } });",
+      "purpose": "Listen for HTTP/3 only (disable HTTP/1.1). Highly experimental. Inventory row 7.",
+      "status": "experimental",
+      "notes": "NOT ADOPTED — server uses dual-stack http3 alongside HTTP/1 when ENABLE_HTTP3=1"
+    },
+    {
+      "id": 19,
+      "feature": "Force HTTP/1.1 fetch protocol",
+      "code": "const res = await fetch(\"https://example.com\", { protocol: \"http1.1\" });",
+      "purpose": "Pin fetch to HTTP/1.1 when protocol negotiation must be forced. Inventory row 9.",
+      "status": "experimental",
+      "notes": "NOT ADOPTED. Companion to HTTP/2 client opt-in"
     }
   ],
   "integration_checklist": [
-    "Bun.Image: ADOPTED — verify src/utils/image.ts pipeline",
+    "Bun.Image: ADOPTED — verify src/utils/image.ts pipeline; .placeholder() still optional",
     "Global Virtual Store: ADOPTED — verify bunfig.toml globalStore = true",
     "HTTP/3 server: ADOPTED behind flag — test with curl --http3",
+    "HTTP/3 only (http1: false): NOT ADOPTED",
     "HTTP/2 client: NOT ADOPTED — evaluate for outbound fetch()",
+    "Force HTTP/1.1 protocol: NOT ADOPTED",
     "HTTP/3 client: PARTIAL — verify render-mermaid.ts fallback",
     "fs.watch(): NOT ADOPTED — build config/manifest hot-reload",
-    "--no-orphans: ADOPTED — verify pool.ts:145 worker env",
+    "--no-orphans: ADOPTED — verify pool.ts:145 worker env (optional bunfig [run] noOrphans)",
     "process.execve(): NOT VIABLE — IPC breaks",
     "Bun.Terminal: NOT APPLICABLE — macOS/Linux only",
     "using/await using: ADOPTED — verify task-worker.ts:203",
@@ -172,7 +190,7 @@
     {
       "phase": 3,
       "title": "Update documentation",
-      "items": ["Mark I4 RESOLVED in OPEN_TASKS.md", "Update BUN_API_REFERENCE.md", "Update ARCHITECTURE.md"]
+      "items": ["Mark I4 RESOLVED in OPEN_TASKS.md", "Update BUN_API_REFERENCE.md", "Update ARCHITECTURE.md", "Keep catalog.md aligned with extracted.json"]
     },
     {
       "phase": 4,

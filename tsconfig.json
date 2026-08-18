@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     // ----- Language & Environment -----
-    "lib": ["ESNext"],
+    "lib": ["ESNext", "DOM"],
     "target": "ESNext",
     "module": "Preserve",
     "moduleDetection": "force",
@@ -27,7 +27,9 @@
       "@middleware/*": ["./src/middleware/*"],
       "@utils/*": ["./src/utils/*"],
       "@workers/*": ["./src/workers/*"],
-      "@models/*": ["./src/types/*"]
+      "@models/*": ["./src/types/*"],
+      "bun-validation": ["./packages/bun-validation/src/index.ts"],
+      "bun-validation/*": ["./packages/bun-validation/src/*"]
     },
 
     // ----- Type Checking (maximum strictness) -----
@@ -51,6 +53,13 @@
     "noImplicitReturns": true,
     "noPropertyAccessFromIndexSignature": false
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts", "*.d.ts", "seed-agent.ts"],
+  "include": [
+    "src/**/*.ts",
+    "tests/**/*.ts",
+    "docs/releases/**/*.ts",
+    "packages/bun-validation/src/**/*.ts",
+    "*.d.ts",
+    "seed-agent.ts"
+  ],
   "exclude": ["node_modules", "data", "dist", "build"]
 }

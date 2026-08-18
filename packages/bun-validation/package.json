@@ -1,0 +1,31 @@
+{
+  "name": "bun-validation",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Zero-dependency Bun-native validation for release ingest pipelines",
+  "license": "MIT",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "bin": {
+    "bun-validate": "./src/bin.ts"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./cli": "./src/cli.ts"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "validate": "bun src/bin.ts",
+    "test": "bun test"
+  },
+  "keywords": [
+    "bun",
+    "validation",
+    "ci",
+    "junit"
+  ]
+}

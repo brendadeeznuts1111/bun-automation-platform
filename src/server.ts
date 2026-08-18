@@ -848,7 +848,8 @@ const exportBundleHandler = withAuth<"">(async (req: BunRequest<"">): Promise<Re
 
   if (useGzip) {
     const bundle = await createCompressedExportBundle();
-    return new Response(bundle.data, {
+    // JUSTIFIED: gzip Uint8Array is a valid Response body; DOM BodyInit omits ArrayBufferLike
+    return new Response(bundle.data as BodyInit, {
       headers: {
         "Content-Type": "application/gzip",
         "Content-Disposition": `attachment; filename="bun-dev-export-${bundle.date}.tar.gz"`,

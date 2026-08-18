@@ -1,0 +1,14 @@
+[
+  {
+    "id": "bun-0.0.0-hello-bun-1",
+    "feature": "Hello Bun",
+    "code": "console.log(\"hello\");",
+    "purpose": "Sample feature so a fresh scaffold has a passing validate run.",
+    "status": "stable",
+    "notes": "Replace with real extracted blocks.",
+    "api": ["console.log"],
+    "dependencies": [],
+    "runnable": true,
+    "added_in": "0.0.0"
+  }
+]

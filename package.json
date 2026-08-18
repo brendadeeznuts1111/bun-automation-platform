@@ -1,8 +1,10 @@
 {
   "name": "bun-automation-platform",
   "private": true,
+  "workspaces": ["packages/*"],
   "bin": {
-    "render-mermaid": "render-mermaid.ts"
+    "render-mermaid": "render-mermaid.ts",
+    "bun-validate": "packages/bun-validation/src/bin.ts"
   },
   "scripts": {
     "check": "tsc --noEmit",
@@ -17,7 +19,13 @@
     "test:parallel": "bun test --parallel --isolate",
     "test:changed": "bun test --changed",
     "test:fast": "bun test --parallel=4 --isolate",
-    "cli:dashboard": "bun run src/cli/dashboard.ts"
+    "cli:dashboard": "bun run src/cli/dashboard.ts",
+    "ingest": "bun docs/releases/ingest-release.ts",
+    "validate": "bun docs/releases/validate.ts",
+    "validate:all": "bun docs/releases/validate-all.ts",
+    "ci": "bun run validate:all && bun test",
+    "create:validation": "bun create bun-validation",
+    "init:validation": "bun scripts/init-with-validation.ts"
   },
   "devDependencies": {
     "@types/bun": "^1.3.14",

@@ -25,6 +25,9 @@ jobs:
       - name: Type check
         run: bun run check
 
+      - name: Validate release artifacts
+        run: bun run validate:all
+
       - name: Run test suite
         run: bun test
 

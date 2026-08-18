@@ -197,7 +197,8 @@ async function extractDominantColor(
     } catch {
       // Fallback: use DecompressionStream which handles zlib format
       const ds = new DecompressionStream("deflate");
-      const stream = new Blob([idat]).stream().pipeThrough(ds);
+      // JUSTIFIED: ArrayBufferLike → ArrayBuffer for BlobPart (DOM lib + bun-types)
+      const stream = new Blob([idat as Uint8Array<ArrayBuffer>]).stream().pipeThrough(ds);
       const buf = await new Response(stream).arrayBuffer();
       raw = new Uint8Array(buf);
     }
@@ -258,12 +259,15 @@ export async function serveScreenshot(
   //   return new Response(new Bun.Image(upload).resize(200).jpeg());
   switch (format) {
     case "jpeg":
-      return new Response(img.jpeg());
+      // JUSTIFIED: Bun.Image is a documented Response body; DOM BodyInit omits it
+      return new Response(img.jpeg() as unknown as BodyInit);
     case "png":
-      return new Response(img.png());
+      // JUSTIFIED: Bun.Image is a documented Response body; DOM BodyInit omits it
+      return new Response(img.png() as unknown as BodyInit);
     case "webp":
     default:
-      return new Response(img.webp({ quality: FULL_QUALITY }));
+      // JUSTIFIED: Bun.Image is a documented Response body; DOM BodyInit omits it
+      return new Response(img.webp({ quality: FULL_QUALITY }) as unknown as BodyInit);
   }
 }
 

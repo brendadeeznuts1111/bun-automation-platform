@@ -1,0 +1,16 @@
+{
+  "name": "bun-validation-starter",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "validate": "bun-validate",
+    "validate:all": "bun scripts/validate-all.ts",
+    "ci": "bun run validate:all && bun test"
+  },
+  "dependencies": {
+    "bun-validation": "^0.1.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}
