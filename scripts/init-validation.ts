@@ -2,7 +2,7 @@
 // Layer bun-validation onto `bun init -y` in a target folder.
 //
 // Usage:
-//   bun scripts/init-with-validation.ts [dest]
+//   bun scripts/init-validation.ts [dest]
 //
 // `bun init` has no --template flag. This script is the equivalent:
 // init a Bun project, then add the workspace crate + starter scripts.

@@ -53,7 +53,7 @@ Root scripts: `bun run validate -- 1.3.14` and `bun run validate:all`.
 bun create bun-validation ./my-validator
 
 # Layer the crate onto `bun init -y`
-bun scripts/init-with-validation.ts ./my-app
+bun scripts/init-validation.ts ./my-app
 ```
 
 ## Publish (optional)

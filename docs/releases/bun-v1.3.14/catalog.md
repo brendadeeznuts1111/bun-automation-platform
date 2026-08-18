@@ -407,4 +407,4 @@ Repo-aware status (from `extracted.json` notes + code inspection):
 
 ## Full Code Block Reference
 
-Deep-dive snippets above are the human-facing reference. Machine-facing blocks: `extracted.json` → `normalized.json` via `bun docs/releases/normalize.ts bun-v1.3.14`. Validate with `bun docs/releases/validate.ts 1.3.14`.
+Deep-dive snippets above are the human-facing reference. Machine-facing blocks: `extracted.json` → `normalized.json` via `bun docs/releases/normalize.ts bun-v1.3.14`. Validate with `bun docs/releases/validate-release.ts 1.3.14`.

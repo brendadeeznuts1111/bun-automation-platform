@@ -1,5 +1,5 @@
 import type { ReportFormat, ValidationReport } from "./types.ts";
-import { normalizeVersion } from "./validate.ts";
+import { normalizeVersion } from "./engine.ts";
 
 export function escapeXml(value: string): string {
   return value
