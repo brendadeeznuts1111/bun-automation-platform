@@ -123,6 +123,36 @@ bun run check
 | **CORS Middleware** | [`tests/cors.test.ts`](tests/cors.test.ts) | Origin validation, preflight options handling, and header injection |
 | **Database & Audit** | [`tests/db.test.ts`](tests/db.test.ts) | WAL mode concurrency, read pool load, write mutex serialization, and audit queries |
 | **Retry Helper** | [`tests/retry.test.ts`](tests/retry.test.ts) | Exponential backoff, jitter calculation, and error filtering |
+| **Release Validation** | [`tests/validate.test.ts`](tests/validate.test.ts) | Shape guards, 13 semantic rules, consistency checks, JUnit/console/JSON reporters |
+| **Validation Crate** | [`tests/bun-validation-crate.test.ts`](tests/bun-validation-crate.test.ts) | Package API, `bun create` template, `init-validation` scaffolding |
+
+---
+
+## Release Validation
+
+Release artifacts (`extracted.json` + `normalized.json`) are validated by the
+[`bun-validation`](packages/bun-validation/) package — a zero-dependency,
+Bun-native crate with 13 rules covering shape, semantics, consistency, and
+regression snapshots.
+
+```bash
+# Validate a single release
+bun run validate -- 1.3.14
+
+# Validate all releases (concurrent, bounded by --concurrency)
+bun run validate:all
+
+# Full CI gate: validate all releases + run test suite
+bun run ci
+
+# Ingest a new release (fetch → normalize → diff → validate)
+bun run ingest -- 1.3.15
+```
+
+Reports: `--report=console` (default), `--report=json`, `--report=junit`.
+Strict mode: `--strict` treats warnings as failures.
+Env overrides: `STRICT_VALIDATION`, `MAX_WARNINGS`, `MAX_ERRORS`,
+`VALID_STATUSES`, `VALID_LANGS` (or persist in `.env.validation`).
 
 ---
 
@@ -239,6 +269,24 @@ bun-automation-platform/
 │   │   └── task-worker.ts     # Task execution lifecycle & progress updates
 │   └── types/
 │       └── env.d.ts           # Typed environment variable declarations
+├── packages/
+│   └── bun-validation/        # Release artifact validator (reusable crate)
+│       └── src/
+│           ├── engine.ts      # validateAll, validateVersionsParallel, snapshots
+│           ├── rules.ts       # 13 validation rules (shape, semantic, consistency)
+│           ├── guards.ts      # Type guards for pipeline + spec-style schemas
+│           ├── reporters.ts   # Console, JSON, JUnit formatters
+│           ├── cli.ts         # parseCliArgs, runCli
+│           └── config.ts      # Env-based config loader
+├── docs/releases/             # Release ingestion pipeline
+│   ├── ingest-release.ts      # Fetch → normalize → diff → validate
+│   ├── validate-release.ts    # Thin CLI wrapper for bun-validation
+│   ├── validate-all.ts        # Concurrent multi-version runner
+│   ├── normalize.ts           # extracted.json → normalized.json
+│   ├── diff-releases.ts       # Cross-release feature diff
+│   └── bun-v1.3.14/           # Real release data (extracted + normalized)
+├── scripts/
+│   └── init-validation.ts     # Scaffold bun-validation onto a new project
 ├── tests/
 │   ├── server.test.ts          # Server REST API integration test suite
 │   ├── bun-apis.test.ts        # Native Bun APIs & utilities test suite

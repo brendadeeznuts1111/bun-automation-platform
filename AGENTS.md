@@ -54,6 +54,10 @@ Every file that calls Bun APIs must include a comment citing the specific doc:
 - Run dev server (TLS + HTTP/3 + dashboard): `bun run dev:tls`
 - Run dev server (dashboard only): `bun run dev:dashboard`
 - Run worker: `bun run src/workers/task-worker.ts`
+- Validate a release: `bun run validate -- 1.3.14`
+- Validate all releases: `bun run validate:all`
+- Full CI gate: `bun run ci` (validate:all + bun test)
+- Ingest a new release: `bun run ingest -- 1.3.15`
 
 ## Architecture
 
@@ -64,6 +68,8 @@ Every file that calls Bun APIs must include a comment citing the specific doc:
 - `src/middleware/` — auth (Bearer token), CSRF, CORS, rate limiting
 - `src/utils/` — image processing, circuit breaker, retry, shutdown
 - `tests/` — bun:test with 85% coverage threshold (lines + functions)
+- `packages/bun-validation/` — release artifact validator (shape, semantic, consistency, regression)
+- `docs/releases/` — release ingestion pipeline (fetch → normalize → diff → validate)
 
 ## Feature flags
 

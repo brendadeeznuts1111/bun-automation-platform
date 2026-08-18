@@ -24,6 +24,14 @@ Default to using Bun instead of Node.js.
 - Prefer `Bun.file` over `node:fs`'s readFile/writeFile
 - Bun.$`ls` instead of execa.
 
+## Release validation
+
+- `bun run validate -- <version>` — validate a single release's `extracted.json` + `normalized.json`
+- `bun run validate:all` — validate every `docs/releases/bun-v*` directory (concurrent)
+- `bun run ingest -- <version>` — fetch blog → normalize → diff → validate a new release
+- `bun run ci` — validate:all + bun test (the full CI gate)
+- Validator package: `packages/bun-validation/` (reusable, zero-dependency)
+
 ## Testing
 
 Use `bun test` to run tests.
