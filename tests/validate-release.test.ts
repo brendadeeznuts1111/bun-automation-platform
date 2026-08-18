@@ -170,7 +170,8 @@ describe("JUnit + grouping", () => {
       regressionWarnings: [],
     });
     expect(xml).toContain("<failure");
-    expect(xml).toContain("semantic_0");
+    expect(xml).toContain('name="semantic"');
+    expect(xml).toContain('name="shape"');
   });
 });
 
